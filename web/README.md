@@ -42,7 +42,7 @@ app/
   pages/          29 pages, file-based routing
   types/
 server/
-  api/            content endpoints; renders markdown and picks the body
+  routes/_api/    frontend's own endpoints; renders markdown and picks the body
   data/           markdown — server only, cannot be imported by a page
   middleware/     legacy /{locale}/ redirects
   routes/         robots.txt, sitemap.xml
@@ -53,7 +53,8 @@ bench/            k6 load harness and HTML report
 ## Decisions worth knowing before you change something
 
 **Content never reaches the browser as markdown.** `server/data` holds the
-prose and `server/api` renders it. Pages fetch the rendered HTML with
+prose and `server/routes/_api` renders it. The `_api` prefix is deliberate:
+`/api/*` belongs to the Rust backend, which Caddy routes to separately. Pages fetch the rendered HTML with
 `useAsyncData`, which during SSR calls the handler directly — no HTTP round
 trip. Importing `server/data` from a page is not possible, and that is the
 point: the browser was previously downloading ~190kb of markdown to display one

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { BlogPostResponse } from '@/types/Content'
 // the listing needs titles and dates, not bodies
-const { data: sorted } = await useAsyncData('posts', () => $fetch<BlogPostResponse[]>('/api/blog'), {
+const { data: sorted } = await useAsyncData('posts', () => $fetch<BlogPostResponse[]>('/_api/blog'), {
   default: () => [],
 })
 

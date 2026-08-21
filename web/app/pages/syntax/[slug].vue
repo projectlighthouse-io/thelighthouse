@@ -11,7 +11,7 @@ const slug = computed<string>(() => String(route.params.slug))
 // dedupes so hydration does not fetch it a second time.
 const { data: lang } = await useAsyncData(
   () => `syntax:${slug.value}`,
-  () => $fetch<SyntaxResponse>(`/api/syntax/${slug.value}`),
+  () => $fetch<SyntaxResponse>(`/_api/syntax/${slug.value}`),
   { watch: [slug] },
 )
 

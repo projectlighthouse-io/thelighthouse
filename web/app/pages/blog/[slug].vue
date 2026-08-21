@@ -7,7 +7,7 @@ const slug = computed<string>(() => String(route.params.slug))
 // one. SSR calls the handler directly, so this costs no round trip.
 const { data: post } = await useAsyncData(
   () => `post:${slug.value}`,
-  () => $fetch<BlogPostResponse>(`/api/blog/${slug.value}`),
+  () => $fetch<BlogPostResponse>(`/_api/blog/${slug.value}`),
   { watch: [slug] },
 )
 

@@ -13,7 +13,7 @@ const lessonSlug = computed<string>(() => String(route.params.lesson))
 // directly, so it costs no HTTP round trip.
 const { data } = await useAsyncData(
   () => `lesson:${bookSlug.value}:${lessonSlug.value}`,
-  () => $fetch<LessonResponse>(`/api/books/${bookSlug.value}/pages/${lessonSlug.value}`),
+  () => $fetch<LessonResponse>(`/_api/books/${bookSlug.value}/pages/${lessonSlug.value}`),
   { watch: [bookSlug, lessonSlug] },
 )
 
