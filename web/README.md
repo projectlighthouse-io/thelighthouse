@@ -96,6 +96,25 @@ Runs on pull requests and pushes to `master`: lint, typecheck, build, `npm
 audit`, and a container build that boots the image and curls it. Nothing is
 deployed from CI — `make push` is run by hand.
 
+## Licence
+
+**GNU AGPL v3.0** — see [LICENSE](LICENSE).
+
+In short: fork it, change it, run it, sell access to it. But if you run a
+modified version as a website, **you have to publish your changes under the
+same licence**, and tell your users where to get them.
+
+That last part is why this is AGPL and not GPL. GPL's copyleft triggers on
+*distributing* software, and running a website does not distribute anything —
+so a GPL fork could be deployed as a closed-source competitor perfectly
+legally. AGPL section 13 closes that gap by treating "users interact with it
+over a network" as the trigger.
+
+The licence covers the code in this repository. The books, lessons and project
+briefs live in a separate private repository and are **not** covered by it —
+they are not open source, and forking this repo gives you the platform, not the
+content.
+
 ## Architecture
 
 The full rebuild plan, including the Rust API split, entitlements and the
