@@ -1,0 +1,205 @@
+<script setup lang="ts">
+import type { Chapter, LessonSummary } from '@/types/Content'
+import { books } from '@/data/Books'
+import { curriculum } from '@/data/Curriculum'
+
+const route = useRoute()
+const slug = computed<string>(() => String(route.params.slug))
+
+const book = computed(() => books.find(b => b.slug === slug.value))
+const plan = computed(() => curriculum[slug.value])
+
+// an unknown slug is a real 404, not an empty page
+if (!book.value) {
+  throw createError({ statusCode: 404, statusMessage: 'Book not found', fatal: true })
+}
+
+const lessons = computed<LessonSummary[]>(() => plan.value?.lessons ?? [])
+const chapters = computed<Chapter[]>(() => plan.value?.chapters ?? [])
+
+const lessonsFor = (chapter: Chapter): LessonSummary[] =>
+  lessons.value.filter(l => l.chapterId === chapter.id)
+
+/** running lesson number across the whole book, not per chapter */
+const numberOf = (lesson: LessonSummary): string =>
+  String(lessons.value.indexOf(lesson) + 1).padStart(2, '0')
+
+const firstLesson = computed<LessonSummary | undefined>(() => lessons.value[0])
+const hasLocked = computed<boolean>(() => lessons.value.some(l => l.locked))
+const estHours = computed<string>(() => `~${Math.max(1, Math.round(lessons.value.length * 0.4))} hours`)
+
+useSeo(() => ({
+  title: `${book.value?.title} — projectlighthouse`,
+  description: book.value?.description ?? '',
+  image: book.value?.thumbnailUrl,
+}))
+
+useJsonLd('book', () => ({
+  '@type': 'Book',
+  'name': book.value?.title,
+  'description': book.value?.description,
+  'image': book.value?.thumbnailUrl,
+  'url': `${SITE.url}/books/${slug.value}`,
+  'bookFormat': 'https://schema.org/EBook',
+  'numberOfPages': lessons.value.length,
+  'inLanguage': 'en',
+  'author': { '@type': 'Person', 'name': 'Aryan Ahmed' },
+  'publisher': { '@type': 'Organization', 'name': SITE.name, 'url': SITE.url },
+  'hasPart': chapters.value.map(c => ({ '@type': 'Chapter', 'name': c.title })),
+}))
+
+useJsonLd('crumbs', () => ({
+  '@type': 'BreadcrumbList',
+  'itemListElement': [
+    { '@type': 'ListItem', 'position': 1, 'name': 'Books', 'item': `${SITE.url}/books` },
+    { '@type': 'ListItem', 'position': 2, 'name': book.value?.title },
+  ],
+}))
+</script>
+
+<template>
+  <div v-if="book" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <nav class="pt-10 pb-8 font-mono text-sm text-faint">
+      <NuxtLink to="/books" class="hover:text-ink">books</NuxtLink>
+      <span class="mx-3 text-crumb">/</span>
+      <span class="text-quiet">{{ book.title.toLowerCase() }}</span>
+    </nav>
+
+    <section class="grid gap-12 pb-16 lg:grid-cols-[1fr_420px] lg:items-start">
+      <div>
+        <div class="mb-10 flex flex-wrap items-center gap-2 font-mono text-xs">
+          <span class="inline-flex items-center rounded-md px-2.5 py-1 text-ink">
+            {{ lessons.length }} lessons
+          </span>
+          <span
+            class="inline-flex items-center rounded-full border border-stroke bg-panel px-3 py-1 text-ink"
+          >
+            {{ estHours }}
+          </span>
+        </div>
+
+        <h1
+          class="font-editorial text-ink font-semibold text-hero-lg leading-none tracking-editorial"
+        >
+          {{ book.title }}
+        </h1>
+
+        <p class="mt-8 max-w-xl text-base leading-relaxed text-ink sm:text-lg">
+          {{ book.description }}
+        </p>
+
+        <div class="mt-10 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <NuxtLink
+            v-if="firstLesson"
+            :to="`/books/${book.slug}/pages/${firstLesson.slug}`"
+            class="rounded-md bg-ink px-5 py-3 text-center text-base font-medium text-on-ink transition hover:bg-ink-hover sm:w-auto"
+          >
+            Start reading
+          </NuxtLink>
+          <NuxtLink
+            v-if="hasLocked"
+            to="/pricing"
+            class="rounded-md border border-stroke bg-panel px-5 py-3 text-center text-base font-medium text-ink transition hover:bg-paper-warm sm:w-auto"
+          >
+            Unlock the whole book
+          </NuxtLink>
+        </div>
+      </div>
+
+      <div class="hidden flex-col items-center gap-3 lg:flex">
+        <div class="relative aspect-[16/10] w-full overflow-hidden rounded-xl">
+          <img
+            :src="book.thumbnailUrl"
+            :alt="book.title"
+            class="absolute inset-0 h-full w-full rounded-xl object-contain"
+          >
+        </div>
+      </div>
+    </section>
+
+    <section class="grid gap-12 pb-20 lg:grid-cols-3 lg:items-start">
+      <div class="min-w-0 lg:col-span-2">
+        <div v-for="chapter in chapters" :key="chapter.id" class="mb-16 last:mb-0">
+          <header class="mb-6">
+            <h2
+              class="font-editorial text-ink font-medium text-display-sm tracking-editorial"
+            >
+              {{ chapter.title }}
+            </h2>
+          </header>
+
+          <ul>
+            <li
+              v-for="lesson in lessonsFor(chapter)"
+              :key="lesson.slug"
+              class="border-b border-dashed border-rule-soft py-5 last:border-b-0"
+              :class="lesson.locked ? 'bg-locked-bg' : ''"
+            >
+              <NuxtLink
+                :to="`/books/${book.slug}/pages/${lesson.slug}`"
+                class="block px-2 no-underline"
+              >
+                <div class="flex items-baseline gap-6">
+                  <span class="w-10 shrink-0 font-mono text-sm tabular-nums text-numeral">
+                    {{ numberOf(lesson) }}
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-3">
+                      <h3
+                        class="font-editorial text-xl text-ink sm:text-[1.375rem] font-semibold tracking-editorial"
+                      >
+                        {{ lesson.title }}
+                      </h3>
+                      <span
+                        v-if="lesson.locked"
+                        class="inline-flex items-center gap-1 rounded-full border border-lock-line bg-lock-bg px-2.5 py-0.5 font-mono text-xs text-lock"
+                      >
+                        voyage
+                      </span>
+                      <span
+                        v-else
+                        class="inline-flex items-center rounded-full border border-free-line bg-free-bg px-2.5 py-0.5 font-mono text-xs text-free"
+                      >
+                        free
+                      </span>
+                    </div>
+                    <p
+                      v-if="lesson.description"
+                      class="mt-2 max-w-2xl text-sm leading-relaxed text-quiet"
+                    >
+                      {{ lesson.description }}
+                    </p>
+                  </div>
+                </div>
+              </NuxtLink>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <aside class="hidden lg:block">
+        <div class="sticky top-24 rounded-lg bg-note p-7">
+          <div class="font-mono text-xs tracking-wider uppercase text-rose">
+            what you'll walk away with
+          </div>
+          <ul class="mt-5 space-y-4">
+            <li
+              v-for="chapter in chapters.slice(0, 6)"
+              :key="chapter.id"
+              class="flex gap-3 text-sm leading-relaxed text-ink"
+            >
+              <span class="mt-2 size-1.5 shrink-0 rounded-full bg-rose" />
+              <span>{{ chapter.title }}</span>
+            </li>
+          </ul>
+          <div
+            v-if="chapters.length > 6"
+            class="mt-6 border-t border-dashed border-rule-dashed pt-5 text-sm leading-relaxed italic text-quiet"
+          >
+            and {{ chapters.length - 6 }} more chapters.
+          </div>
+        </div>
+      </aside>
+    </section>
+  </div>
+</template>
