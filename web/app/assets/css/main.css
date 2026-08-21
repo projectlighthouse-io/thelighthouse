@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+@plugin "@tailwindcss/typography";
+
+@source '../../**/*.vue';
+
+/* theme first — it defines the @theme tokens and :root variables the rest use */
+@import './theme.css';
+@import './code.css';
+@import './animation.css';
+@import './pencil.css';
+@import './prose.css';
+@import './transition.css';
+
+/* reader.css is NOT imported here on purpose — it is one system scoped under
+   .reader-shell and only the lesson page needs it, so that page imports it
+   itself and every other route stops shipping ~20kb it never uses. */

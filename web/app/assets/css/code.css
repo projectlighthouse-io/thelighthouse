@@ -1,0 +1,25 @@
+/* code blocks and syntax highlighting */
+
+/* inline and block code */
+
+pre code.hljs {
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 13px;
+    background: var(--color-code-bg);
+}
+
+code {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.hljs {
+    background: var(--color-code-bg);
+}
+
+/* task descriptions */
+
+.task-description pre,
+.task-description pre code {
+    background-color: var(--color-stripe);
+}
