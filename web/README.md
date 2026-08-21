@@ -88,8 +88,6 @@ one hop and remembers the language in a cookie.
   `make install`, not `npm install`.
 - No banner comments. Comments say why, not what.
 
-Longer-form rules are in `CLAUDE.local.md` (not committed).
-
 ## CI
 
 Runs on pull requests and pushes to `master`: lint, typecheck, build, `npm
