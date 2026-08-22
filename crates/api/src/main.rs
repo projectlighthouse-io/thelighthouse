@@ -7,6 +7,7 @@
 
 mod api;
 mod auth;
+mod books;
 mod cache;
 mod config;
 mod db;
