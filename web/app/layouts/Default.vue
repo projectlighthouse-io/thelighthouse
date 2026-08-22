@@ -26,15 +26,15 @@ const footerLinks: NavLink[] = [
   { to: '/blog', label: 'blog' },
 ]
 
-// A client-side island: this layout wraps prerendered, edge-cached pages, so
-// the session must never reach the rendered HTML. The header draws signed-out
-// and fills in on mount — see UseAuth.ts.
-// The reader's name, avatar and email belong to ChromeUserMenu now — the layout
-// only needs to know whether to show it or the join button.
+// A client-side island: this layout wraps prerendered, edge-cached pages, so the
+// session must never reach the rendered HTML — see UseAuth.ts.
 //
-// `chrome`, not a boolean: it has a third state for "no answer yet", so the
-// header can draw a reserved space instead of guessing. Guessing wrong is the
-// join button appearing in front of somebody who is signed in.
+// `chrome`, not a boolean, because it has a third state for "no answer yet".
+// The header draws a reserved space until it knows, then fades in exactly one
+// answer. A boolean would force a guess, and the wrong guess is a join button
+// appearing in front of somebody who is signed in.
+//
+// The reader's name, avatar and email belong to ChromeUserMenu.
 const { chrome, load } = useAuth()
 
 onMounted(load)
@@ -156,25 +156,32 @@ const year = new Date().getFullYear()
                  slot stays empty at the right size. Empty says "not yet"; a
                  join button says something that may be false. -->
             <ClientOnly>
-              <ChromeUserMenu v-if="chrome === 'reader'" />
+              <!-- `out-in` with an instant leave: the placeholder is invisible,
+                   so there is nothing to animate away, and letting the two
+                   overlap in the flow would shift the header sideways mid-fade.
+                   Keys are required — without them Vue reuses one element and
+                   never runs the transition. -->
+              <Transition name="chrome" mode="out-in">
+                <ChromeUserMenu v-if="chrome === 'reader'" key="reader" />
 
-              <button
-                v-else-if="chrome === 'anonymous'"
-                type="button"
-                aria-haspopup="dialog"
-                :aria-expanded="joinOpen"
-                class="cursor-pointer rounded-lg border border-stroke bg-ink px-4 py-2 text-sm font-semibold text-on-ink transition hover:bg-ink-hover sm:px-6"
-                @click="toggleJoin"
-                @mouseenter="hoverIn"
-                @mouseleave="hoverOut"
-              >
-                join
-              </button>
+                <button
+                  v-else-if="chrome === 'anonymous'"
+                  key="join"
+                  type="button"
+                  aria-haspopup="dialog"
+                  :aria-expanded="joinOpen"
+                  class="cursor-pointer rounded-lg border border-stroke bg-ink px-4 py-2 text-sm font-semibold text-on-ink transition hover:bg-ink-hover sm:px-6"
+                  @click="toggleJoin"
+                  @mouseenter="hoverIn"
+                  @mouseleave="hoverOut"
+                >
+                  join
+                </button>
 
-              <!-- chrome === 'unknown', and the ClientOnly fallback before
-                   mount. Same size either way, so nothing shifts when the
-                   answer lands. -->
-              <div v-else class="h-10 w-24" aria-hidden="true" />
+                <!-- chrome === 'unknown'. Same size as both of the above, so
+                     nothing shifts when the answer lands. -->
+                <div v-else key="pending" class="h-10 w-24" aria-hidden="true" />
+              </Transition>
 
               <template #fallback>
                 <div class="h-10 w-24" aria-hidden="true" />
@@ -238,3 +245,31 @@ const year = new Date().getFullYear()
     </footer>
   </div>
 </template>
+
+<style scoped>
+/* The header settles in once, when the session finally answers. Slow enough to
+   read as deliberate rather than as something twitching into place. */
+.chrome-enter-active {
+  transition:
+    opacity 420ms ease,
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.chrome-enter-from {
+  opacity: 0;
+  transform: translateY(-3px);
+}
+
+/* Instant. The thing leaving is the invisible placeholder, and animating it
+   would only delay the thing worth looking at. */
+.chrome-leave-active {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chrome-enter-active {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+</style>
