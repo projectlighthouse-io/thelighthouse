@@ -44,6 +44,28 @@ In production there is no `.env` — every key comes from the platform's own
 environment, and the API reads whichever is present. What it will not do is
 start with a key missing; the boot failure names it.
 
+## The database
+
+Postgres runs from `compose.yaml`, so a clone needs nothing installed:
+
+```bash
+make db          # start postgres and wait until it answers
+make migrate     # build the schema from migration 0
+make db-down     # stop it, keep the data
+make db-reset    # stop it and delete the data
+```
+
+It publishes **5433**, not 5432, so it can coexist with the Laravel stack's
+Postgres. The default connection string is:
+
+```
+DATABASE_URL=postgres://lighthouse:lighthouse@127.0.0.1:5433/lighthouse
+```
+
+Only Postgres is in compose. The api, Nuxt and Caddy ship as one image built by
+the `Dockerfile` — running them a second way here would mean two definitions of
+the same thing drifting apart. `make image && make run` runs the site.
+
 ## Migrations
 
 ```bash
