@@ -51,8 +51,16 @@ Postgres runs from `compose.yaml`, so a clone needs nothing installed:
 ```bash
 make db          # start postgres and wait until it answers
 make migrate     # build the schema from migration 0
+make psql        # open a shell on it
 make db-down     # stop it, keep the data
 make db-reset    # stop it and delete the data
+```
+
+`make psql` takes a query too, for when a shell is more ceremony than the
+question deserves:
+
+```bash
+make psql ARGS='-c "select slug, status from books"'
 ```
 
 It publishes **5433**, not 5432, so it can coexist with the Laravel stack's

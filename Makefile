@@ -1,12 +1,18 @@
 PORT ?= 8080
 
+# Match compose.yaml's defaults, and overridable the same way: the file reads
+# these from the environment too, so `POSTGRES_DB=other make psql` follows
+# whatever `POSTGRES_DB=other make db` started.
+POSTGRES_USER ?= lighthouse
+POSTGRES_DB   ?= lighthouse
+
 REGISTRY := registry.digitalocean.com/lighthouse-registry
 IMAGE    := thelighthouse
 VERSION  := $(shell cat VERSION)
 TAG      := $(REGISTRY)/$(IMAGE):$(VERSION)
 
 .DEFAULT_GOAL := help
-.PHONY: help web db db-down db-reset migrate migrate-status fmt fmt-check lint test \
+.PHONY: help web db db-down db-reset psql migrate migrate-status fmt fmt-check lint test \
         build check audit image run login push clean
 
 help: ## show this
@@ -30,6 +36,13 @@ db-down: ## stop postgres, keep the data
 
 db-reset: ## stop postgres and delete the data
 	docker compose down -v
+
+# `exec`, not `run`: attaches to the container `make db` already started, so it
+# is the same database with the same data. `docker compose run` would spin up a
+# second one. Add a command to inspect without the shell:
+#   make psql ARGS='-c "select slug, status from books"'
+psql: ## open a psql shell in the running postgres
+	docker compose exec postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) $(ARGS)
 
 # Fresh database: builds the schema from migration 0. A database the laravel app
 # already owns wants `baseline` instead — see the README.
