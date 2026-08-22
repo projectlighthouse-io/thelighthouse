@@ -86,15 +86,31 @@ export function useAuth() {
   }
 
   /**
-   * What the chrome should draw *now*.
+   * What the chrome should draw *now* — including "nothing yet".
    *
-   * Before the session answers, this is the remembered answer; after, it is the
-   * real one. The header has to render something on first paint, and rendering
-   * "signed out" at a signed-in reader is the flash this exists to remove.
+   * Three states rather than a boolean, because a boolean forces a guess before
+   * the answer exists, and the wrong guess is the bug: a join button appearing
+   * for a moment in front of somebody who is signed in.
+   *
+   *   reader     the cookie says so, or the session confirmed it
+   *   anonymous  the session answered, and there is nobody
+   *   unknown    no evidence yet — draw a reserved space, not a claim
+   *
+   * `unknown` only ever becomes one of the other two. Nothing renders twice with
+   * different content, which is the whole requirement.
    */
-  const looksSignedIn = computed<boolean>(() =>
-    resolved.value ? user.value !== null : hint.value,
-  )
+  const chrome = computed<'reader' | 'anonymous' | 'unknown'>(() => {
+    // The cookie is set by rust at sign-in and cleared with the session, so it
+    // is right from the first paint and needs no round trip to consult.
+    if (hint.value) return 'reader'
+
+    // No cookie is not proof of being signed out — it could be a first visit,
+    // or a session opened before the cookie existed. Wait for the real answer
+    // rather than flashing a join button at somebody who has one.
+    if (!resolved.value) return 'unknown'
+
+    return user.value !== null ? 'reader' : 'anonymous'
+  })
 
   async function load(force = false): Promise<void> {
     // SSR renders every reader as anonymous. See the note at the top.
@@ -149,7 +165,7 @@ export function useAuth() {
   return {
     user,
     resolved,
-    looksSignedIn,
+    chrome,
     isSignedIn: computed<boolean>(() => user.value !== null),
     initials: computed<string>(() => initialsOf(user.value)),
     load,
