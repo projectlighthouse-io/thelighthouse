@@ -1,0 +1,24 @@
+[package]
+name = "lighthouse-migrate"
+version = "0.1.0"
+edition = "2024"
+description = "Applies the schema migrations. Run deliberately, never by the server."
+
+[lints]
+workspace = true
+
+[dependencies]
+# `macros` is here and deliberately absent from the api. The feature carries two
+# very different macros: `query!`, which checks SQL against a live database at
+# compile time, and `migrate!`, which only reads a directory. This crate uses
+# the second, so the build stays database-free — but the first is now within
+# reach, and it must not be used, or the docker build starts needing postgres.
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls-ring",
+    "postgres",
+    "migrate",
+    "macros",
+] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+dotenvy = "0.15"
