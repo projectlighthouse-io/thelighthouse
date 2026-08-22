@@ -82,9 +82,20 @@ export function useAuth() {
   // who is in fact signed in.
   const resolved = useState<boolean>('auth.resolved', () => false)
 
-  // Read once per client, not per call — `useState` keeps it stable across the
-  // components that ask.
-  const hint = useState<boolean>('auth.hint', readHint)
+  const hint = useState<boolean>('auth.hint', () => false)
+
+  // Read here, not in the `useState` initialiser above. That initialiser runs on
+  // the *server*, where there is no localStorage, and its result is serialised
+  // into the payload — so the client hydrates `false` and never asks. The
+  // symptom is the flash this exists to remove, arriving anyway.
+  //
+  // This runs during setup, before the first render, so the header's first paint
+  // already knows which shape to draw. Skipped once the session has really
+  // answered: after that `user` is the truth and the remembered value is stale
+  // by definition.
+  if (import.meta.client && !resolved.value) {
+    hint.value = readHint()
+  }
 
   /**
    * What the chrome should draw *now*.
