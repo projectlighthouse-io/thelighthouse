@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # No debuginfo in CI either. Nothing here attaches a debugger, and it is the
+  # difference between a cache that fits and one that does not.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+
+jobs:
+  check:
+    name: fmt, clippy, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # Pinned to a commit, not a tag. Tags are mutable — the
+      # tj-actions/changed-files compromise moved tags to a malicious commit and
+      # every repo tracking @v4 ran it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # rust-toolchain.toml pins the compiler, so there is nothing to choose
+      # here — rustup reads it and installs clippy and rustfmt with it.
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+
+      - name: Format
+        run: make fmt-check
+
+      # Separate steps rather than `make check`: make stops at the first
+      # failure, and a formatting nit should not hide a clippy error.
+      - name: Clippy
+        run: make lint
+
+      - name: Test
+        run: make test
+
+  audit:
+    name: audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit
+        run: cargo audit
+
+  image:
+    name: docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # The frontend is a submodule and the image builds it from source, so
+      # without this the build fails on an empty web/.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+
+      - name: Build image
+        run: docker build --platform linux/amd64 -t thelighthouse:ci .
+
+      # A build that succeeds and an image that serves are different claims.
+      # This asserts the routing too: the frontend is public, the api is not.
+      - name: Boot it and check the routing holds
+        run: |
+          docker run -d --name ci -p 8080:8080 -e LUXCTL_SECRET=citest thelighthouse:ci
+          for i in $(seq 1 60); do
+            curl -fsS -o /dev/null http://localhost:8080/ && break
+            sleep 1
+          done
+
+          echo "frontend must be public"
+          curl -fsS -o /dev/null http://localhost:8080/
+          curl -fsS -o /dev/null http://localhost:8080/books
+
+          echo "api must reject unsigned requests"
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/ping)
+          [ "$code" = "404" ] || { echo "expected 404, got $code"; exit 1; }
+
+          echo "api must accept a valid signature"
+          sig=$(printf '' | openssl dgst -sha256 -hmac citest -hex | sed 's/.*= //')
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Luxctl-Signature: $sig" http://localhost:8080/api/ping)
+          [ "$code" = "200" ] || { echo "expected 200, got $code"; exit 1; }
+
+          docker rm -f ci
