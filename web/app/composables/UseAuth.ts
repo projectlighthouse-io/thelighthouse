@@ -30,6 +30,39 @@ export interface AuthUser {
  */
 let inFlight: Promise<void> | null = null
 
+/**
+ * Remembers, across page loads, that the last answer was "signed in".
+ *
+ * Not authentication — nothing is trusted because of it. It exists so the header
+ * can draw the *right shape* on the client's very first render, instead of
+ * showing a join button to somebody who is signed in and swapping it out a
+ * network round trip later.
+ *
+ * A stale hint is self-correcting: `load()` overwrites it either way, so the
+ * worst case is an avatar that becomes a join button once the session comes back
+ * empty. That is the right way round — the reverse is what looks broken.
+ */
+const HINT_KEY = 'auth.hint'
+
+function readHint(): boolean {
+  if (import.meta.server) return false
+  try {
+    return localStorage.getItem(HINT_KEY) === '1'
+  }
+  catch {
+    // Safari in private mode throws on localStorage. Not worth a broken header.
+    return false
+  }
+}
+
+function writeHint(signedIn: boolean): void {
+  try {
+    if (signedIn) localStorage.setItem(HINT_KEY, '1')
+    else localStorage.removeItem(HINT_KEY)
+  }
+  catch { /* see readHint */ }
+}
+
 /** First letters of the first and last word, for the avatar fallback. */
 function initialsOf(user: AuthUser | null): string {
   const name = user?.name?.trim()
@@ -49,6 +82,21 @@ export function useAuth() {
   // who is in fact signed in.
   const resolved = useState<boolean>('auth.resolved', () => false)
 
+  // Read once per client, not per call — `useState` keeps it stable across the
+  // components that ask.
+  const hint = useState<boolean>('auth.hint', readHint)
+
+  /**
+   * What the chrome should draw *now*.
+   *
+   * Before the session answers, this is the remembered answer; after, it is the
+   * real one. The header has to render something on first paint, and rendering
+   * "signed out" at a signed-in reader is the flash this exists to remove.
+   */
+  const looksSignedIn = computed<boolean>(() =>
+    resolved.value ? user.value !== null : hint.value,
+  )
+
   async function load(force = false): Promise<void> {
     // SSR renders every reader as anonymous. See the note at the top.
     if (import.meta.server) return
@@ -58,10 +106,16 @@ export function useAuth() {
     inFlight = $fetch<AuthUser | null>('/api/auth/session')
       .then((reader) => {
         user.value = reader ?? null
+        hint.value = reader !== null
+        writeHint(reader !== null)
       })
       .catch(() => {
         // The api being unreachable is not a signed-in reader. Failing to
         // anonymous keeps the chrome honest instead of leaving it half-drawn.
+        //
+        // The hint is left alone: a request that never arrived is not evidence
+        // of being signed out, and forgetting on a flaky connection would put
+        // the flash back on the next load.
         user.value = null
       })
       .finally(() => {
@@ -79,6 +133,8 @@ export function useAuth() {
 
     user.value = null
     resolved.value = true
+    hint.value = false
+    writeHint(false)
 
     await navigateTo('/')
   }
@@ -93,6 +149,7 @@ export function useAuth() {
   return {
     user,
     resolved,
+    looksSignedIn,
     isSignedIn: computed<boolean>(() => user.value !== null),
     initials: computed<string>(() => initialsOf(user.value)),
     load,

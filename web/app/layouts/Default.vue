@@ -31,7 +31,11 @@ const footerLinks: NavLink[] = [
 // and fills in on mount — see UseAuth.ts.
 // The reader's name, avatar and email belong to ChromeUserMenu now — the layout
 // only needs to know whether to show it or the join button.
-const { isSignedIn, load } = useAuth()
+//
+// `looksSignedIn`, not `isSignedIn`: the first answer comes from the remembered
+// one, so a signed-in reader is not shown a join button for the length of a
+// network round trip on every page load.
+const { looksSignedIn, load } = useAuth()
 
 onMounted(load)
 
@@ -142,20 +146,33 @@ const year = new Date().getFullYear()
           <div class="flex items-center gap-1">
             <ChromeThemeToggle />
 
-            <ChromeUserMenu v-if="isSignedIn" />
+            <!-- Client-only, and the fallback is a blank slot of the same
+                 height. Server-rendered HTML must be identical for every
+                 anonymous visitor or it cannot be edge-cached, so the server
+                 cannot render this — and rendering a join button there means
+                 showing one to signed-in readers on every page load. An empty
+                 reserved slot says "not yet"; a join button says something
+                 false. The client fills it on its first render. -->
+            <ClientOnly>
+              <ChromeUserMenu v-if="looksSignedIn" />
 
-            <button
-              v-else
-              type="button"
-              aria-haspopup="dialog"
-              :aria-expanded="joinOpen"
-              class="cursor-pointer rounded-lg border border-stroke bg-ink px-4 py-2 text-sm font-semibold text-on-ink transition hover:bg-ink-hover sm:px-6"
-              @click="toggleJoin"
-              @mouseenter="hoverIn"
-              @mouseleave="hoverOut"
-            >
-              join
-            </button>
+              <button
+                v-else
+                type="button"
+                aria-haspopup="dialog"
+                :aria-expanded="joinOpen"
+                class="cursor-pointer rounded-lg border border-stroke bg-ink px-4 py-2 text-sm font-semibold text-on-ink transition hover:bg-ink-hover sm:px-6"
+                @click="toggleJoin"
+                @mouseenter="hoverIn"
+                @mouseleave="hoverOut"
+              >
+                join
+              </button>
+
+              <template #fallback>
+                <div class="h-10 w-24" aria-hidden="true" />
+              </template>
+            </ClientOnly>
           </div>
         </div>
       </div>
