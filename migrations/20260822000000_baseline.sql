@@ -19,10 +19,26 @@
 --                            not qualified — with an empty search_path the
 --                            migration applies and then recording it fails.
 --
--- Production already has these tables. Applying this there would fail on the
--- first CREATE TABLE, so production gets baselined instead: insert this
--- version into _sqlx_migrations without running it. The file exists so a fresh
--- clone — a contributor's, or CI's — comes up with a real schema.
+-- This file has two jobs, and which one applies depends on the database:
+--
+--   a fresh one    `lighthouse-migrate run` executes it and the schema exists.
+--                  This is the local, CI and contributor-clone path, and the
+--                  only reason the file is 3,000 lines rather than a note.
+--
+--   an existing    `lighthouse-migrate baseline` records it as applied without
+--                  executing it. Production and any laravel-owned database take
+--                  this path; `run` there fails on the first CREATE TABLE,
+--                  correctly, because that schema does not need building.
+--
+-- Either way the version ends up in _sqlx_migrations, so from the next forward
+-- migration onward both kinds of database are on the same footing.
+--
+-- Not made idempotent with IF NOT EXISTS, which would collapse the two paths
+-- into one command. Postgres has no ADD CONSTRAINT IF NOT EXISTS and there are
+-- 115 of them below, so each would need a DO block swallowing duplicate_object.
+-- And IF NOT EXISTS compares nothing: it skips a table that exists with
+-- entirely different columns, reporting a clean migration over a schema that
+-- has drifted.
 --
 -- PostgreSQL database dump
 --
