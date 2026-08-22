@@ -125,7 +125,12 @@ const year = new Date().getFullYear()
 <template>
   <div class="flex min-h-screen flex-col">
     <header class="dotted-bg fixed top-0 right-0 left-0 z-50">
-      <div class="mx-auto max-w-full px-4 sm:px-6 lg:px-8">
+      <!-- max-w-7xl, matching the footer and every content page. The header was
+           the only thing running edge to edge, which left the logo and the
+           profile menu floating far outside the column everything else lines up
+           to. The bar itself still spans the viewport — only its contents are
+           constrained — so the background and bottom edge stay full width. -->
+      <div class="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="relative flex h-16 items-center justify-between">
           <NuxtLink to="/" class="flex items-center gap-2">
             <img src="/lighthouse.svg" alt="projectlighthouse logo" class="h-8 w-8 object-contain">
