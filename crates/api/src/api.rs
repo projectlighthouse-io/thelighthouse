@@ -29,7 +29,7 @@ use crate::{
     auth,
     cache::{self, CachePolicy},
     config::Config,
-    db, telemetry,
+    db, notes, session, telemetry,
 };
 
 type HmacSha256 = Hmac<Sha256>;
@@ -49,30 +49,41 @@ pub(crate) struct AppState {
 }
 
 pub(crate) fn app(config: Config, socials: Providers, db: PgPool) -> Router {
+    let state = AppState {
+        config,
+        socials,
+        db,
+    };
+
     // Everything mounted here inherits the signature check.
     let signed = Router::new()
         .route("/ping", get(ping))
         .route("/books", get(books))
         .route("/me", get(me))
         .route_layer(middleware::from_fn_with_state(
-            config.clone(),
+            state.config.clone(),
             require_signature,
         ));
+
+    // ...and everything mounted here inherits the session check. Absolute
+    // paths, so it merges alongside `signed` rather than nesting under the
+    // same prefix.
+    let reader = notes::routes().route_layer(middleware::from_fn_with_state(
+        state.clone(),
+        require_session,
+    ));
 
     Router::new()
         .route("/health", get(health))
         .nest("/api", signed)
+        .merge(reader)
         // Merged rather than nested under the same `/api`, and deliberately
         // outside the signature layer: an OAuth callback is a browser
         // navigation and cannot carry an HMAC. Those four routes authenticate
         // themselves — see `auth`.
         .merge(auth::routes())
         .layer(middleware::from_fn(telemetry::trace_request))
-        .with_state(AppState {
-            config,
-            socials,
-            db,
-        })
+        .with_state(state)
 }
 
 fn hex_decode(s: &str) -> Option<Vec<u8>> {
@@ -132,6 +143,40 @@ async fn require_signature(State(config): State<Config>, request: Request, next:
 
     next.run(Request::from_parts(parts, Body::from(bytes)))
         .await
+}
+
+/// Rejects anything without a live session, and hands the resolved one on.
+///
+/// A layer for the same reason [`require_signature`] is one: an endpoint under
+/// it is protected because of where it is mounted, not because a handler
+/// remembered to check. The handler takes `Extension<Session>` and can be sure
+/// of it — there is no path through here that leaves it absent.
+///
+/// **401, not 404.** Unlike the luxctl surface, these routes are the frontend's
+/// and the browser already knows they exist; hiding them buys nothing and would
+/// make an expired session indistinguishable from a typo in a URL.
+async fn require_session(
+    State(state): State<AppState>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    let deny = || StatusCode::UNAUTHORIZED.into_response();
+
+    let Some(id) = auth::read_cookie(request.headers(), auth::SESSION_COOKIE) else {
+        return deny();
+    };
+
+    // Cloned because `load` borrows the pool out of `state` while the cookie is
+    // still borrowed out of `request`, which is then handed on mutably.
+    let id = id.to_owned();
+
+    let Some(session) = session::load(&state.db, &id).await else {
+        return deny();
+    };
+
+    request.extensions_mut().insert(session);
+
+    next.run(request).await
 }
 
 /// Unsigned on purpose. Caddy never routes to it, so it is reachable only from

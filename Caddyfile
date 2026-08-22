@@ -112,6 +112,17 @@
 		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
+	# A reader's own data, fetched by the browser carrying the session cookie.
+	# No signature — luxctl is not the caller here — so the api gates it on the
+	# session instead, in a layer beside the one that verifies the HMAC.
+	#
+	# Every browser-facing /api route needs a rule like this, and that is the
+	# point: reaching the api from a browser is a decision written down here,
+	# not something a new route gets for free.
+	handle /api/notes* {
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
+	}
+
 	# The provider's return leg, and the one URL here that was not ours to pick:
 	# it is registered with Google and GitHub, and is the path the laravel app
 	# already serves. Keeping it means the cutover is a DNS change rather than a

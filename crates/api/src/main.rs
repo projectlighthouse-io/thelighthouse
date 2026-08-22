@@ -11,6 +11,7 @@ mod cache;
 mod config;
 mod content;
 mod db;
+mod notes;
 mod session;
 mod telemetry;
 mod users;
