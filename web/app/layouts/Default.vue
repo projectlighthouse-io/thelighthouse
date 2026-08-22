@@ -143,30 +143,32 @@ const year = new Date().getFullYear()
             </NuxtLink>
           </nav>
 
-          <div class="flex items-center gap-1">
-            <ChromeThemeToggle />
+          <!-- The whole right-hand cluster arrives at once.
 
-            <!-- Exactly one of these ever renders, and it never changes into
-                 the other.
+               The theme toggle is in here rather than outside because appearing
+               on its own and waiting for company reads as two separate things
+               loading. One fade, one arrival.
 
-                 Server-rendered HTML has to be identical for every anonymous
-                 visitor or it cannot be edge-cached, so the server cannot draw
-                 this at all — hence ClientOnly. And until the session answers,
-                 neither a name nor a join button is known to be true, so the
-                 slot stays empty at the right size. Empty says "not yet"; a
-                 join button says something that may be false. -->
-            <ClientOnly>
-              <!-- `out-in` with an instant leave: the placeholder is invisible,
-                   so there is nothing to animate away, and letting the two
-                   overlap in the flow would shift the header sideways mid-fade.
-                   Keys are required — without them Vue reuses one element and
-                   never runs the transition. -->
-              <Transition name="chrome" mode="out-in">
-                <ChromeUserMenu v-if="chrome === 'reader'" key="reader" />
+               Server-rendered HTML has to be identical for every anonymous
+               visitor or it cannot be edge-cached, so the server cannot draw the
+               reader half at all — hence ClientOnly. And until the session
+               answers, neither a name nor a join button is known to be true, so
+               nothing renders yet: an empty slot says "not yet", a join button
+               says something that may be false. -->
+          <ClientOnly>
+            <!-- `out-in` with an instant leave: the placeholder is invisible, so
+                 there is nothing worth animating away, and letting the two share
+                 the flow would shove the header sideways mid-fade. Keys are
+                 required — without them Vue reuses one element and the
+                 transition never runs. -->
+            <Transition name="chrome" mode="out-in">
+              <div v-if="chrome !== 'unknown'" key="ready" class="flex items-center gap-1">
+                <ChromeThemeToggle />
+
+                <ChromeUserMenu v-if="chrome === 'reader'" />
 
                 <button
-                  v-else-if="chrome === 'anonymous'"
-                  key="join"
+                  v-else
                   type="button"
                   aria-haspopup="dialog"
                   :aria-expanded="joinOpen"
@@ -177,17 +179,19 @@ const year = new Date().getFullYear()
                 >
                   join
                 </button>
+              </div>
 
-                <!-- chrome === 'unknown'. Same size as both of the above, so
-                     nothing shifts when the answer lands. -->
-                <div v-else key="pending" class="h-10 w-24" aria-hidden="true" />
-              </Transition>
+              <!-- chrome === 'unknown'. Holds the space so nothing shifts. -->
+              <div v-else key="pending" class="h-10 w-40" aria-hidden="true" />
+            </Transition>
 
-              <template #fallback>
-                <div class="h-10 w-24" aria-hidden="true" />
-              </template>
-            </ClientOnly>
-          </div>
+            <!-- Before mount, and while the answer is unknown. Sized for the
+                 toggle plus the widest of the two, so the header does not shift
+                 when the cluster lands. -->
+            <template #fallback>
+              <div class="h-10 w-40" aria-hidden="true" />
+            </template>
+          </ClientOnly>
         </div>
       </div>
     </header>
