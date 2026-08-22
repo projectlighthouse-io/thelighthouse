@@ -29,7 +29,9 @@ const footerLinks: NavLink[] = [
 // A client-side island: this layout wraps prerendered, edge-cached pages, so
 // the session must never reach the rendered HTML. The header draws signed-out
 // and fills in on mount — see UseAuth.ts.
-const { user, isSignedIn, initials, load } = useAuth()
+// The reader's name, avatar and email belong to ChromeUserMenu now — the layout
+// only needs to know whether to show it or the join button.
+const { isSignedIn, load } = useAuth()
 
 onMounted(load)
 
@@ -140,27 +142,7 @@ const year = new Date().getFullYear()
           <div class="flex items-center gap-1">
             <ChromeThemeToggle />
 
-            <NuxtLink
-              v-if="isSignedIn"
-              to="/profile"
-              class="flex items-center gap-2 rounded-md px-2 py-1.5 transition hover:bg-paper-warm"
-              :title="user?.email ?? undefined"
-            >
-              <img
-                v-if="user?.avatar"
-                :src="user.avatar"
-                alt=""
-                class="size-7 rounded-full object-cover"
-                referrerpolicy="no-referrer"
-              >
-              <span
-                v-else
-                class="flex size-7 items-center justify-center rounded-full bg-ink font-mono text-xs text-on-ink"
-              >{{ initials }}</span>
-              <span class="hidden font-sans text-sm text-ink sm:inline">
-                {{ user?.name ?? user?.email }}
-              </span>
-            </NuxtLink>
+            <ChromeUserMenu v-if="isSignedIn" />
 
             <button
               v-else
