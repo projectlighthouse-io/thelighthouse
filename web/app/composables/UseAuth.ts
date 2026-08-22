@@ -14,7 +14,12 @@
  */
 
 export interface AuthUser {
-  /** `provider:id` — stable across name and email changes. */
+  /**
+   * The reader's own id, as a string. Opaque — nothing here parses it.
+   *
+   * It used to be `provider:id`, because there was no users row to point at.
+   * The shape did not have to change when the meaning did.
+   */
   sub: string
   provider: 'github' | 'google'
   name: string | null
