@@ -50,6 +50,24 @@ use crate::{
 /// The signed session. Site-wide path: every page may ask who the reader is.
 const SESSION_COOKIE: &str = "lh_session";
 
+/// A companion to the session that javascript is allowed to read.
+///
+/// It carries no identity — the value is always `1` — and grants nothing. Its
+/// only job is to let the frontend know, *before it has asked anyone*, which
+/// shape the header should be.
+///
+/// Without it the frontend cannot tell a signed-in reader from an anonymous one
+/// until `/api/auth/session` answers, because the real session cookie is
+/// `HttpOnly` and deliberately unreadable. So every page load drew a join button
+/// at signed-in readers and swapped it a round trip later. Server-rendering the
+/// answer instead would make every page per-reader and uncacheable, which is a
+/// far worse trade than one extra cookie.
+///
+/// Set and cleared in lockstep with the session. If they ever disagree the
+/// frontend corrects itself the moment the session endpoint replies — this is a
+/// hint, and nothing is trusted because of it.
+const READER_COOKIE: &str = "lh_reader";
+
 /// The CSRF state, plus where to land afterwards.
 ///
 /// `Path=/` rather than something narrower, because the two routes that use it
@@ -224,6 +242,7 @@ async fn callback(
         &target,
         &[
             cookie(SESSION_COOKIE, &value, "/", session::MAX_AGE, secure),
+            readable_cookie(READER_COOKIE, "1", "/", session::MAX_AGE, secure),
             cleared(OAUTH_COOKIE, OAUTH_PATH, secure),
         ],
     )
@@ -284,7 +303,12 @@ async fn logout(State(state): State<AppState>) -> Response {
     // original and the reader stays signed in.
     append_cookies(
         headers,
-        &[cleared(SESSION_COOKIE, "/", state.config.cookie_secure())],
+        &[
+            cleared(SESSION_COOKIE, "/", state.config.cookie_secure()),
+            // Cleared with the session, or the frontend keeps drawing a signed-in
+            // header for somebody who is not.
+            cleared_readable(READER_COOKIE, "/", state.config.cookie_secure()),
+        ],
     );
     cache::apply(headers, CachePolicy::NoStore, None);
 
@@ -334,13 +358,34 @@ fn append_cookies(headers: &mut HeaderMap, cookies: &[String]) {
 }
 
 fn cookie(name: &str, value: &str, path: &str, max_age: u64, secure: bool) -> String {
+    http_only_cookie(name, value, path, max_age, secure, true)
+}
+
+/// The readable companion. Same lifetime and path as the session, without
+/// `HttpOnly` so a script can see it.
+///
+/// Only ever used for [`READER_COOKIE`], which holds no secret. Anything with a
+/// value worth stealing goes through [`cookie`].
+fn readable_cookie(name: &str, value: &str, path: &str, max_age: u64, secure: bool) -> String {
+    http_only_cookie(name, value, path, max_age, secure, false)
+}
+
+fn http_only_cookie(
+    name: &str,
+    value: &str,
+    path: &str,
+    max_age: u64,
+    secure: bool,
+    http_only: bool,
+) -> String {
     // `SameSite=Lax`, not `Strict`. Strict would withhold the state cookie on
     // the callback — that arrives as a top-level navigation *from the
     // provider's origin*, which is exactly what Strict is for suppressing — and
     // the login would fail every time with a state mismatch.
     let secure = if secure { "; Secure" } else { "" };
+    let http_only = if http_only { "; HttpOnly" } else { "" };
 
-    format!("{name}={value}; Path={path}; Max-Age={max_age}; HttpOnly; SameSite=Lax{secure}")
+    format!("{name}={value}; Path={path}; Max-Age={max_age}{http_only}; SameSite=Lax{secure}")
 }
 
 /// Same name, same path, no value, immediate expiry. A browser matches a
@@ -348,6 +393,14 @@ fn cookie(name: &str, value: &str, path: &str, max_age: u64, secure: bool) -> St
 /// leaves the cookie in place.
 fn cleared(name: &str, path: &str, secure: bool) -> String {
     cookie(name, "", path, 0, secure)
+}
+
+/// Clears a cookie that was set readable, keeping the flags symmetrical with
+/// how it was written. A browser will delete it either way, but a cookie whose
+/// set and clear disagree about `HttpOnly` is a puzzle for whoever reads the
+/// response next.
+fn cleared_readable(name: &str, path: &str, secure: bool) -> String {
+    readable_cookie(name, "", path, 0, secure)
 }
 
 /// Reads one cookie out of the request.
@@ -812,10 +865,18 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // Both of them. The readable companion left behind would keep the
+        // frontend drawing a signed-in header for somebody who is not.
         let cleared = set_cookies(&response);
-        assert_eq!(cleared.len(), 1);
-        assert!(cleared.first().unwrap().starts_with("lh_session=;"));
-        assert!(cleared.first().unwrap().contains("Max-Age=0"));
+        assert_eq!(cleared.len(), 2);
+        for name in [SESSION_COOKIE, READER_COOKIE] {
+            let value = cleared
+                .iter()
+                .find(|c| c.starts_with(&format!("{name}=;")))
+                .unwrap_or_else(|| panic!("{name} was not cleared"));
+            assert!(value.contains("Max-Age=0"));
+        }
 
         // GET would let a prefetch or an <img> sign a reader out.
         assert_eq!(
