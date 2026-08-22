@@ -26,7 +26,73 @@ const footerLinks: NavLink[] = [
   { to: '/blog', label: 'blog' },
 ]
 
-const { user, isSignedIn } = usePreviewAuth()
+// A client-side island: this layout wraps prerendered, edge-cached pages, so
+// the session must never reach the rendered HTML. The header draws signed-out
+// and fills in on mount — see UseAuth.ts.
+const { user, isSignedIn, initials, load } = useAuth()
+
+onMounted(load)
+
+// Join opens the panel instead of navigating. /login still exists and is still
+// where the middleware and rust's failure redirects send people — this is the
+// same screen brought to the reader rather than the reader sent to it.
+const joinOpen = ref(false)
+
+// Clicked, as opposed to drifted into. A pinned panel gets the scrim, focus and
+// aria-modal; a hovered one is only a preview and stays out of the way.
+const joinPinned = ref(false)
+
+// Hover is an enhancement over the click, never a replacement: it is off for
+// touch and stylus, where `mouseenter` fires on tap and would make the panel
+// open and shut in the same gesture.
+const canHover = ref(false)
+onMounted(() => {
+  canHover.value = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+})
+
+// Two different waits, for two different mistakes. Opening waits long enough
+// that a cursor crossing the button on its way elsewhere does not flash the
+// panel open. Closing waits long enough to cross the gap between the button and
+// the panel, which is a diagonal of a few hundred pixels — too short and the
+// panel closes while the reader is on their way to it.
+const OPEN_DELAY = 120
+const CLOSE_DELAY = 260
+
+let openTimer: ReturnType<typeof setTimeout> | undefined
+let closeTimer: ReturnType<typeof setTimeout> | undefined
+
+function clearTimers() {
+  clearTimeout(openTimer)
+  clearTimeout(closeTimer)
+}
+
+function hoverIn() {
+  if (!canHover.value) return
+  clearTimers()
+  openTimer = setTimeout(() => (joinOpen.value = true), OPEN_DELAY)
+}
+
+function hoverOut() {
+  if (!canHover.value) return
+  clearTimers()
+  // A pinned panel is the reader's decision and only they close it — with the
+  // ×, Escape or the scrim. Drifting the cursor off is not a decision.
+  if (joinPinned.value) return
+  closeTimer = setTimeout(() => (joinOpen.value = false), CLOSE_DELAY)
+}
+
+function toggleJoin() {
+  clearTimers()
+  joinOpen.value = !joinOpen.value
+  joinPinned.value = joinOpen.value
+}
+
+// Whatever closed it — scrim, Escape, a route change — the pin goes with it.
+watch(joinOpen, (isOpen) => {
+  if (!isOpen) joinPinned.value = false
+})
+
+onBeforeUnmount(clearTimers)
 
 // site-level identity, emitted once for every page that uses this layout
 useJsonLd('site', {
@@ -78,25 +144,47 @@ const year = new Date().getFullYear()
               v-if="isSignedIn"
               to="/profile"
               class="flex items-center gap-2 rounded-md px-2 py-1.5 transition hover:bg-paper-warm"
-              :title="user?.email"
+              :title="user?.email ?? undefined"
             >
+              <img
+                v-if="user?.avatar"
+                :src="user.avatar"
+                alt=""
+                class="size-7 rounded-full object-cover"
+                referrerpolicy="no-referrer"
+              >
               <span
+                v-else
                 class="flex size-7 items-center justify-center rounded-full bg-ink font-mono text-xs text-on-ink"
-              >{{ user?.initials }}</span>
-              <span class="hidden font-sans text-sm text-ink sm:inline">{{ user?.name }}</span>
+              >{{ initials }}</span>
+              <span class="hidden font-sans text-sm text-ink sm:inline">
+                {{ user?.name ?? user?.email }}
+              </span>
             </NuxtLink>
 
-            <NuxtLink
+            <button
               v-else
-              to="/login"
-              class="rounded-lg border border-stroke bg-ink px-4 py-2 text-sm font-semibold text-on-ink transition hover:bg-ink-hover sm:px-6"
+              type="button"
+              aria-haspopup="dialog"
+              :aria-expanded="joinOpen"
+              class="cursor-pointer rounded-lg border border-stroke bg-ink px-4 py-2 text-sm font-semibold text-on-ink transition hover:bg-ink-hover sm:px-6"
+              @click="toggleJoin"
+              @mouseenter="hoverIn"
+              @mouseleave="hoverOut"
             >
               join
-            </NuxtLink>
+            </button>
           </div>
         </div>
       </div>
     </header>
+
+    <AuthJoinPanel
+      v-model="joinOpen"
+      :pinned="joinPinned"
+      @hover-in="hoverIn"
+      @hover-out="hoverOut"
+    />
 
     <main class="mt-16 flex flex-1 flex-col">
       <slot />
