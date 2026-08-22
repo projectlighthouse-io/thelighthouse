@@ -1,0 +1,46 @@
+# Postgres for local development, and nothing else.
+#
+# The api, nuxt and caddy are not here on purpose: they ship as one image built
+# by the Dockerfile, and running them a second way in compose means two
+# definitions of the same thing drifting apart. `make image && make run` is how
+# you run the site. This file exists so a clone has a database to run it
+# against without installing postgres or the laravel stack.
+
+services:
+  postgres:
+    # Alpine, and pinned to the major the production dump came from (17.10).
+    # A dump restored into an older major fails outright; a newer one accepts it
+    # and then differs in ways nobody looks for until something breaks.
+    image: postgres:17-alpine
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lighthouse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lighthouse}
+      POSTGRES_DB: ${POSTGRES_DB:-lighthouse}
+
+    ports:
+      # 5433 on the host, not 5432. The laravel stack publishes 5432, and the
+      # rebuild is developed alongside it — same port means whichever came up
+      # first wins and the other fails to bind, which reads as a broken
+      # database rather than a port collision. Inside the container it is still
+      # 5432, so DATABASE_URL points at 5433 from the host.
+      - "${POSTGRES_PORT:-5433}:5432"
+
+    volumes:
+      # Named, so `docker compose down` keeps the data and `down -v` is the
+      # deliberate way to throw it away.
+      - lighthouse-postgres:/var/lib/postgresql/data
+
+    healthcheck:
+      # `pg_isready` alone reports ready during the brief first-boot restart
+      # postgres does after initdb, so the check names the database too.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lighthouse} -d ${POSTGRES_DB:-lighthouse}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+    restart: unless-stopped
+
+volumes:
+  lighthouse-postgres:

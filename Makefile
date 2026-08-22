@@ -6,17 +6,38 @@ VERSION  := $(shell cat VERSION)
 TAG      := $(REGISTRY)/$(IMAGE):$(VERSION)
 
 .DEFAULT_GOAL := help
-.PHONY: help web fmt fmt-check lint test build check audit image run login push clean
+.PHONY: help web db db-down db-reset migrate migrate-status fmt fmt-check lint test \
+        build check audit image run login push clean
 
 help: ## show this
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-8s\033[0m %s\n", $$1, $$2}'
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 # The frontend is a submodule, so a fresh clone has an empty web/ until this
 # runs. Building without it fails inside docker with a confusing missing-file
 # error rather than an obvious one.
 web: ## fetch or update the frontend submodule
 	git submodule update --init --remote web
+
+# Postgres only. The site itself runs from the built image — see `run`.
+db: ## start postgres and wait for it
+	docker compose up -d --wait
+
+# No -v. The volume survives, because throwing away local data should be typed
+# out in full rather than reachable by muscle memory.
+db-down: ## stop postgres, keep the data
+	docker compose down
+
+db-reset: ## stop postgres and delete the data
+	docker compose down -v
+
+# Fresh database: builds the schema from migration 0. A database the laravel app
+# already owns wants `baseline` instead — see the README.
+migrate: ## apply pending migrations
+	cargo run -q -p lighthouse-migrate -- run
+
+migrate-status: ## what is applied, what is pending
+	cargo run -q -p lighthouse-migrate -- status
 
 fmt: ## format the rust source
 	cargo fmt --all
