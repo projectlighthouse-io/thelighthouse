@@ -31,36 +31,27 @@ export interface AuthUser {
 let inFlight: Promise<void> | null = null
 
 /**
- * Remembers, across page loads, that the last answer was "signed in".
+ * Whether the last sign-in is still believed to be live.
  *
- * Not authentication — nothing is trusted because of it. It exists so the header
- * can draw the *right shape* on the client's very first render, instead of
- * showing a join button to somebody who is signed in and swapping it out a
- * network round trip later.
+ * Read from `lh_reader`, a cookie rust sets beside the session and clears with
+ * it. Not authentication — the value is always `1` and grants nothing. It exists
+ * so the header knows which shape to draw on its *first* render, rather than
+ * showing a join button to a signed-in reader for the length of a round trip.
  *
- * A stale hint is self-correcting: `load()` overwrites it either way, so the
- * worst case is an avatar that becomes a join button once the session comes back
- * empty. That is the right way round — the reverse is what looks broken.
+ * A cookie rather than localStorage, which is what this was first: localStorage
+ * is only written once a session fetch has already succeeded, so the first load
+ * after signing in — and after any deploy that cleared it — flashed anyway. The
+ * cookie arrives with the redirect that signs you in, so it is right from the
+ * very first paint.
+ *
+ * Stale is self-correcting and fails the safe way: an expired session shows your
+ * avatar until `/api/auth/session` replies, then falls back to join. The reverse
+ * is what looked broken.
  */
-const HINT_KEY = 'auth.hint'
-
-function readHint(): boolean {
+function readerHint(): boolean {
   if (import.meta.server) return false
-  try {
-    return localStorage.getItem(HINT_KEY) === '1'
-  }
-  catch {
-    // Safari in private mode throws on localStorage. Not worth a broken header.
-    return false
-  }
-}
 
-function writeHint(signedIn: boolean): void {
-  try {
-    if (signedIn) localStorage.setItem(HINT_KEY, '1')
-    else localStorage.removeItem(HINT_KEY)
-  }
-  catch { /* see readHint */ }
+  return document.cookie.split(';').some(pair => pair.trim() === 'lh_reader=1')
 }
 
 /** First letters of the first and last word, for the avatar fallback. */
@@ -84,17 +75,14 @@ export function useAuth() {
 
   const hint = useState<boolean>('auth.hint', () => false)
 
-  // Read here, not in the `useState` initialiser above. That initialiser runs on
-  // the *server*, where there is no localStorage, and its result is serialised
-  // into the payload — so the client hydrates `false` and never asks. The
-  // symptom is the flash this exists to remove, arriving anyway.
+  // Read here, not in the `useState` initialiser. That initialiser runs on the
+  // *server*, where there are no cookies to read from `document`, and its result
+  // is serialised into the payload — so the client hydrates `false` and never
+  // asks. The symptom is the flash this exists to remove, arriving anyway.
   //
-  // This runs during setup, before the first render, so the header's first paint
-  // already knows which shape to draw. Skipped once the session has really
-  // answered: after that `user` is the truth and the remembered value is stale
-  // by definition.
+  // This runs during setup, before the first render.
   if (import.meta.client && !resolved.value) {
-    hint.value = readHint()
+    hint.value = readerHint()
   }
 
   /**
@@ -117,8 +105,9 @@ export function useAuth() {
     inFlight = $fetch<AuthUser | null>('/api/auth/session')
       .then((reader) => {
         user.value = reader ?? null
-        hint.value = reader !== null
-        writeHint(reader !== null)
+        // `user.value`, not `reader`: $fetch answers undefined for an empty
+        // body, and `undefined !== null` would read as signed in.
+        hint.value = user.value !== null
       })
       .catch(() => {
         // The api being unreachable is not a signed-in reader. Failing to
@@ -126,7 +115,7 @@ export function useAuth() {
         //
         // The hint is left alone: a request that never arrived is not evidence
         // of being signed out, and forgetting on a flaky connection would put
-        // the flash back on the next load.
+        // the flash back on the next load. Rust owns the cookie either way.
         user.value = null
       })
       .finally(() => {
@@ -144,8 +133,8 @@ export function useAuth() {
 
     user.value = null
     resolved.value = true
+    // Rust clears `lh_reader` in the same response; this is the local redraw.
     hint.value = false
-    writeHint(false)
 
     await navigateTo('/')
   }
