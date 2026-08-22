@@ -64,6 +64,20 @@ export default defineNuxtConfig({
   // per request — prerender them and serve files. What is left on the server is
   // only what depends on a session.
   routeRules: {
+    // Prerendered HTML is a file on disk, but without a cache header every
+    // browser and CDN falls back to its own heuristic — which for a page with
+    // no Expires and no max-age usually means refetching every time.
+    //
+    // max-age=0 keeps the browser honest (it revalidates, and gets a 304), while
+    // s-maxage lets a shared cache serve it outright. stale-while-revalidate
+    // means a deploy does not cause a latency spike: the CDN keeps serving the
+    // old copy while it fetches the new one.
+    '/**': {
+      headers: {
+        'cache-control': 'public, max-age=0, s-maxage=600, stale-while-revalidate=86400',
+      },
+    },
+
     '/': { prerender: true },
     '/books/**': { prerender: true },
     '/projects/**': { prerender: true },
@@ -80,11 +94,12 @@ export default defineNuxtConfig({
     // Session-dependent, so prerendering them would bake one user's view into a
     // file. They are noindex anyway, and rendering them on the client keeps the
     // server out of it entirely.
-    '/dashboard': { ssr: false },
-    '/notes': { ssr: false },
-    '/profile': { ssr: false },
-    '/settings/**': { ssr: false },
-    '/dev/**': { ssr: false },
+    // no-store, not just private: these render per session, and the /** rule
+    // above would otherwise hand a shared cache permission to keep them
+    '/dashboard': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
+    '/notes': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
+    '/profile': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
+    '/settings/**': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
 
     // Hashed filenames, so they can never go stale.
     '/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
@@ -94,6 +109,36 @@ export default defineNuxtConfig({
     alias: {
       '@': appDir,
       '#server': serverDir,
+    },
+
+    // In production Caddy routes these to the rust api; in dev there is no
+    // Caddy, so nuxt stands in for it. Without this every /api/auth/* request
+    // hits nuxt's own router and 404s, and sign-in cannot be exercised locally
+    // at all. Dev only — nitro drops devProxy from the build.
+    //
+    // Cookies come back with no Domain, so they bind to whatever host the
+    // browser used; changeOrigin would rewrite it and drop the session cookie.
+    devProxy: {
+      '/api': {
+        target: 'http://127.0.0.1:9000/api',
+        changeOrigin: false,
+      },
+      // The OAuth return leg lives at the root because that is what is
+      // registered with the providers — mirrors the two `handle` blocks in the
+      // Caddyfile.
+      //
+      // Keyed on `/github`, not `/github/callback`, because nitro strips the
+      // matched prefix and forwards the remainder: an exact-length key leaves
+      // `/`, which arrives at the api as `/github/callback/` and 404s on the
+      // trailing slash. The shorter key leaves `/callback` to append.
+      '/github': {
+        target: 'http://127.0.0.1:9000/github',
+        changeOrigin: false,
+      },
+      '/google': {
+        target: 'http://127.0.0.1:9000/google',
+        changeOrigin: false,
+      },
     },
 
     // brotli + gzip beside every public asset, so the CDN serves the compressed
