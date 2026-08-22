@@ -49,8 +49,9 @@
 use std::process::ExitCode;
 
 use sqlx::{
+    Connection as _,
     migrate::{Migrate as _, Migrator},
-    postgres::PgPoolOptions,
+    postgres::PgConnection,
 };
 
 /// Compiled in at build time from the workspace's `migrations/`.
@@ -94,18 +95,33 @@ async fn run() -> Result<(), String> {
     let url = std::env::var("DATABASE_URL")
         .map_err(|_| "DATABASE_URL is not set in .env or the environment".to_owned())?;
 
-    // One connection. This is a short-lived command run by a person, and a pool
-    // would only mean more sockets doing the same single job.
-    let pool = PgPoolOptions::new()
-        .max_connections(1)
-        .connect(&url)
+    // A single connection, not a pool. This is a short-lived command run by a
+    // person, so a pool buys nothing — and it costs the error message: a pool
+    // that cannot connect reports "pool timed out while waiting for an open
+    // connection", which hides the refusal and never says where it was trying
+    // to reach. A plain connection says "Connection refused".
+    let mut conn = PgConnection::connect(&url)
         .await
-        .map_err(|error| format!("cannot connect: {error}"))?;
+        .map_err(|error| format!("cannot connect to {}: {error}", redacted(&url)))?;
 
     match command.as_str() {
-        "run" => apply(&pool).await,
-        "baseline" => baseline(&pool).await,
-        _ => status(&pool).await,
+        "run" => apply(&mut conn).await,
+        "baseline" => baseline(&mut conn).await,
+        _ => status(&mut conn).await,
+    }
+}
+
+/// The connection target, without the password.
+///
+/// Printed on a failed connect, because "cannot connect" without saying where
+/// is the difference between a two-second fix and a puzzled ten minutes — and
+/// pointing at the wrong host is the most common reason this fails.
+fn redacted(url: &str) -> String {
+    // postgres://user:password@host:port/db — everything up to and including
+    // the last '@' is credentials.
+    match url.rsplit_once('@') {
+        Some((_, target)) => target.to_owned(),
+        None => url.to_owned(),
     }
 }
 
@@ -114,7 +130,7 @@ async fn run() -> Result<(), String> {
 /// Records the first migration as applied without running it. Everything after
 /// it is left pending, so the next `run` applies the forward migrations and
 /// nothing else.
-async fn baseline(pool: &sqlx::PgPool) -> Result<(), String> {
+async fn baseline(conn: &mut PgConnection) -> Result<(), String> {
     let Some(first) = MIGRATIONS.iter().next() else {
         return Err("this binary carries no migrations".to_owned());
     };
@@ -124,7 +140,7 @@ async fn baseline(pool: &sqlx::PgPool) -> Result<(), String> {
     // later as a missing table rather than here.
     let schema_exists: Option<String> =
         sqlx::query_scalar(&format!("SELECT to_regclass('{SENTINEL}')::text"))
-            .fetch_one(pool)
+            .fetch_one(&mut *conn)
             .await
             .map_err(|error| format!("cannot inspect the schema: {error}"))?;
 
@@ -135,14 +151,11 @@ async fn baseline(pool: &sqlx::PgPool) -> Result<(), String> {
     }
 
     // sqlx creates its bookkeeping table on first run; here nothing has run.
-    pool.acquire()
-        .await
-        .map_err(|error| format!("cannot acquire a connection: {error}"))?
-        .ensure_migrations_table()
+    conn.ensure_migrations_table()
         .await
         .map_err(|error| format!("cannot create the migrations table: {error}"))?;
 
-    if applied_versions(pool).await.contains(&first.version) {
+    if applied_versions(&mut *conn).await.contains(&first.version) {
         println!("already baselined  {} {}", first.version, first.description);
         return Ok(());
     }
@@ -157,7 +170,7 @@ async fn baseline(pool: &sqlx::PgPool) -> Result<(), String> {
     .bind(first.version)
     .bind(&*first.description)
     .bind(&*first.checksum)
-    .execute(pool)
+    .execute(&mut *conn)
     .await
     .map_err(|error| format!("cannot record the baseline: {error}"))?;
 
@@ -167,15 +180,15 @@ async fn baseline(pool: &sqlx::PgPool) -> Result<(), String> {
     Ok(())
 }
 
-async fn apply(pool: &sqlx::PgPool) -> Result<(), String> {
-    let before = applied_versions(pool).await;
+async fn apply(conn: &mut PgConnection) -> Result<(), String> {
+    let before = applied_versions(&mut *conn).await;
 
     MIGRATIONS
-        .run(pool)
+        .run(&mut *conn)
         .await
         .map_err(|error| format!("migration failed: {error}"))?;
 
-    let after = applied_versions(pool).await;
+    let after = applied_versions(&mut *conn).await;
 
     // Names what ran rather than printing "done". A migration command that is
     // silent about which files it applied is one you have to go and check.
@@ -195,8 +208,8 @@ async fn apply(pool: &sqlx::PgPool) -> Result<(), String> {
     Ok(())
 }
 
-async fn status(pool: &sqlx::PgPool) -> Result<(), String> {
-    let applied = applied_versions(pool).await;
+async fn status(conn: &mut PgConnection) -> Result<(), String> {
+    let applied = applied_versions(&mut *conn).await;
 
     for migration in MIGRATIONS.iter() {
         let mark = if applied.contains(&migration.version) {
@@ -220,9 +233,9 @@ async fn status(pool: &sqlx::PgPool) -> Result<(), String> {
 
 /// Applied versions, or none when the bookkeeping table does not exist yet —
 /// which is simply a database that has never been migrated.
-async fn applied_versions(pool: &sqlx::PgPool) -> Vec<i64> {
+async fn applied_versions(conn: &mut PgConnection) -> Vec<i64> {
     sqlx::query_scalar::<_, i64>("SELECT version FROM _sqlx_migrations WHERE success")
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await
         .unwrap_or_default()
 }
