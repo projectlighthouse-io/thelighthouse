@@ -111,35 +111,14 @@ export default defineNuxtConfig({
       '#server': serverDir,
     },
 
-    // In production Caddy routes these to the rust api; in dev there is no
-    // Caddy, so nuxt stands in for it. Without this every /api/auth/* request
-    // hits nuxt's own router and 404s, and sign-in cannot be exercised locally
-    // at all. Dev only — nitro drops devProxy from the build.
+    // No devProxy. Caddy fronts development too — `make up` in the thelighthouse
+    // repo — so `/api/*` and the OAuth callbacks reach the rust api the same way
+    // they do in production, and this app is reached at :8000 rather than :3000.
     //
-    // Cookies come back with no Domain, so they bind to whatever host the
-    // browser used; changeOrigin would rewrite it and drop the session cookie.
-    devProxy: {
-      '/api': {
-        target: 'http://127.0.0.1:9000/api',
-        changeOrigin: false,
-      },
-      // The OAuth return leg lives at the root because that is what is
-      // registered with the providers — mirrors the two `handle` blocks in the
-      // Caddyfile.
-      //
-      // Keyed on `/github`, not `/github/callback`, because nitro strips the
-      // matched prefix and forwards the remainder: an exact-length key leaves
-      // `/`, which arrives at the api as `/github/callback/` and 404s on the
-      // trailing slash. The shorter key leaves `/callback` to append.
-      '/github': {
-        target: 'http://127.0.0.1:9000/github',
-        changeOrigin: false,
-      },
-      '/google': {
-        target: 'http://127.0.0.1:9000/google',
-        changeOrigin: false,
-      },
-    },
+    // A proxy here would be a second way in, and then the shape you tested would
+    // be whichever you happened to start. The session cookie is the thing that
+    // suffers: it crosses different boundaries under each, which is exactly the
+    // bug that does not reproduce locally.
 
     // brotli + gzip beside every public asset, so the CDN serves the compressed
     // copy instead of compressing on the fly
