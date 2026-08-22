@@ -6,14 +6,18 @@ PORT ?= 8080
 POSTGRES_USER ?= lighthouse
 POSTGRES_DB   ?= lighthouse
 
+# Where caddy listens on the host. 8000 matches APP_URL and the oauth callbacks
+# already registered with google and github.
+CADDY_PORT ?= 8000
+
 REGISTRY := registry.digitalocean.com/lighthouse-registry
 IMAGE    := thelighthouse
 VERSION  := $(shell cat VERSION)
 TAG      := $(REGISTRY)/$(IMAGE):$(VERSION)
 
 .DEFAULT_GOAL := help
-.PHONY: help web db db-down db-reset psql migrate migrate-status fmt fmt-check lint test \
-        build check audit image run login push clean
+.PHONY: help web up down db db-down db-reset psql migrate migrate-status fmt fmt-check \
+        lint test build check audit image run login push clean
 
 help: ## show this
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -25,9 +29,29 @@ help: ## show this
 web: ## fetch or update the frontend submodule
 	git submodule update --init --remote web
 
-# Postgres only. The site itself runs from the built image — see `run`.
-db: ## start postgres and wait for it
+# Everything development needs that is not the code: postgres, and the caddy
+# that fronts it. The api and nuxt you start yourself — caddy proxies to them on
+# the host, so start them in either order and reload the page.
+#
+#   cargo run -p lighthouse-api                     :9000
+#   cd web && HOST=127.0.0.1 PORT=3000 npm run dev  :3000
+#   http://localhost:8000                           ← visit this, never :3000
+#
+# HOST=127.0.0.1 is not optional. Nuxt otherwise binds [::1] — IPv6 loopback
+# only — and caddy, running in docker, reaches the host over IPv4. The symptom
+# is a 502 from caddy while http://localhost:3000 works perfectly in a browser.
+up: ## start postgres and caddy, and wait for them
 	docker compose up -d --wait
+	@echo "\n  caddy    http://localhost:$(CADDY_PORT)"
+	@echo "  api      cargo run -p lighthouse-api"
+	@echo "  nuxt     cd web && HOST=127.0.0.1 PORT=3000 npm run dev\n"
+
+down: ## stop postgres and caddy, keep the data
+	docker compose down
+
+# Postgres only, for when caddy is not wanted.
+db: ## start postgres and wait for it
+	docker compose up -d --wait postgres
 
 # No -v. The volume survives, because throwing away local data should be typed
 # out in full rather than reachable by muscle memory.

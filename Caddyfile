@@ -1,18 +1,30 @@
-# Caddy is the only public listener in the container. Nuxt and the api bind
-# loopback, so nothing reaches them except through here.
+# Caddy is the only public listener. Nuxt and the api sit behind it, so nothing
+# reaches them except through here.
 #
-#   browser  ──► :{$PORT} caddy ──► :3000 nuxt
-#   luxctl   ──► :{$PORT} caddy ──► :9000 api     (signed requests only)
-#   nuxt ssr ──────────────────► :9000 api        (loopback, never via caddy)
+#   browser  ──► :{$PORT} caddy ──► nuxt
+#   luxctl   ──► :{$PORT} caddy ──► api     (signed requests only)
+#   nuxt ssr ──────────────────► api        (direct, never via caddy)
 #
-# Nuxt talks to the api over loopback, which is why there is no browser-facing
-# rule for reading content: the frontend is the only thing that does it on a
-# reader's behalf.
+# Nuxt talks to the api directly, which is why there is no browser-facing rule
+# for reading content: the frontend is the only thing that does it on a reader's
+# behalf.
+#
+# **This one file serves development too.** A separate dev Caddyfile would drift
+# from this one silently, and the drift would be in the rules deciding what a
+# browser can reach — the worst possible place for two versions of the truth. The
+# only real differences are where the upstreams live and which port is published,
+# so those are the only things parameterised:
+#
+#   production   both upstreams default to loopback inside the container
+#   development  compose overrides them to host.docker.internal, because the api
+#                and nuxt run on the host while caddy runs in docker
 {
 	admin off
 
-	# TLS terminates at the App Platform load balancer, so caddy must not try
-	# to get its own certificate.
+	# No certificate here. In production TLS is terminated by Cloudflare in front
+	# of the droplet; in development there is none at all. The edge-to-origin hop
+	# still needs its own certificate — see docs/rebuild.md — and that is a
+	# separate change, not something this line is currently getting right.
 	auto_https off
 	servers {
 		trusted_proxies static private_ranges
@@ -91,13 +103,13 @@
 		header X-Luxctl-Signature *
 	}
 	handle @signed {
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
 	# OAuth is a browser navigation, so it cannot carry a signature. The api
 	# owns the whole dance and sets the session cookie.
 	handle /api/auth/* {
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
 	# The provider's return leg, and the one URL here that was not ours to pick:
@@ -109,16 +121,16 @@
 	# the root, above the catch-all that hands everything to nuxt, so anything
 	# looser would start swallowing page routes.
 	handle /github/callback {
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
 	handle /google/callback {
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
 	# Webhooks authenticate by signing their own payloads, Stripe-style.
 	handle /webhooks/* {
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
 	# Anything else on /api/* is unsigned traffic off the open internet.
@@ -129,6 +141,6 @@
 
 	# Nuxt owns everything else, including its own /_api/* endpoints.
 	handle {
-		reverse_proxy 127.0.0.1:3000
+		reverse_proxy {$NUXT_UPSTREAM:127.0.0.1:3000}
 	}
 }

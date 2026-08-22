@@ -1,10 +1,17 @@
-# Postgres for local development, and nothing else.
+# The two pieces of local development that are not the code you are editing:
+# postgres, and the caddy that sits in front of it all.
 #
-# The api, nuxt and caddy are not here on purpose: they ship as one image built
-# by the Dockerfile, and running them a second way in compose means two
-# definitions of the same thing drifting apart. `make image && make run` is how
-# you run the site. This file exists so a clone has a database to run it
-# against without installing postgres or the laravel stack.
+# The api and nuxt are deliberately absent. You run those yourself, from source,
+# with a compiler and a watcher attached — putting them here would mean a second
+# definition of how they start, drifting from the Dockerfile that actually ships.
+# `make image && make run` runs the real thing.
+#
+# Caddy *is* here, because the alternative was worse. Without it, development was
+# browser → nuxt with a devProxy forwarding /api, while production is
+# browser → caddy → nuxt + api. The session cookie crossed different boundaries
+# in each, which is exactly where cookie bugs hide and exactly the bug you cannot
+# reproduce locally. Same Caddyfile, same routing rules, same origin for both
+# processes — only the upstreams differ.
 
 services:
   postgres:
@@ -39,6 +46,33 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
+
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.10-alpine
+
+    ports:
+      # 8000 on the host, matching APP_URL and the callback URLs already
+      # registered with Google and GitHub. Inside, caddy binds 8080 exactly as it
+      # does in the production image.
+      - "${CADDY_PORT:-8000}:8080"
+
+    environment:
+      # The api and nuxt run on the host, not in this network. In the production
+      # image these default to loopback and nothing sets them.
+      API_UPSTREAM: host.docker.internal:9000
+      NUXT_UPSTREAM: host.docker.internal:3000
+
+    volumes:
+      # Read-only: the container has no business editing the routing rules, and
+      # the same file is what ships in the image.
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+
+    extra_hosts:
+      # Docker Desktop resolves this already; declaring it keeps the compose file
+      # working on plain docker engine, where it is not automatic.
+      - "host.docker.internal:host-gateway"
 
     restart: unless-stopped
 

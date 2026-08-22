@@ -44,16 +44,46 @@ In production there is no `.env` — every key comes from the platform's own
 environment, and the API reads whichever is present. What it will not do is
 start with a key missing; the boot failure names it.
 
+## Running it locally
+
+Caddy fronts development too, so the browser reaches Nuxt and the API exactly as
+it will in production — same routing rules, same origin, same boundaries for the
+session cookie to cross.
+
+```bash
+make up          # postgres + caddy
+make migrate     # build the schema
+
+cargo run -p lighthouse-api                      # :9000
+cd web && HOST=127.0.0.1 PORT=3000 npm run dev   # :3000
+```
+
+Then visit **http://localhost:8000** — never `:3000` directly, or you are testing
+a different shape than the one that ships.
+
+`HOST=127.0.0.1` is not optional. Nuxt otherwise binds `[::1]`, IPv6 loopback
+only, and Caddy reaches the host over IPv4. The symptom is a 502 from Caddy while
+`http://localhost:3000` works perfectly in a browser.
+
+Port 8000 matches `APP_URL` and the OAuth callbacks already registered with
+Google and GitHub, so signing in works without touching either console.
+
+There is one Caddyfile, not a dev copy. A second one would drift, and the drift
+would be in the rules that decide what a browser can reach. Only the upstreams
+differ, and those are environment variables: in the production image both default
+to loopback inside the container; in compose they point at the host.
+
 ## The database
 
 Postgres runs from `compose.yaml`, so a clone needs nothing installed:
 
 ```bash
-make db          # start postgres and wait until it answers
+make db          # postgres alone, without caddy
 make migrate     # build the schema from migration 0
 make psql        # open a shell on it
 make db-down     # stop it, keep the data
 make db-reset    # stop it and delete the data
+make down        # stop postgres and caddy together
 ```
 
 `make psql` takes a query too, for when a shell is more ceremony than the
