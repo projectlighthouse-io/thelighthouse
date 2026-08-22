@@ -2,18 +2,19 @@
 -- the rebuild does not carry go away.
 --
 -- The two new columns are stored as smallint and given names in rust, in
--- `crates/api/src/books.rs`. Integers rather than text because the set of values
--- is closed and known at compile time: a typo in a varchar column is a row that
--- reads as neither published nor local and is silently absent from every
--- listing, whereas a smallint outside its CHECK cannot be written at all. The
--- rust enum and the CHECK below have to be changed together — the COMMENTs on
--- each column name the type to change alongside it.
+-- `crates/api/src/content.rs`. Integers rather than text because the set of
+-- values is closed and known at compile time: a typo in a varchar column is a
+-- row that reads as neither published nor draft and is silently absent from
+-- every listing, whereas a smallint outside its CHECK cannot be written at all.
+-- The rust enum and the CHECK below have to be changed together — the COMMENTs
+-- on each column name the type to change alongside it.
 --
---   status   0 local, 1 published
+--   status   0 draft, 1 published
 --   tier     0 foundation, 1 intermediate, 2 advanced
 --
--- Dropped: `is_published`, replaced by `status`, which has room for the states
--- between "on my machine" and "live" that a boolean cannot express.
+-- Dropped: `is_published`, replaced by `status`. A draft is written but not for
+-- readers: a local run shows drafts so they can be read while being written,
+-- production does not. A boolean cannot say that.
 -- `lab_slug` and `details_component`, which belong to the retired lab
 -- infrastructure and a laravel component name respectively — neither means
 -- anything in the rebuild.
@@ -22,7 +23,7 @@
 -- status
 --
 -- Backfilled from is_published, which is a faithful mapping: everything that
--- was published becomes published, everything else becomes local.
+-- was published becomes published, everything else becomes a draft.
 
 ALTER TABLE books ADD COLUMN status smallint NOT NULL DEFAULT 0;
 
@@ -37,10 +38,10 @@ CREATE INDEX books_status_index ON books (status);
 ALTER TABLE books ADD CONSTRAINT books_status_check CHECK (status IN (0, 1));
 
 -- The default stays. A book that is created without saying otherwise should be
--- local — the failure mode of the other default is publishing something by
+-- a draft — the failure mode of the other default is publishing something by
 -- accident.
 COMMENT ON COLUMN books.status IS
-    '0 local, 1 published. Mapped by books::Status in crates/api; change both together.';
+    '0 draft, 1 published. Mapped by content::Status in crates/api; change both together.';
 
 -- tier
 --
@@ -83,7 +84,7 @@ ALTER TABLE books ALTER COLUMN tier DROP DEFAULT;
 ALTER TABLE books ADD CONSTRAINT books_tier_check CHECK (tier IN (0, 1, 2));
 
 COMMENT ON COLUMN books.tier IS
-    '0 foundation, 1 intermediate, 2 advanced. Mapped by books::Tier in crates/api; change both together.';
+    '0 foundation, 1 intermediate, 2 advanced. Mapped by content::Tier in crates/api; change both together.';
 
 -- Entitlement does not go with it. Deciding what a subscription unlocks belongs
 -- to the entitlements table in a later migration, and `tier` must never be
