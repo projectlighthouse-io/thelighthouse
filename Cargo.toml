@@ -1,0 +1,62 @@
+[workspace]
+resolver = "3"
+members = ["crates/api", "crates/loginwith", "crates/migrate"]
+
+# Declared once here and inherited by every crate, so a new crate cannot opt
+# out by forgetting to repeat them.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+# No panics. This is a long-running server: a panic in a request handler takes
+# a thread down, and with panic=abort in release it takes the process — and
+# therefore, in a single container, the whole site — with it.
+#
+# These are deny, not warn, because a warning in a 5,000-line build scroll is
+# a warning nobody reads. Tests are exempt via clippy.toml.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+indexing_slicing = "deny"
+integer_division = "deny"
+unwrap_in_result = "deny"
+
+# Axum requires every handler to return a future, so a handler that does no io
+# is still `async`. This is the framework's contract, not an oversight — the
+# alternative is an #[allow] on each one, which is noise that hides real cases.
+unused_async = "allow"
+
+# Silent truncation in a size or an offset is the kind of bug that only shows
+# up on the one input nobody tested.
+cast_possible_truncation = "deny"
+cast_sign_loss = "deny"
+cast_precision_loss = "deny"
+
+# Profiles are only honoured in the workspace root. Putting them in a member
+# manifest is silently ignored, which is where these used to live.
+
+[profile.dev]
+# No debuginfo. Debugging here is logs, not a debugger, and debug symbols are
+# what turn target/ into tens of gigabytes.
+debug = false
+strip = "debuginfo"
+
+[profile.test]
+debug = false
+strip = "debuginfo"
+
+[profile.release]
+debug = false
+strip = true
+lto = true
+codegen-units = 1
+# A panic in a request handler should take the process down cleanly rather than
+# unwinding through a half-updated state. The entrypoint restarts the container.
+panic = "abort"

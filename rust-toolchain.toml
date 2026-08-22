@@ -1,0 +1,7 @@
+# Pinned, same reasoning as .nvmrc on the frontend and the base images in the
+# Dockerfile: everyone and every build uses one compiler, so "works on my
+# machine" cannot mean "on my toolchain".
+[toolchain]
+channel = "1.98"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

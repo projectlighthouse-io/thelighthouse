@@ -1,0 +1,8 @@
+# Defaults are the community standard and worth keeping. These are the few
+# stable options that meaningfully help review.
+edition = "2024"
+max_width = 100
+
+# Group and sort imports so a diff never reshuffles them.
+reorder_imports = true
+reorder_modules = true

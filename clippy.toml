@@ -1,0 +1,9 @@
+# Tests are allowed to unwrap. A panic in a test is a failed test, which is the
+# point; forcing error handling there buys nothing and obscures the assertion.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+
+# An HMAC comparison or a token check hidden behind a long function is easy to
+# get wrong unnoticed.
+cognitive-complexity-threshold = 20

@@ -1,0 +1,7 @@
+target/
+node_modules/
+.env
+.env.*
+!.env.example
+.DS_Store
+CLAUDE.local.md
