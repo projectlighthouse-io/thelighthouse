@@ -25,9 +25,6 @@ pub(crate) struct Config {
     /// derive from it rather than being configured separately and drifting: the
     /// OAuth callback URLs, and whether cookies are marked `Secure`.
     pub(crate) app_url: String,
-    /// Signs the session cookie. Rotating it signs everyone out, which is the
-    /// only revocation a stateless session has — see `session`.
-    pub(crate) session_secret: String,
     pub(crate) github_id: String,
     pub(crate) github_secret: String,
     pub(crate) google_id: String,
@@ -44,7 +41,6 @@ impl fmt::Debug for Config {
             // Redacted: a connection string carries the password.
             .field("database_url", &"<redacted>")
             .field("app_url", &self.app_url)
-            .field("session_secret", &"<redacted>")
             .field("github_id", &self.github_id)
             .field("github_secret", &"<redacted>")
             .field("google_id", &self.google_id)
@@ -102,7 +98,6 @@ impl Config {
             // onto it without producing `//github/callback` — which a provider
             // compares byte for byte against its registered callback and refuses.
             app_url: required("APP_URL")?.trim_end_matches('/').to_owned(),
-            session_secret: required("SESSION_SECRET")?,
             github_id: required("GITHUB_CLIENT_ID")?,
             github_secret: required("GITHUB_CLIENT_SECRET")?,
             google_id: required("GOOGLE_CLIENT_ID")?,
@@ -138,7 +133,6 @@ impl Config {
             api_port: 9000,
             database_url: "postgres://localhost/lighthouse".to_owned(),
             app_url: "https://lighthouse.test".to_owned(),
-            session_secret: "session".to_owned(),
             github_id: "gh-id".to_owned(),
             github_secret: "gh-secret".to_owned(),
             google_id: "goo-id".to_owned(),
@@ -161,7 +155,6 @@ mod tests {
             "postgres://postgres:password@localhost/projectlighthouse",
         ),
         ("APP_URL", "https://lighthouse.test"),
-        ("SESSION_SECRET", "session"),
         ("GITHUB_CLIENT_ID", "gh-id"),
         ("GITHUB_CLIENT_SECRET", "gh-secret"),
         ("GOOGLE_CLIENT_ID", "goo-id"),

@@ -165,9 +165,9 @@ never sees a token and never talks to a provider.
 
 ```
 GET  /api/auth/{provider}    mint a state, redirect to the provider
-GET  /{provider}/callback    verify, exchange, set the session cookie
+GET  /{provider}/callback    verify, exchange, resolve a user, open a session
 GET  /api/auth/session       the reader, or null
-POST /api/auth/logout        clear the cookie
+POST /api/auth/logout        delete the session row, clear the cookie
 ```
 
 The callback sits at the root while the rest live under `/api/auth`. That
@@ -176,11 +176,20 @@ keeps the path the Laravel app serves and the rebuild inherits both
 registrations. Renaming it would mean editing two OAuth consoles before this
 could ship.
 
-The session is an HttpOnly, SameSite=Lax cookie, signed with
-`SESSION_SECRET` — there is no session table, because there is no users table
-yet. The consequence, written down where it can be found: **a session cannot be
-revoked before it expires.** Rotating `SESSION_SECRET` signs everyone out and
-is the only blunt instrument available until the users table lands.
+The session is an HttpOnly, SameSite=Lax cookie carrying 32 random bytes and
+nothing else. Those bytes name a row in `sessions`, which holds the user id, the
+provider, and a CSRF token for the writes that come later. `last_activity` is a
+sliding expiry: thirty days without a request, not thirty days from sign-in.
+
+**Signing out deletes the row**, so a copy of the cookie lifted off a browser
+dies with it. That is the reason the session is a row rather than a signed
+payload the process can verify without remembering it.
+
+The callback resolves the profile to a `users` row: by the provider's id, else
+by email — which is what lets one person sign in with either Google or GitHub
+and land in the same account — else a new row with a generated username. A
+provider that shares no email address cannot complete sign-in, because
+`users.email` is the link key and the column is `NOT NULL`.
 
 Each provider's registered callback must be `APP_URL` plus the callback path
 above, byte for byte. An empty client id skips that provider — its route 404s

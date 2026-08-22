@@ -9,9 +9,9 @@
 //!
 //! ```text
 //!   GET /api/auth/{provider}     → set lh_oauth, 302 to the provider
-//!   GET /{provider}/callback     → verify, set lh_session, 302 back in
+//!   GET /{provider}/callback     → verify, resolve a user, open a session
 //!   GET /api/auth/session        → who is this, or null
-//!   POST /api/auth/logout        → clear lh_session
+//!   POST /api/auth/logout        → delete the session row, clear lh_session
 //! ```
 //!
 //! The callback is at the root while everything else is under `/api/auth`, and
@@ -22,7 +22,8 @@
 //! None of these carry a luxctl signature — an OAuth callback is a browser
 //! navigation and cannot — so Caddy routes them to the api unsigned and they
 //! authenticate themselves: the state cookie is what ties a callback to a login
-//! this site started, and the session cookie is signed.
+//! this site started, and the session cookie names a row that only this process
+//! could have written.
 //!
 //! Nothing here is cacheable. Every response either sets a cookie or describes
 //! one reader, so all of them go out `no-store`.
@@ -44,11 +45,14 @@ use serde::{Deserialize, Serialize};
 use crate::{
     api::AppState,
     cache::{self, CachePolicy},
-    session::{self, Session},
+    session, users,
 };
 
-/// The signed session. Site-wide path: every page may ask who the reader is.
-const SESSION_COOKIE: &str = "lh_session";
+/// The session id. Site-wide path: every page may ask who the reader is.
+///
+/// Opaque — 32 random bytes naming a row. Nothing about the reader travels in
+/// it, so there is nothing in it to read or to edit. See `session`.
+pub(crate) const SESSION_COOKIE: &str = "lh_session";
 
 /// A companion to the session that javascript is allowed to read.
 ///
@@ -80,7 +84,7 @@ const OAUTH_PATH: &str = "/";
 
 /// Long enough for a reader to fill in a provider's login form and a 2FA
 /// prompt, short enough that an abandoned attempt does not linger.
-const OAUTH_MAX_AGE: u64 = 60 * 10;
+const OAUTH_MAX_AGE: i64 = 60 * 10;
 
 /// Where a reader lands when they did not ask for anywhere in particular.
 const DEFAULT_REDIRECT: &str = "/dashboard";
@@ -95,6 +99,12 @@ const MAX_REDIRECT_LEN: usize = 512;
 const GENERIC_FAILURE: &str = "Sign-in did not complete. Please try again.";
 const EXPIRED_FAILURE: &str = "That sign-in link expired. Please try again.";
 const CANCELLED: &str = "Sign-in was cancelled.";
+
+/// The one failure specific enough to be worth naming, because the reader can
+/// act on it: an account is found by email, so there has to be one. Telling
+/// somebody to "try again" when trying again cannot possibly work is worse than
+/// telling them what is wrong.
+const NO_EMAIL: &str = "That account shared no email address. Make one public with the provider, or use the other one.";
 
 /// Mounted on the root router with absolute paths rather than nested, so the
 /// paths in this file are the paths in the Caddyfile — no prefix to hold in
@@ -196,7 +206,7 @@ async fn callback(
         return to_login(GENERIC_FAILURE, &discard);
     };
 
-    let user = match driver
+    let social = match driver
         .user(Callback {
             code,
             // Absent rather than empty is still a state that does not match, and
@@ -220,28 +230,38 @@ async fn callback(
         }
     };
 
-    let issued = Session {
-        sub: format!("{}:{}", driver.provider().as_str(), user.id),
-        provider: driver.provider().as_str().to_owned(),
-        // GitHub leaves `name` null far more often than `login`, and a reader
-        // with neither gets chrome that says so rather than an empty gap.
-        name: user.name.or(user.nickname),
-        email: user.email,
-        avatar: user.avatar,
-        exp: session::now() + session::MAX_AGE,
+    // The provider has proved who this is. Everything from here is ours: which
+    // row that person is, and a session pointing at it.
+    let reader = match users::find_or_create(&state.db, driver.provider(), &social).await {
+        Ok(reader) => reader,
+        Err(users::Error::NoEmail) => {
+            // Not an error to hide behind the generic message: the reader has
+            // to change something with the provider before this can ever work.
+            tracing::info!(%provider, "the provider shared no email address");
+            return to_login(NO_EMAIL, &discard);
+        }
+        Err(users::Error::Database(error)) => {
+            tracing::error!(%provider, %error, "cannot resolve the reader");
+            return to_login(GENERIC_FAILURE, &discard);
+        }
+        Err(users::Error::UsernameRace) => {
+            tracing::error!(%provider, "gave up choosing a username");
+            return to_login(GENERIC_FAILURE, &discard);
+        }
     };
 
-    let Some(value) = session::encode(&state.config.session_secret, &issued) else {
-        tracing::error!(%provider, "cannot encode the session");
+    let Some(opened) = session::create(&state.db, reader.id, driver.provider().as_str()).await
+    else {
         return to_login(GENERIC_FAILURE, &discard);
     };
 
-    tracing::info!(%provider, sub = %issued.sub, "signed in");
+    tracing::info!(%provider, user_id = reader.id, "signed in");
 
     redirect(
         &target,
         &[
-            cookie(SESSION_COOKIE, &value, "/", session::MAX_AGE, secure),
+            // The cookie carries the row's id and nothing else.
+            cookie(SESSION_COOKIE, &opened.id, "/", session::MAX_AGE, secure),
             readable_cookie(READER_COOKIE, "1", "/", session::MAX_AGE, secure),
             cleared(OAUTH_COOKIE, OAUTH_PATH, secure),
         ],
@@ -249,26 +269,19 @@ async fn callback(
 }
 
 /// What the frontend renders chrome from. Never the source of an entitlement —
-/// anything paid is decided server side, against the cookie, not against this.
+/// anything paid is decided server side, against the session row, not this.
 #[derive(Debug, Serialize)]
 struct Reader {
+    /// The `users.id`, as a string.
+    ///
+    /// It used to be `provider:id`, because there was no users row to point at.
+    /// The frontend never parses it — it is an opaque identity — so the shape
+    /// did not have to change when the meaning did.
     sub: String,
     provider: String,
-    name: Option<String>,
-    email: Option<String>,
+    name: String,
+    email: String,
     avatar: Option<String>,
-}
-
-impl From<Session> for Reader {
-    fn from(session: Session) -> Self {
-        Self {
-            sub: session.sub,
-            provider: session.provider,
-            name: session.name,
-            email: session.email,
-            avatar: session.avatar,
-        }
-    }
 }
 
 /// Who is this, or `null`.
@@ -276,10 +289,12 @@ impl From<Session> for Reader {
 /// 200 with a null body rather than a 401: "nobody" is a correct answer to the
 /// question, not a failure to answer it. A 401 would make the anonymous case —
 /// the common one — an error in every client that calls this.
+///
+/// Two queries: the session, then the reader it points at. A join would make it
+/// one, at the cost of putting the expiry and sliding-refresh rules in two
+/// places. This runs once per page load for signed-in readers only.
 async fn session(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    let reader = read_cookie(&headers, SESSION_COOKIE)
-        .and_then(|cookie| session::decode(&state.config.session_secret, cookie))
-        .map(Reader::from);
+    let reader = resolve(&state, &headers).await;
 
     let mut response = Json(reader).into_response();
     // Describes one reader. No ETag either: revalidation would hand a shared
@@ -288,14 +303,42 @@ async fn session(State(state): State<AppState>, headers: HeaderMap) -> Response 
     response
 }
 
-/// Clears the cookie. POST, not GET, so a prefetcher or an `<img>` on another
-/// site cannot sign a reader out.
+/// The cookie, resolved all the way to a reader, or `None` at the first step
+/// that does not answer.
+async fn resolve(state: &AppState, headers: &HeaderMap) -> Option<Reader> {
+    let id = read_cookie(headers, SESSION_COOKIE)?;
+    let session = session::load(&state.db, id).await?;
+
+    let reader = users::find(&state.db, session.user_id)
+        .await
+        .inspect_err(|error| tracing::error!(%error, "cannot read the reader"))
+        .ok()??;
+
+    Some(Reader {
+        sub: reader.id.to_string(),
+        provider: session.provider,
+        name: reader.name,
+        email: reader.email,
+        avatar: reader.avatar,
+    })
+}
+
+/// Clears the cookie and deletes the row. POST, not GET, so a prefetcher or an
+/// `<img>` on another site cannot sign a reader out.
+///
+/// **Deleting the row is what makes this real revocation.** The stateless
+/// session this replaced could only clear the reader's own copy; a copy lifted
+/// off that browser stayed valid until it expired.
 ///
 /// `SameSite=Lax` already stops the cross-site form POST from carrying the
 /// cookie, so this needs no CSRF token of its own. The mutations that do —
 /// anything that changes stored state — get the double-submit token described
 /// in docs/rebuild.md when they exist.
-async fn logout(State(state): State<AppState>) -> Response {
+async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Some(id) = read_cookie(&headers, SESSION_COOKIE) {
+        session::delete(&state.db, id).await;
+    }
+
     let mut response = StatusCode::NO_CONTENT.into_response();
     let headers = response.headers_mut();
 
@@ -357,7 +400,7 @@ fn append_cookies(headers: &mut HeaderMap, cookies: &[String]) {
     }
 }
 
-fn cookie(name: &str, value: &str, path: &str, max_age: u64, secure: bool) -> String {
+fn cookie(name: &str, value: &str, path: &str, max_age: i64, secure: bool) -> String {
     http_only_cookie(name, value, path, max_age, secure, true)
 }
 
@@ -366,7 +409,7 @@ fn cookie(name: &str, value: &str, path: &str, max_age: u64, secure: bool) -> St
 ///
 /// Only ever used for [`READER_COOKIE`], which holds no secret. Anything with a
 /// value worth stealing goes through [`cookie`].
-fn readable_cookie(name: &str, value: &str, path: &str, max_age: u64, secure: bool) -> String {
+fn readable_cookie(name: &str, value: &str, path: &str, max_age: i64, secure: bool) -> String {
     http_only_cookie(name, value, path, max_age, secure, false)
 }
 
@@ -374,7 +417,7 @@ fn http_only_cookie(
     name: &str,
     value: &str,
     path: &str,
-    max_age: u64,
+    max_age: i64,
     secure: bool,
     http_only: bool,
 ) -> String {
@@ -409,7 +452,7 @@ fn cleared_readable(name: &str, path: &str, secure: bool) -> String {
 /// above, both values restricted to characters that need no escaping. The
 /// dependency would bring percent-decoding, jars and its own signing, none of
 /// which is used here.
-fn read_cookie<'h>(headers: &'h HeaderMap, name: &str) -> Option<&'h str> {
+pub(crate) fn read_cookie<'h>(headers: &'h HeaderMap, name: &str) -> Option<&'h str> {
     headers
         .get_all(COOKIE)
         .iter()
@@ -480,7 +523,6 @@ mod tests {
     use tower::ServiceExt as _;
 
     use super::*;
-    use crate::session::MAX_AGE;
 
     #[test]
     fn a_same_site_path_is_kept() {
@@ -802,54 +844,10 @@ mod tests {
         assert_eq!(&body[..], b"null");
     }
 
-    #[tokio::test]
-    async fn a_signed_cookie_names_the_reader() {
-        let issued = Session {
-            sub: "github:1".to_owned(),
-            provider: "github".to_owned(),
-            name: Some("Octocat".to_owned()),
-            email: Some("o@x.test".to_owned()),
-            avatar: None,
-            exp: session::now() + MAX_AGE,
-        };
-        let value = session::encode("session", &issued).unwrap();
-
-        let response = get(
-            "/api/auth/session",
-            Some(&format!("theme=dark; lh_session={value}")),
-        )
-        .await;
-        let body = axum::body::to_bytes(response.into_body(), 4096)
-            .await
-            .unwrap();
-        let body = String::from_utf8(body.to_vec()).unwrap();
-
-        assert!(body.contains("github:1"));
-        assert!(body.contains("Octocat"));
-    }
-
-    #[tokio::test]
-    async fn a_cookie_this_process_did_not_sign_is_anonymous() {
-        let forged = session::encode(
-            "not-the-session-secret",
-            &Session {
-                sub: "github:999".to_owned(),
-                provider: "github".to_owned(),
-                name: None,
-                email: None,
-                avatar: None,
-                exp: session::now() + MAX_AGE,
-            },
-        )
-        .unwrap();
-
-        let response = get("/api/auth/session", Some(&format!("lh_session={forged}"))).await;
-        let body = axum::body::to_bytes(response.into_body(), 4096)
-            .await
-            .unwrap();
-
-        assert_eq!(&body[..], b"null");
-    }
+    // There is no test here for "a cookie naming a real session names the
+    // reader": a session is a row now, so proving that needs a database, and
+    // these tests deliberately run without one. What that costs is stated in
+    // CLAUDE.local.md — the end-to-end check in the plan covers it instead.
 
     #[tokio::test]
     async fn signing_out_clears_the_cookie_and_refuses_a_get() {
@@ -894,6 +892,23 @@ mod tests {
                 get(uri, None).await.status(),
                 StatusCode::NOT_FOUND,
                 "{uri}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_reader_route_refuses_anyone_without_a_session_cookie() {
+        // The third mounting: /api/notes is outside the signature layer — the
+        // browser has no HMAC — and inside the session layer. If it ever drifts
+        // out of both, one reader's notes are readable by anybody who asks.
+        //
+        // No cookie means no database is touched, which is why this one can run
+        // here. A cookie naming an unknown session needs postgres.
+        for cookies in [None, Some("theme=dark"), Some("lh_session_old=stale")] {
+            assert_eq!(
+                get("/api/notes", cookies).await.status(),
+                StatusCode::UNAUTHORIZED,
+                "{cookies:?}"
             );
         }
     }

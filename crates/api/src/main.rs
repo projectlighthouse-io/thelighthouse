@@ -13,6 +13,7 @@ mod content;
 mod db;
 mod session;
 mod telemetry;
+mod users;
 
 use std::net::{Ipv4Addr, SocketAddr};
 
