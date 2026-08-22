@@ -12,9 +12,14 @@ const navLinks: NavLink[] = [
   { to: '/pricing', label: 'pricing' },
 ]
 
+// syntax and pricing are here because the header is client-rendered, so its
+// links are absent from the server-rendered HTML. Without these two, nothing a
+// crawler reads on any page would link to either.
 const footerLinks: NavLink[] = [
   { to: '/books', label: 'books' },
   { to: '/projects', label: 'projects' },
+  { to: '/syntax', label: 'syntax' },
+  { to: '/pricing', label: 'pricing' },
   { to: '/roadmap', label: 'roadmap' },
   { to: '/connecting-the-dots', label: 'connecting the dots' },
   { to: '/terms', label: 'terms' },
@@ -131,45 +136,54 @@ const year = new Date().getFullYear()
            to. The bar itself still spans the viewport — only its contents are
            constrained — so the background and bottom edge stay full width. -->
       <div class="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="relative flex h-16 items-center justify-between">
-          <NuxtLink to="/" class="flex items-center gap-2">
-            <img src="/lighthouse.svg" alt="projectlighthouse logo" class="h-8 w-8 object-contain">
-            <span class="text-base tracking-tight text-ink">projectlighthouse</span>
-          </NuxtLink>
+        <!-- The whole bar arrives at once: wordmark, links and the right-hand
+             cluster together. Anything that appears ahead of the rest reads as
+             the page still loading.
 
-          <nav class="absolute left-1/2 hidden -translate-x-1/2 items-center gap-2 sm:flex">
-            <NuxtLink
-              v-for="link in navLinks"
-              :key="link.to"
-              :to="link.to"
-              class="px-4 py-1 font-sans text-xs text-ink transition hover:text-link-hover sm:text-sm"
+             Client-rendered, and that is forced rather than preferred. Markup in
+             the server-rendered HTML is already painted before any script runs,
+             so there is no state left to fade *from* — fading the bar means
+             rendering the bar on the client. It waits for the session because
+             that is the last thing to arrive, and waiting is what makes it one
+             arrival instead of two.
+
+             The cost is the header's links leaving the crawlable HTML. Paid back
+             in the footer, which now carries syntax and pricing too, so every
+             destination the header offers is still a real link in the
+             server-rendered page. -->
+        <ClientOnly>
+          <!-- `out-in` with an instant leave: the placeholder is invisible, so
+               there is nothing worth animating away, and letting the two share
+               the flow would shove the bar around mid-fade. Keys are required —
+               without them Vue reuses one element and never transitions. -->
+          <Transition name="chrome" mode="out-in">
+            <div
+              v-if="chrome !== 'unknown'"
+              key="ready"
+              class="relative flex h-16 items-center justify-between"
             >
-              {{ link.label }}
-            </NuxtLink>
-          </nav>
+              <NuxtLink to="/" class="flex items-center gap-2">
+                <img src="/lighthouse.svg" alt="projectlighthouse logo" class="h-8 w-8 object-contain">
+                <span class="text-base tracking-tight text-ink">projectlighthouse</span>
+              </NuxtLink>
 
-          <!-- The whole right-hand cluster arrives at once.
+              <nav class="absolute left-1/2 hidden -translate-x-1/2 items-center gap-2 sm:flex">
+                <NuxtLink
+                  v-for="link in navLinks"
+                  :key="link.to"
+                  :to="link.to"
+                  class="px-4 py-1 font-sans text-xs text-ink transition hover:text-link-hover sm:text-sm"
+                >
+                  {{ link.label }}
+                </NuxtLink>
+              </nav>
 
-               The theme toggle is in here rather than outside because appearing
-               on its own and waiting for company reads as two separate things
-               loading. One fade, one arrival.
-
-               Server-rendered HTML has to be identical for every anonymous
-               visitor or it cannot be edge-cached, so the server cannot draw the
-               reader half at all — hence ClientOnly. And until the session
-               answers, neither a name nor a join button is known to be true, so
-               nothing renders yet: an empty slot says "not yet", a join button
-               says something that may be false. -->
-          <ClientOnly>
-            <!-- `out-in` with an instant leave: the placeholder is invisible, so
-                 there is nothing worth animating away, and letting the two share
-                 the flow would shove the header sideways mid-fade. Keys are
-                 required — without them Vue reuses one element and the
-                 transition never runs. -->
-            <Transition name="chrome" mode="out-in">
-              <div v-if="chrome !== 'unknown'" key="ready" class="flex items-center gap-1">
+              <div class="flex items-center gap-1">
                 <ChromeThemeToggle />
 
+                <!-- Exactly one of these, and it never becomes the other: by the
+                     time this renders the session has answered, so neither is a
+                     guess. -->
                 <ChromeUserMenu v-if="chrome === 'reader'" />
 
                 <button
@@ -185,19 +199,18 @@ const year = new Date().getFullYear()
                   join
                 </button>
               </div>
+            </div>
 
-              <!-- chrome === 'unknown'. Holds the space so nothing shifts. -->
-              <div v-else key="pending" class="h-10 w-40" aria-hidden="true" />
-            </Transition>
+            <!-- Waiting on the session. Holds the bar's height so the page
+                 below never jumps when the real one lands. -->
+            <div v-else key="pending" class="h-16" aria-hidden="true" />
+          </Transition>
 
-            <!-- Before mount, and while the answer is unknown. Sized for the
-                 toggle plus the widest of the two, so the header does not shift
-                 when the cluster lands. -->
-            <template #fallback>
-              <div class="h-10 w-40" aria-hidden="true" />
-            </template>
-          </ClientOnly>
-        </div>
+          <!-- Before mount. Same height again. -->
+          <template #fallback>
+            <div class="h-16" aria-hidden="true" />
+          </template>
+        </ClientOnly>
       </div>
     </header>
 
