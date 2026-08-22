@@ -1,0 +1,134 @@
+# Caddy is the only public listener in the container. Nuxt and the api bind
+# loopback, so nothing reaches them except through here.
+#
+#   browser  ──► :{$PORT} caddy ──► :3000 nuxt
+#   luxctl   ──► :{$PORT} caddy ──► :9000 api     (signed requests only)
+#   nuxt ssr ──────────────────► :9000 api        (loopback, never via caddy)
+#
+# Nuxt talks to the api over loopback, which is why there is no browser-facing
+# rule for reading content: the frontend is the only thing that does it on a
+# reader's behalf.
+{
+	admin off
+
+	# TLS terminates at the App Platform load balancer, so caddy must not try
+	# to get its own certificate.
+	auto_https off
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:{$PORT:8080} {
+	encode zstd gzip
+
+	# frame-ancestors only works as a real header; it is ignored in a <meta>
+	# tag. X-Frame-Options is the legacy equivalent, kept for older browsers.
+	header Content-Security-Policy "frame-ancestors 'self'"
+	header X-Frame-Options "SAMEORIGIN"
+
+	# Stop browsers guessing a content type when the declared one looks wrong —
+	# that guess is how a served .txt becomes executable script.
+	header X-Content-Type-Options "nosniff"
+
+	# Referrer leaks the full path of paid lesson URLs to any third party a
+	# reader clicks through to.
+	header Referrer-Policy "strict-origin-when-cross-origin"
+
+	# Images and fonts out of public/ carry no cache header from nitro, so they
+	# are refetched constantly. /_nuxt/* is deliberately absent: nuxt already
+	# marks it immutable, and setting it here too emits the header twice.
+	@public_static {
+		path *.png *.jpg *.jpeg *.webp *.svg *.gif *.ico *.woff2 *.woff
+		not path /_nuxt/*
+	}
+	header @public_static Cache-Control "public, max-age=604800"
+
+	# Caddy mints the request id and hands it to whichever process handles the
+	# request, so one id follows it through all three. Without this each process
+	# invents its own and the logs cannot be joined.
+	request_header X-Request-Id {http.request.uuid}
+	# `?` sets it only when absent. The api echoes the id itself, so setting it
+	# unconditionally here emits the header twice; this covers the nuxt path,
+	# where nothing downstream adds it.
+	header ?X-Request-Id {http.request.uuid}
+
+	log {
+		output stdout
+		# JSON, not console: App Platform captures stdout, and structured fields
+		# stay queryable if they are ever shipped somewhere that indexes them.
+		format json
+		level {$CADDY_LOG_LEVEL:INFO}
+	}
+
+	# The docker healthcheck hits / every 30s, which is 2880 identical lines a
+	# day drowning the traffic worth reading. Scoped to loopback and the probe's
+	# own user agent, so a real request to / is still logged.
+	@healthprobe {
+		path /
+		remote_ip 127.0.0.1
+		header User-Agent Wget
+	}
+	log_skip @healthprobe
+
+	# .env, .git and friends. .well-known stays reachable for ACME and
+	# security.txt. This must be a `handle` placed first — as a bare `respond`
+	# it never fires, because the catch-all handle swallows the request.
+	@dotfiles {
+		path_regexp \/\.
+		not path /.well-known/*
+	}
+	handle @dotfiles {
+		respond 403
+	}
+
+	# luxctl signs every request. Caddy checks only that a signature is present
+	# — it cannot verify an HMAC, and a proxy that pretends to authenticate is
+	# worse than one that does not. The api verifies it properly; this rule
+	# exists to keep unsigned traffic off the api, not to authorise anything.
+	@signed {
+		path /api/*
+		header X-Luxctl-Signature *
+	}
+	handle @signed {
+		reverse_proxy 127.0.0.1:9000
+	}
+
+	# OAuth is a browser navigation, so it cannot carry a signature. The api
+	# owns the whole dance and sets the session cookie.
+	handle /api/auth/* {
+		reverse_proxy 127.0.0.1:9000
+	}
+
+	# The provider's return leg, and the one URL here that was not ours to pick:
+	# it is registered with Google and GitHub, and is the path the laravel app
+	# already serves. Keeping it means the cutover is a DNS change rather than a
+	# round trip through two OAuth consoles.
+	#
+	# Named provider by provider rather than matched as /*/callback. This sits at
+	# the root, above the catch-all that hands everything to nuxt, so anything
+	# looser would start swallowing page routes.
+	handle /github/callback {
+		reverse_proxy 127.0.0.1:9000
+	}
+
+	handle /google/callback {
+		reverse_proxy 127.0.0.1:9000
+	}
+
+	# Webhooks authenticate by signing their own payloads, Stripe-style.
+	handle /webhooks/* {
+		reverse_proxy 127.0.0.1:9000
+	}
+
+	# Anything else on /api/* is unsigned traffic off the open internet.
+	# 404 rather than 403 — a 403 confirms the endpoint is there.
+	handle /api/* {
+		respond 404
+	}
+
+	# Nuxt owns everything else, including its own /_api/* endpoints.
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}
