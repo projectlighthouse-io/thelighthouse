@@ -10,11 +10,13 @@
 //! The content, entitlement and payment endpoints from docs/rebuild.md replace
 //! the stub routes below.
 
+use std::sync::Arc;
+
 use axum::{
     Json, Router,
     body::{Body, to_bytes},
     extract::{Request, State},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, HeaderValue, Method, StatusCode, header::RETRY_AFTER},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
@@ -29,7 +31,9 @@ use crate::{
     auth,
     cache::{self, CachePolicy},
     config::Config,
-    db, notes, session, telemetry,
+    db,
+    limit::RateLimit,
+    notes, session, telemetry,
 };
 
 type HmacSha256 = Hmac<Sha256>;
@@ -46,6 +50,9 @@ pub(crate) struct AppState {
     pub(crate) config: Config,
     pub(crate) socials: Providers,
     pub(crate) db: PgPool,
+    /// Shared, not cloned: an `Arc` so every clone of this state counts against
+    /// the same buckets. A `RateLimit` per clone would be a limit per request.
+    pub(crate) limits: Arc<RateLimit>,
 }
 
 pub(crate) fn app(config: Config, socials: Providers, db: PgPool) -> Router {
@@ -53,6 +60,7 @@ pub(crate) fn app(config: Config, socials: Providers, db: PgPool) -> Router {
         config,
         socials,
         db,
+        limits: Arc::new(RateLimit::new()),
     };
 
     // Everything mounted here inherits the signature check.
@@ -145,16 +153,34 @@ async fn require_signature(State(config): State<Config>, request: Request, next:
         .await
 }
 
+/// Where the frontend sends the CSRF token it read from `/api/auth/session`.
+///
+/// A header rather than a form field: a cross-site form POST can carry any body
+/// it likes, but it cannot set a custom header without a CORS preflight that
+/// this origin never answers.
+pub(crate) const CSRF_HEADER: &str = "x-csrf-token";
+
 /// Rejects anything without a live session, and hands the resolved one on.
 ///
-/// A layer for the same reason [`require_signature`] is one: an endpoint under
-/// it is protected because of where it is mounted, not because a handler
-/// remembered to check. The handler takes `Extension<Session>` and can be sure
-/// of it — there is no path through here that leaves it absent.
+/// Three checks, in order, and all three for the same reason [`require_signature`]
+/// exists: an endpoint under this layer is protected because of where it is
+/// mounted, not because a handler remembered. The handler takes
+/// `Extension<Session>` and can be sure of it.
 ///
-/// **401, not 404.** Unlike the luxctl surface, these routes are the frontend's
-/// and the browser already knows they exist; hiding them buys nothing and would
-/// make an expired session indistinguishable from a typo in a URL.
+/// 1. **A live session.** 401, not 404 — unlike the luxctl surface, these routes
+///    are the frontend's and the browser already knows they exist, so hiding
+///    them buys nothing and would make an expired session look like a typo.
+/// 2. **A CSRF token, on anything that changes state.** `SameSite=Lax` already
+///    stops the common cross-site form POST, and is not enough on its own
+///    (docs/rebuild.md). The token is minted with the session and lives in its
+///    row, so this compares what the caller sent against what this process
+///    stored rather than against another cookie — a plain double-submit trusts
+///    a cookie an attacker on a sibling subdomain can write.
+/// 3. **The write limit.** Ten a minute per reader, keyed by user id rather than
+///    by address, so a shared network is not one bucket.
+///
+/// Reads skip 2 and 3. A GET that needed a CSRF token would be a GET that
+/// changes something, which is its own bug.
 async fn require_session(
     State(state): State<AppState>,
     mut request: Request,
@@ -174,9 +200,57 @@ async fn require_session(
         return deny();
     };
 
+    if changes_state(request.method()) {
+        let provided = request
+            .headers()
+            .get(CSRF_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+
+        if !csrf_matches(&session.csrf, provided) {
+            tracing::info!(
+                user_id = session.user_id,
+                "a write arrived without a valid csrf token"
+            );
+            // 403, not 401: the reader is signed in. Answering 401 would send
+            // the frontend to re-authenticate, which cannot fix a missing header
+            // and would look like being signed out at random.
+            return StatusCode::FORBIDDEN.into_response();
+        }
+
+        if let Some(retry_after) = state.limits.check(session.user_id) {
+            let mut response = StatusCode::TOO_MANY_REQUESTS.into_response();
+            if let Ok(value) = HeaderValue::from_str(&retry_after.to_string()) {
+                response.headers_mut().insert(RETRY_AFTER, value);
+            }
+            return response;
+        }
+    }
+
     request.extensions_mut().insert(session);
 
     next.run(request).await
+}
+
+/// Whether a method is one the CSRF and rate-limit checks apply to.
+///
+/// The safe methods are listed rather than the unsafe ones, so a method nobody
+/// thought about — or one a future axum adds — is treated as a write. Getting
+/// this backwards is a mutation that skips both checks.
+fn changes_state(method: &Method) -> bool {
+    !matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS)
+}
+
+/// Constant time, and an empty expectation never matches — the same rules the
+/// oauth state comparison follows, for the same reason.
+fn csrf_matches(expected: &str, provided: &str) -> bool {
+    if expected.is_empty() {
+        return false;
+    }
+
+    let (expected, provided) = (expected.as_bytes(), provided.as_bytes());
+
+    expected.len() == provided.len() && bool::from(expected.ct_eq(provided))
 }
 
 /// Unsigned on purpose. Caddy never routes to it, so it is reachable only from
@@ -227,7 +301,7 @@ async fn ping(headers: HeaderMap) -> Response {
 /// handler cannot accidentally return a bare body with no `Cache-Control`.
 fn json_response<T: serde::Serialize>(
     request_headers: &HeaderMap,
-    policy: CachePolicy,
+    cache_policy: CachePolicy,
     value: T,
 ) -> Response {
     let Ok(body) = serde_json::to_vec(&value) else {
@@ -242,12 +316,12 @@ fn json_response<T: serde::Serialize>(
         && cache::matches_if_none_match(request_headers, etag)
     {
         let mut response = cache::NOT_MODIFIED.into_response();
-        cache::apply(response.headers_mut(), policy, Some(etag.clone()));
+        cache::apply(response.headers_mut(), cache_policy, Some(etag.clone()));
         return response;
     }
 
     let mut response = Json(value).into_response();
-    cache::apply(response.headers_mut(), policy, etag);
+    cache::apply(response.headers_mut(), cache_policy, etag);
     response
 }
 
@@ -262,6 +336,43 @@ mod tests {
         assert!(!signature_matches("secret", b"", "00"));
         assert!(!signature_matches("secret", b"", "not-hex"));
         assert!(!signature_matches("secret", b"", ""));
+    }
+
+    #[test]
+    fn only_the_safe_methods_skip_the_csrf_and_limit_checks() {
+        for safe in [Method::GET, Method::HEAD, Method::OPTIONS] {
+            assert!(!changes_state(&safe), "{safe} was treated as a write");
+        }
+
+        for write in [
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            // Not a method anything here serves, and that is the point: the
+            // list above is the allowlist, so anything unrecognised is checked
+            // rather than waved through.
+            Method::TRACE,
+        ] {
+            assert!(changes_state(&write), "{write} skipped the checks");
+        }
+    }
+
+    #[test]
+    fn a_csrf_token_must_match_exactly() {
+        assert!(csrf_matches("token", "token"));
+        assert!(!csrf_matches("token", "tokeN"));
+        assert!(!csrf_matches("token", "toke"));
+        assert!(!csrf_matches("token", "tokens"));
+    }
+
+    #[test]
+    fn a_session_with_no_token_accepts_nothing() {
+        // Including another empty string. A session that somehow carries no
+        // token must refuse every write, not accept the one that sends none.
+        assert!(!csrf_matches("", ""));
+        assert!(!csrf_matches("", "anything"));
+        assert!(!csrf_matches("token", ""));
     }
 
     #[test]

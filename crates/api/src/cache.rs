@@ -87,10 +87,10 @@ pub(crate) fn matches_if_none_match(headers: &HeaderMap, etag: &HeaderValue) -> 
 /// that the response depends on the cookie or the signature, it will happily
 /// reuse one caller's response for the next. That is the same leak as a missing
 /// `no-store`, arriving by a different route.
-pub(crate) fn apply(headers: &mut HeaderMap, policy: CachePolicy, etag: Option<HeaderValue>) {
-    headers.insert(CACHE_CONTROL, policy.header_value());
+pub(crate) fn apply(headers: &mut HeaderMap, cache_policy: CachePolicy, etag: Option<HeaderValue>) {
+    headers.insert(CACHE_CONTROL, cache_policy.header_value());
 
-    let vary = match policy {
+    let vary = match cache_policy {
         // Even for shared content: the response body is the same, but the
         // encoding is not, and an entitled caller may get a different one later.
         CachePolicy::Shared { .. } => "Accept-Encoding",

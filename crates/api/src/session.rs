@@ -49,12 +49,12 @@ pub(crate) struct Session {
     pub(crate) user_id: i64,
     /// Which provider signed this session in. Not authorization — it is what
     /// the reader is shown about their own account.
-    #[allow(dead_code)]
     pub(crate) provider: String,
-    /// The other half of the double-submit CSRF check every mutation will
-    /// carry. Minted here so it exists before the first write endpoint does —
-    /// see docs/rebuild.md.
-    #[allow(dead_code)]
+    /// The token every state-changing request has to echo back in a header.
+    ///
+    /// Minted per session and never leaves the row except through
+    /// `/api/auth/session`, which already needs the session cookie to answer.
+    /// Compared in `api::require_session`.
     pub(crate) csrf: String,
 }
 
@@ -62,7 +62,7 @@ pub(crate) struct Session {
 /// owns this table's shape and adding columns to it during the crossover is a
 /// migration both stacks have to agree about.
 #[derive(Debug, Serialize, Deserialize)]
-struct Payload {
+struct SessionPayload {
     provider: String,
     csrf: String,
 }
@@ -82,7 +82,7 @@ pub(crate) async fn create(pool: &PgPool, user_id: i64, provider: &str) -> Optio
     let id = loginwith::random_state().ok()?;
     let csrf = loginwith::random_state().ok()?;
 
-    let payload = Payload {
+    let payload = SessionPayload {
         provider: provider.to_owned(),
         csrf: csrf.clone(),
     };
@@ -97,7 +97,7 @@ pub(crate) async fn create(pool: &PgPool, user_id: i64, provider: &str) -> Optio
     .bind(now)
     .execute(pool)
     .await
-    .inspect_err(|error| tracing::error!(%error, "cannot open a session"))
+    .inspect_err(|error| tracing::error!(%error, user_id, "failed to open a session"))
     .ok()?;
 
     Some(Session {
@@ -122,7 +122,7 @@ pub(crate) async fn load(pool: &PgPool, id: &str) -> Option<Session> {
     .bind(id)
     .fetch_optional(pool)
     .await
-    .inspect_err(|error| tracing::error!(%error, "cannot read the session"))
+    .inspect_err(|error| tracing::error!(%error, "failed to read the session"))
     .ok()??;
 
     // `user_id` is nullable because laravel used this table for anonymous
@@ -144,10 +144,10 @@ pub(crate) async fn load(pool: &PgPool, id: &str) -> Option<Session> {
             .bind(now)
             .execute(pool)
             .await
-            .inspect_err(|error| tracing::warn!(%error, "cannot refresh the session"));
+            .inspect_err(|error| tracing::warn!(%error, user_id, "failed to refresh the session"));
     }
 
-    let payload: Payload = serde_json::from_str(&payload).ok()?;
+    let payload: SessionPayload = serde_json::from_str(&payload).ok()?;
 
     Some(Session {
         id: id.to_owned(),
@@ -163,7 +163,7 @@ pub(crate) async fn delete(pool: &PgPool, id: &str) {
         .bind(id)
         .execute(pool)
         .await
-        .inspect_err(|error| tracing::error!(%error, "cannot delete the session"));
+        .inspect_err(|error| tracing::error!(%error, "failed to delete the session"));
 }
 
 /// Whether a session has gone too long without being used.
@@ -220,13 +220,13 @@ mod tests {
 
     #[test]
     fn the_payload_carries_the_provider_and_the_csrf_token() {
-        let json = serde_json::to_string(&Payload {
+        let json = serde_json::to_string(&SessionPayload {
             provider: "github".to_owned(),
             csrf: "token".to_owned(),
         })
         .unwrap();
 
-        let read: Payload = serde_json::from_str(&json).unwrap();
+        let read: SessionPayload = serde_json::from_str(&json).unwrap();
 
         assert_eq!(read.provider, "github");
         assert_eq!(read.csrf, "token");

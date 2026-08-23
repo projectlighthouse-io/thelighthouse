@@ -145,7 +145,7 @@ async fn start(
 
     let Ok(oauth_state) = loginwith::random_state() else {
         // No fallback. A predictable state is worse than a failed login.
-        tracing::error!("cannot read the system random source");
+        tracing::error!(%provider, "failed to read the system random source");
         return to_login(GENERIC_FAILURE, &[]);
     };
 
@@ -241,7 +241,7 @@ async fn callback(
             return to_login(NO_EMAIL, &discard);
         }
         Err(users::Error::Database(error)) => {
-            tracing::error!(%provider, %error, "cannot resolve the reader");
+            tracing::error!(%provider, %error, "failed to resolve the reader");
             return to_login(GENERIC_FAILURE, &discard);
         }
         Err(users::Error::UsernameRace) => {
@@ -271,7 +271,7 @@ async fn callback(
 /// What the frontend renders chrome from. Never the source of an entitlement —
 /// anything paid is decided server side, against the session row, not this.
 #[derive(Debug, Serialize)]
-struct Reader {
+struct ReaderResponse {
     /// The `users.id`, as a string.
     ///
     /// It used to be `provider:id`, because there was no users row to point at.
@@ -282,6 +282,19 @@ struct Reader {
     name: String,
     email: String,
     avatar: Option<String>,
+    /// The CSRF token for this session, which the frontend echoes in a header
+    /// on every write — see `api::CSRF_HEADER`.
+    ///
+    /// Handed out here rather than in a second readable cookie. A cookie can be
+    /// written by any sibling subdomain, so comparing a header against a cookie
+    /// proves less than comparing it against the session row; this endpoint
+    /// already requires the session cookie to answer at all, so the token only
+    /// ever reaches the reader it belongs to.
+    ///
+    /// It is exactly as exposed to XSS as any token a page has to send, which
+    /// is to say a script running on this origin defeats CSRF protection
+    /// whatever shape it takes.
+    csrf: String,
 }
 
 /// Who is this, or `null`.
@@ -305,21 +318,24 @@ async fn session(State(state): State<AppState>, headers: HeaderMap) -> Response 
 
 /// The cookie, resolved all the way to a reader, or `None` at the first step
 /// that does not answer.
-async fn resolve(state: &AppState, headers: &HeaderMap) -> Option<Reader> {
+async fn resolve(state: &AppState, headers: &HeaderMap) -> Option<ReaderResponse> {
     let id = read_cookie(headers, SESSION_COOKIE)?;
     let session = session::load(&state.db, id).await?;
 
     let reader = users::find(&state.db, session.user_id)
         .await
-        .inspect_err(|error| tracing::error!(%error, "cannot read the reader"))
+        .inspect_err(
+            |error| tracing::error!(%error, user_id = session.user_id, "failed to read the reader"),
+        )
         .ok()??;
 
-    Some(Reader {
+    Some(ReaderResponse {
         sub: reader.id.to_string(),
         provider: session.provider,
         name: reader.name,
         email: reader.email,
         avatar: reader.avatar,
+        csrf: session.csrf,
     })
 }
 
@@ -687,8 +703,6 @@ mod tests {
         assert_eq!(response.headers().get_all(SET_COOKIE).iter().count(), 2);
     }
 
-    // ---- the routes, driven through the real router --------------------
-    //
     // These exist because the mounting is the part that fails silently: these
     // four routes sit outside the signature layer, and if they ever drift
     // inside it every one of them answers 404 and the site simply has no login.
@@ -892,6 +906,37 @@ mod tests {
                 get(uri, None).await.status(),
                 StatusCode::NOT_FOUND,
                 "{uri}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_write_without_a_session_is_refused_before_anything_else() {
+        // Ordering, not just the outcome: the session check runs first, so a
+        // write with no cookie is 401 and never reaches the csrf comparison —
+        // which would otherwise have no session token to compare against. It
+        // also never reaches the json extractor, which is why an empty body is
+        // enough here.
+        for (method, uri) in [
+            ("POST", "/api/notes"),
+            ("PATCH", "/api/notes/1"),
+            ("DELETE", "/api/notes/1"),
+        ] {
+            let response = router()
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(
+                response.status(),
+                StatusCode::UNAUTHORIZED,
+                "{method} {uri}"
             );
         }
     }

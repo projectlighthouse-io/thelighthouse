@@ -42,12 +42,12 @@ pub(crate) struct User {
 }
 
 /// A tuple in the column order every query below selects.
-type Row = (i64, String, String, Option<String>);
+type UserRow = (i64, String, String, Option<String>);
 
 const COLUMNS: &str = "id, name, email, avatar_url";
 
-impl From<Row> for User {
-    fn from((id, name, email, avatar): Row) -> Self {
+impl From<UserRow> for User {
+    fn from((id, name, email, avatar): UserRow) -> Self {
         Self {
             id,
             name,
@@ -105,7 +105,7 @@ pub(crate) async fn find_or_create(
     // 1. Known provider id. `users_{provider}_id_unique` makes this an index
     //    lookup, and the common case one query.
     let found =
-        sqlx::query_as::<_, Row>(&format!("SELECT {COLUMNS} FROM users WHERE {column} = $1"))
+        sqlx::query_as::<_, UserRow>(&format!("SELECT {COLUMNS} FROM users WHERE {column} = $1"))
             .bind(&social.id)
             .fetch_optional(pool)
             .await?;
@@ -126,7 +126,7 @@ pub(crate) async fn find_or_create(
     attach.push_str(" WHERE email = $1 RETURNING ");
     attach.push_str(COLUMNS);
 
-    let mut query = sqlx::query_as::<_, Row>(&attach)
+    let mut query = sqlx::query_as::<_, UserRow>(&attach)
         .bind(email)
         .bind(&social.id)
         .bind(social.avatar.as_deref());
@@ -150,7 +150,7 @@ pub(crate) async fn find_or_create(
 /// at a deleted user is a signed-out reader, not an error.
 pub(crate) async fn find(pool: &PgPool, id: i64) -> Result<Option<User>, sqlx::Error> {
     Ok(
-        sqlx::query_as::<_, Row>(&format!("SELECT {COLUMNS} FROM users WHERE id = $1"))
+        sqlx::query_as::<_, UserRow>(&format!("SELECT {COLUMNS} FROM users WHERE id = $1"))
             .bind(id)
             .fetch_optional(pool)
             .await?
@@ -193,7 +193,7 @@ async fn create(
     for _ in 0..USERNAME_ATTEMPTS {
         let username = unique_username(pool, source).await?;
 
-        let row = sqlx::query_as::<_, Row>(&insert)
+        let row = sqlx::query_as::<_, UserRow>(&insert)
             .bind(name)
             .bind(&username)
             .bind(email)
