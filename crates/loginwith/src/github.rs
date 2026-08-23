@@ -7,7 +7,10 @@ use crate::{client::Client, error::Error, user::SocialUser};
 /// GitHub wants `Authorization: token …` rather than `Bearer …`.
 const SCHEME: &str = "token";
 
-pub(crate) async fn user(client: &Client, token: &str) -> Result<SocialUser, Error> {
+pub(crate) async fn user(
+    client: &Client,
+    token: &str,
+) -> Result<SocialUser, Error> {
     let profile: Profile = client
         .get(&format!("{}/user", client.api()), token, SCHEME)
         .await?;
@@ -28,7 +31,10 @@ pub(crate) async fn user(client: &Client, token: &str) -> Result<SocialUser, Err
     })
 }
 
-async fn primary_email(client: &Client, token: &str) -> Result<Option<String>, Error> {
+async fn primary_email(
+    client: &Client,
+    token: &str,
+) -> Result<Option<String>, Error> {
     let emails: Vec<Address> = client
         .get(&format!("{}/user/emails", client.api()), token, SCHEME)
         .await?;

@@ -36,7 +36,10 @@ pub(crate) struct Note {
 ///
 /// `&Option<_>` rather than `Option<&_>` to match serde's `serialize_with`.
 #[allow(clippy::ref_option)]
-pub(crate) fn as_utc<S: Serializer>(at: &Option<NaiveDateTime>, out: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn as_utc<S: Serializer>(
+    at: &Option<NaiveDateTime>,
+    out: S,
+) -> Result<S::Ok, S::Error> {
     match at {
         Some(at) => {
             let utc = at.and_utc().to_rfc3339_opts(SecondsFormat::Secs, true);

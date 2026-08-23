@@ -167,7 +167,8 @@ mod tests {
 
     #[test]
     fn a_body_carries_the_policy_it_was_given() {
-        let shared = json(StatusCode::OK, "body", CachePolicy::public_content());
+        let shared =
+            json(StatusCode::OK, "body", CachePolicy::public_content());
         assert!(cache_control(&shared).contains("s-maxage"));
 
         let private = json(StatusCode::OK, "body", CachePolicy::Private);

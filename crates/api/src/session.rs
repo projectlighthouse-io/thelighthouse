@@ -73,7 +73,11 @@ struct SessionPayload {
 /// payload. The caller has one response to all of them: the sign-in did not
 /// complete. The reason is logged here rather than returned, because nothing
 /// upstream can act on the difference.
-pub(crate) async fn create(pool: &PgPool, user_id: i64, provider: &str) -> Option<Session> {
+pub(crate) async fn create(
+    pool: &PgPool,
+    user_id: i64,
+    provider: &str,
+) -> Option<Session> {
     let now = now()?;
 
     // The same generator as the oauth state: 32 bytes of OS randomness, hex
@@ -116,7 +120,10 @@ pub(crate) async fn create(pool: &PgPool, user_id: i64, provider: &str) -> Optio
 pub(crate) async fn load(pool: &PgPool, id: &str) -> Option<Session> {
     let now = now()?;
 
-    let (user_id, payload, last_activity) = sqlx::query_as::<_, (Option<i64>, String, i32)>(
+    let (user_id, payload, last_activity) = sqlx::query_as::<
+        _,
+        (Option<i64>, String, i32),
+    >(
         "SELECT user_id, payload, last_activity FROM sessions WHERE id = $1",
     )
     .bind(id)
@@ -163,7 +170,9 @@ pub(crate) async fn delete(pool: &PgPool, id: &str) {
         .bind(id)
         .execute(pool)
         .await
-        .inspect_err(|error| tracing::error!(%error, "failed to delete the session"));
+        .inspect_err(
+            |error| tracing::error!(%error, "failed to delete the session"),
+        );
 }
 
 /// Whether a session has gone too long without being used.

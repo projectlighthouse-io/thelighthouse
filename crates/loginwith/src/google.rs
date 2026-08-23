@@ -8,7 +8,10 @@ use crate::{client::Client, error::Error, user::SocialUser};
 /// and this is the standard userinfo endpoint.
 const USERINFO: &str = "/oauth2/v3/userinfo";
 
-pub(crate) async fn user(client: &Client, token: &str) -> Result<SocialUser, Error> {
+pub(crate) async fn user(
+    client: &Client,
+    token: &str,
+) -> Result<SocialUser, Error> {
     let url = format!("{}{USERINFO}", client.api());
     let profile: Profile = client.get(&url, token, "Bearer").await?;
 
@@ -68,7 +71,8 @@ mod tests {
     #[test]
     fn a_missing_nickname_is_not_an_error() {
         // Google's userinfo usually omits it entirely, unlike GitHub's `login`.
-        let profile: Profile = serde_json::from_str(r#"{"sub":"1","name":"Ada"}"#).unwrap();
+        let profile: Profile =
+            serde_json::from_str(r#"{"sub":"1","name":"Ada"}"#).unwrap();
 
         assert_eq!(profile.nickname, None);
         assert_eq!(profile.email, None);

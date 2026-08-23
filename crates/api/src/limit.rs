@@ -74,10 +74,13 @@ impl RateLimit {
         // Nothing here can panic — and `panic = "abort"` in release means the
         // process would be gone anyway — so taking the value back is strictly
         // better than refusing every write from here on.
-        let mut windows = self.windows.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut windows =
+            self.windows.lock().unwrap_or_else(PoisonError::into_inner);
 
         if windows.len() > PRUNE_ABOVE {
-            windows.retain(|_, window| now.duration_since(window.started) < self.window);
+            windows.retain(|_, window| {
+                now.duration_since(window.started) < self.window
+            });
         }
 
         let window = windows.entry(key).or_insert(Window {

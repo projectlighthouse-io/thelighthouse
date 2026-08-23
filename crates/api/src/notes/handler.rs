@@ -12,7 +12,9 @@ use axum::{
 };
 
 use super::{
-    payload::{EditNoteRequest, NewNoteRequest, validate_new_note, validate_note_body},
+    payload::{
+        EditNoteRequest, NewNoteRequest, validate_new_note, validate_note_body,
+    },
     refusal::{Refusal, refuse},
     store::{self, StoreError},
     target::{self, NoteTarget},
@@ -34,12 +36,15 @@ pub(crate) async fn list(
     let pattern = query.pattern();
     let pattern = pattern.as_deref();
 
-    let Ok(notes) = store::page(&state.db, session.user_id, pattern, paging).await else {
+    let Ok(notes) =
+        store::page(&state.db, session.user_id, pattern, paging).await
+    else {
         tracing::error!(user_id = session.user_id, "failed to read notes");
         return response::server_error();
     };
 
-    let Ok(total) = store::count(&state.db, session.user_id, pattern).await else {
+    let Ok(total) = store::count(&state.db, session.user_id, pattern).await
+    else {
         tracing::error!(user_id = session.user_id, "failed to count notes");
         return response::server_error();
     };
@@ -140,7 +145,9 @@ pub(crate) async fn remove(
     Path(id): Path<i64>,
 ) -> Response {
     match store::delete(&state.db, id, session.user_id).await {
-        Ok(true) => response::empty(StatusCode::NO_CONTENT, CachePolicy::NoStore),
+        Ok(true) => {
+            response::empty(StatusCode::NO_CONTENT, CachePolicy::NoStore)
+        }
         Ok(false) => response::not_found(),
         Err(error) => {
             tracing::error!(

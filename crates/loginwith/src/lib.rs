@@ -72,7 +72,9 @@ mod testing;
 pub use client::{Callback, Client};
 pub use error::Error;
 pub use provider::Provider;
-pub use registry::{GithubProvider, GoogleProvider, Providers, Registration, providers};
+pub use registry::{
+    GithubProvider, GoogleProvider, Providers, Registration, providers,
+};
 pub use state::random_state;
 pub use user::SocialUser;
 

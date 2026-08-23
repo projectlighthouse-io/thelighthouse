@@ -221,12 +221,17 @@ pub(crate) async fn rewrite(
 }
 
 /// Deletes one note. `false` when nothing matched — see [`rewrite`].
-pub(crate) async fn delete(db: &PgPool, id: i64, user_id: i64) -> Result<bool, StoreError> {
-    let deleted = sqlx::query("DELETE FROM notes WHERE id = $1 AND user_id = $2")
-        .bind(id)
-        .bind(user_id)
-        .execute(db)
-        .await?;
+pub(crate) async fn delete(
+    db: &PgPool,
+    id: i64,
+    user_id: i64,
+) -> Result<bool, StoreError> {
+    let deleted =
+        sqlx::query("DELETE FROM notes WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .execute(db)
+            .await?;
 
     Ok(deleted.rows_affected() > 0)
 }

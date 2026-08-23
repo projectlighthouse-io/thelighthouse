@@ -20,7 +20,8 @@ use axum::{
 use tracing::{Instrument, info_span};
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
-pub(crate) const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
+pub(crate) const REQUEST_ID: HeaderName =
+    HeaderName::from_static("x-request-id");
 
 /// Only used when a request arrives without an id — a loopback call from Nuxt,
 /// or anything that bypassed Caddy. Not a UUID: this needs to be unique within
@@ -75,7 +76,10 @@ pub(crate) fn init() {
 /// Everything logged inside the handler inherits those fields, so a line does
 /// not have to remember to include them — which is the difference between
 /// correlation that works and correlation that works when someone remembered.
-pub(crate) async fn trace_request(mut request: Request, next: Next) -> Response {
+pub(crate) async fn trace_request(
+    mut request: Request,
+    next: Next,
+) -> Response {
     let id = request
         .headers()
         .get(&REQUEST_ID)
@@ -102,7 +106,11 @@ pub(crate) async fn trace_request(mut request: Request, next: Next) -> Response 
         span.in_scope(|| {
             let latency_ms = started.elapsed().as_millis();
             if status.is_server_error() {
-                tracing::error!(status = status.as_u16(), latency_ms, "request failed");
+                tracing::error!(
+                    status = status.as_u16(),
+                    latency_ms,
+                    "request failed"
+                );
             } else {
                 tracing::info!(status = status.as_u16(), latency_ms, "request");
             }

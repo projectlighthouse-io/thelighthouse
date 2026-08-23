@@ -92,17 +92,18 @@ async fn run() -> Result<(), String> {
         return Err(format!("cannot read .env: {error}"));
     }
 
-    let url = std::env::var("DATABASE_URL")
-        .map_err(|_| "DATABASE_URL is not set in .env or the environment".to_owned())?;
+    let url = std::env::var("DATABASE_URL").map_err(|_| {
+        "DATABASE_URL is not set in .env or the environment".to_owned()
+    })?;
 
     // A single connection, not a pool. This is a short-lived command run by a
     // person, so a pool buys nothing — and it costs the error message: a pool
     // that cannot connect reports "pool timed out while waiting for an open
     // connection", which hides the refusal and never says where it was trying
     // to reach. A plain connection says "Connection refused".
-    let mut conn = PgConnection::connect(&url)
-        .await
-        .map_err(|error| format!("cannot connect to {}: {error}", redacted(&url)))?;
+    let mut conn = PgConnection::connect(&url).await.map_err(|error| {
+        format!("cannot connect to {}: {error}", redacted(&url))
+    })?;
 
     match command.as_str() {
         "run" => apply(&mut conn).await,
@@ -151,9 +152,9 @@ async fn baseline(conn: &mut PgConnection) -> Result<(), String> {
     }
 
     // sqlx creates its bookkeeping table on first run; here nothing has run.
-    conn.ensure_migrations_table()
-        .await
-        .map_err(|error| format!("cannot create the migrations table: {error}"))?;
+    conn.ensure_migrations_table().await.map_err(|error| {
+        format!("cannot create the migrations table: {error}")
+    })?;
 
     if applied_versions(&mut *conn).await.contains(&first.version) {
         println!("already baselined  {} {}", first.version, first.description);
@@ -175,7 +176,9 @@ async fn baseline(conn: &mut PgConnection) -> Result<(), String> {
     .map_err(|error| format!("cannot record the baseline: {error}"))?;
 
     println!("baselined  {} {}", first.version, first.description);
-    println!("(recorded as applied, not executed — the schema was already here)");
+    println!(
+        "(recorded as applied, not executed — the schema was already here)"
+    );
 
     Ok(())
 }
@@ -201,7 +204,10 @@ async fn apply(conn: &mut PgConnection) -> Result<(), String> {
         println!("nothing to migrate");
     } else {
         for migration in fresh {
-            println!("applied  {} {}", migration.version, migration.description);
+            println!(
+                "applied  {} {}",
+                migration.version, migration.description
+            );
         }
     }
 
@@ -234,8 +240,10 @@ async fn status(conn: &mut PgConnection) -> Result<(), String> {
 /// Applied versions, or none when the bookkeeping table does not exist yet —
 /// which is simply a database that has never been migrated.
 async fn applied_versions(conn: &mut PgConnection) -> Vec<i64> {
-    sqlx::query_scalar::<_, i64>("SELECT version FROM _sqlx_migrations WHERE success")
-        .fetch_all(&mut *conn)
-        .await
-        .unwrap_or_default()
+    sqlx::query_scalar::<_, i64>(
+        "SELECT version FROM _sqlx_migrations WHERE success",
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .unwrap_or_default()
 }

@@ -127,7 +127,11 @@ fn signature_matches(secret: &str, body: &[u8], provided: &str) -> bool {
 ///
 /// Caddy checks only that the header exists. It cannot verify an HMAC, so this
 /// is the real boundary and must never trust the proxy's judgement.
-async fn require_signature(State(config): State<Config>, request: Request, next: Next) -> Response {
+async fn require_signature(
+    State(config): State<Config>,
+    request: Request,
+    next: Next,
+) -> Response {
     // 404 everywhere below, never 401 or 403: those confirm the endpoint is
     // there, which is free reconnaissance for anyone probing.
     let deny = || StatusCode::NOT_FOUND.into_response();
@@ -188,7 +192,8 @@ async fn require_session(
 ) -> Response {
     let deny = || StatusCode::UNAUTHORIZED.into_response();
 
-    let Some(id) = auth::read_cookie(request.headers(), auth::SESSION_COOKIE) else {
+    let Some(id) = auth::read_cookie(request.headers(), auth::SESSION_COOKIE)
+    else {
         return deny();
     };
 
@@ -264,7 +269,8 @@ async fn health(State(state): State<AppState>) -> Response {
     if db::is_reachable(&state.db).await {
         (StatusCode::OK, "ok").into_response()
     } else {
-        (StatusCode::SERVICE_UNAVAILABLE, "database unreachable").into_response()
+        (StatusCode::SERVICE_UNAVAILABLE, "database unreachable")
+            .into_response()
     }
 }
 

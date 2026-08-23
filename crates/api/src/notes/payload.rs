@@ -53,7 +53,9 @@ pub(crate) struct ValidNote<'a> {
     /// Start and end together, or neither.
     pub(crate) offsets: Option<(i32, i32)>,
 }
-pub(crate) fn validate_new_note(payload: &NewNoteRequest) -> Result<ValidNote<'_>, Refusal> {
+pub(crate) fn validate_new_note(
+    payload: &NewNoteRequest,
+) -> Result<ValidNote<'_>, Refusal> {
     let content = validate_note_body(&payload.note_content)?;
 
     let selection = payload
@@ -71,7 +73,9 @@ pub(crate) fn validate_new_note(payload: &NewNoteRequest) -> Result<ValidNote<'_
     // before its start — anchors that can never resolve.
     let offsets = match (payload.start_offset, payload.end_offset) {
         (None, None) => None,
-        (Some(start), Some(end)) if start >= 0 && end >= start => Some((start, end)),
+        (Some(start), Some(end)) if start >= 0 && end >= start => {
+            Some((start, end))
+        }
         _ => return Err(Refusal::BadAnchor),
     };
 
@@ -130,10 +134,15 @@ mod tests {
     /// The offset rule, as `create` applies it. Laravel checks each offset is a
     /// non-negative integer and stops, so it accepts a start with no end and an
     /// end before its start — both anchors that can never resolve.
-    fn anchor(start: Option<i32>, end: Option<i32>) -> Result<Option<(i32, i32)>, ()> {
+    fn anchor(
+        start: Option<i32>,
+        end: Option<i32>,
+    ) -> Result<Option<(i32, i32)>, ()> {
         match (start, end) {
             (None, None) => Ok(None),
-            (Some(start), Some(end)) if start >= 0 && end >= start => Ok(Some((start, end))),
+            (Some(start), Some(end)) if start >= 0 && end >= start => {
+                Ok(Some((start, end)))
+            }
             _ => Err(()),
         }
     }

@@ -1,7 +1,11 @@
 # Defaults are the community standard and worth keeping. These are the few
 # stable options that meaningfully help review.
 edition = "2024"
-max_width = 100
+
+# 80, not rustfmt's default 100. A line that runs to 100 columns is one nobody
+# reads to the end of, and it stops two files fitting side by side in a review.
+# Enforced by `make check`, so it cannot drift back.
+max_width = 80
 
 # Group and sort imports so a diff never reshuffles them.
 reorder_imports = true

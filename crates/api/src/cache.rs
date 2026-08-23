@@ -71,14 +71,19 @@ pub(crate) fn etag_for(body: &[u8]) -> Option<HeaderValue> {
 }
 
 /// Whether the caller already has this exact body.
-pub(crate) fn matches_if_none_match(headers: &HeaderMap, etag: &HeaderValue) -> bool {
+pub(crate) fn matches_if_none_match(
+    headers: &HeaderMap,
+    etag: &HeaderValue,
+) -> bool {
     headers
         .get_all(IF_NONE_MATCH)
         .iter()
         .filter_map(|v| v.to_str().ok())
         .flat_map(|v| v.split(','))
         .map(str::trim)
-        .any(|candidate| candidate == etag.to_str().unwrap_or_default() || candidate == "*")
+        .any(|candidate| {
+            candidate == etag.to_str().unwrap_or_default() || candidate == "*"
+        })
 }
 
 /// Applies the policy, and `Vary` alongside it.
@@ -87,14 +92,20 @@ pub(crate) fn matches_if_none_match(headers: &HeaderMap, etag: &HeaderValue) -> 
 /// that the response depends on the cookie or the signature, it will happily
 /// reuse one caller's response for the next. That is the same leak as a missing
 /// `no-store`, arriving by a different route.
-pub(crate) fn apply(headers: &mut HeaderMap, cache_policy: CachePolicy, etag: Option<HeaderValue>) {
+pub(crate) fn apply(
+    headers: &mut HeaderMap,
+    cache_policy: CachePolicy,
+    etag: Option<HeaderValue>,
+) {
     headers.insert(CACHE_CONTROL, cache_policy.header_value());
 
     let vary = match cache_policy {
         // Even for shared content: the response body is the same, but the
         // encoding is not, and an entitled caller may get a different one later.
         CachePolicy::Shared { .. } => "Accept-Encoding",
-        CachePolicy::Private | CachePolicy::NoStore => "Accept-Encoding, Cookie, Authorization",
+        CachePolicy::Private | CachePolicy::NoStore => {
+            "Accept-Encoding, Cookie, Authorization"
+        }
     };
     headers.insert(VARY, HeaderValue::from_static(vary));
 
@@ -158,7 +169,11 @@ mod tests {
 
         headers.insert(
             IF_NONE_MATCH,
-            HeaderValue::from_str(&format!("W/\"other\", {}", etag.to_str().unwrap())).unwrap(),
+            HeaderValue::from_str(&format!(
+                "W/\"other\", {}",
+                etag.to_str().unwrap()
+            ))
+            .unwrap(),
         );
         assert!(matches_if_none_match(&headers, &etag));
 

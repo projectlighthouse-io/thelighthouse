@@ -104,11 +104,12 @@ pub(crate) async fn find_or_create(
 
     // 1. Known provider id. `users_{provider}_id_unique` makes this an index
     //    lookup, and the common case one query.
-    let found =
-        sqlx::query_as::<_, UserRow>(&format!("SELECT {COLUMNS} FROM users WHERE {column} = $1"))
-            .bind(&social.id)
-            .fetch_optional(pool)
-            .await?;
+    let found = sqlx::query_as::<_, UserRow>(&format!(
+        "SELECT {COLUMNS} FROM users WHERE {column} = $1"
+    ))
+    .bind(&social.id)
+    .fetch_optional(pool)
+    .await?;
 
     if let Some(row) = found {
         return Ok(User::from(row));
@@ -117,7 +118,9 @@ pub(crate) async fn find_or_create(
     // 2. Known email, unknown provider — the cross-provider link. An UPDATE
     //    that matches nothing returns no row, which is exactly "no account with
     //    that address", so the read and the write are one round trip.
-    let mut attach = format!("UPDATE users SET {column} = $2, avatar_url = $3, updated_at = NOW()");
+    let mut attach = format!(
+        "UPDATE users SET {column} = $2, avatar_url = $3, updated_at = NOW()"
+    );
     if github {
         // Only for GitHub, matching the laravel action: Google has no
         // equivalent of `login`, so there is nothing to write.
@@ -148,14 +151,17 @@ pub(crate) async fn find_or_create(
 ///
 /// Whatever the database said. A missing row is `Ok(None)` — a session pointing
 /// at a deleted user is a signed-out reader, not an error.
-pub(crate) async fn find(pool: &PgPool, id: i64) -> Result<Option<User>, sqlx::Error> {
-    Ok(
-        sqlx::query_as::<_, UserRow>(&format!("SELECT {COLUMNS} FROM users WHERE id = $1"))
-            .bind(id)
-            .fetch_optional(pool)
-            .await?
-            .map(User::from),
-    )
+pub(crate) async fn find(
+    pool: &PgPool,
+    id: i64,
+) -> Result<Option<User>, sqlx::Error> {
+    Ok(sqlx::query_as::<_, UserRow>(&format!(
+        "SELECT {COLUMNS} FROM users WHERE id = $1"
+    ))
+    .bind(id)
+    .fetch_optional(pool)
+    .await?
+    .map(User::from))
 }
 
 async fn create(
@@ -226,7 +232,10 @@ async fn create(
 /// Past [`SUFFIX_LIMIT`] it stops counting and appends randomness instead. The
 /// loop is one query per attempt, so an unbounded one is a way to hang a
 /// sign-in on a popular name.
-async fn unique_username(pool: &PgPool, source: &str) -> Result<String, sqlx::Error> {
+async fn unique_username(
+    pool: &PgPool,
+    source: &str,
+) -> Result<String, sqlx::Error> {
     let base = slugify(source);
     let base = if base.is_empty() { "user" } else { &base };
 
@@ -251,11 +260,12 @@ async fn unique_username(pool: &PgPool, source: &str) -> Result<String, sqlx::Er
 }
 
 async fn exists(pool: &PgPool, username: &str) -> Result<bool, sqlx::Error> {
-    let (found,) =
-        sqlx::query_as::<_, (bool,)>("SELECT EXISTS (SELECT 1 FROM users WHERE username = $1)")
-            .bind(username)
-            .fetch_one(pool)
-            .await?;
+    let (found,) = sqlx::query_as::<_, (bool,)>(
+        "SELECT EXISTS (SELECT 1 FROM users WHERE username = $1)",
+    )
+    .bind(username)
+    .fetch_one(pool)
+    .await?;
 
     Ok(found)
 }

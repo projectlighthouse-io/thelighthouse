@@ -232,7 +232,13 @@ async fn callback(
 
     // The provider has proved who this is. Everything from here is ours: which
     // row that person is, and a session pointing at it.
-    let reader = match users::find_or_create(&state.db, driver.provider(), &social).await {
+    let reader = match users::find_or_create(
+        &state.db,
+        driver.provider(),
+        &social,
+    )
+    .await
+    {
         Ok(reader) => reader,
         Err(users::Error::NoEmail) => {
             // Not an error to hide behind the generic message: the reader has
@@ -250,7 +256,8 @@ async fn callback(
         }
     };
 
-    let Some(opened) = session::create(&state.db, reader.id, driver.provider().as_str()).await
+    let Some(opened) =
+        session::create(&state.db, reader.id, driver.provider().as_str()).await
     else {
         return to_login(GENERIC_FAILURE, &discard);
     };
@@ -306,7 +313,10 @@ struct ReaderResponse {
 /// Two queries: the session, then the reader it points at. A join would make it
 /// one, at the cost of putting the expiry and sliding-refresh rules in two
 /// places. This runs once per page load for signed-in readers only.
-async fn session(State(state): State<AppState>, headers: HeaderMap) -> Response {
+async fn session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
     let reader = resolve(&state, &headers).await;
 
     let mut response = Json(reader).into_response();
@@ -318,7 +328,10 @@ async fn session(State(state): State<AppState>, headers: HeaderMap) -> Response 
 
 /// The cookie, resolved all the way to a reader, or `None` at the first step
 /// that does not answer.
-async fn resolve(state: &AppState, headers: &HeaderMap) -> Option<ReaderResponse> {
+async fn resolve(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Option<ReaderResponse> {
     let id = read_cookie(headers, SESSION_COOKIE)?;
     let session = session::load(&state.db, id).await?;
 
@@ -385,7 +398,8 @@ fn redirect(location: &str, cookies: &[String]) -> Response {
     // render as a blank page.
     headers.insert(
         LOCATION,
-        HeaderValue::from_str(location).unwrap_or_else(|_| HeaderValue::from_static("/")),
+        HeaderValue::from_str(location)
+            .unwrap_or_else(|_| HeaderValue::from_static("/")),
     );
 
     append_cookies(headers, cookies);
@@ -416,7 +430,13 @@ fn append_cookies(headers: &mut HeaderMap, cookies: &[String]) {
     }
 }
 
-fn cookie(name: &str, value: &str, path: &str, max_age: i64, secure: bool) -> String {
+fn cookie(
+    name: &str,
+    value: &str,
+    path: &str,
+    max_age: i64,
+    secure: bool,
+) -> String {
     http_only_cookie(name, value, path, max_age, secure, true)
 }
 
@@ -425,7 +445,13 @@ fn cookie(name: &str, value: &str, path: &str, max_age: i64, secure: bool) -> St
 ///
 /// Only ever used for [`READER_COOKIE`], which holds no secret. Anything with a
 /// value worth stealing goes through [`cookie`].
-fn readable_cookie(name: &str, value: &str, path: &str, max_age: i64, secure: bool) -> String {
+fn readable_cookie(
+    name: &str,
+    value: &str,
+    path: &str,
+    max_age: i64,
+    secure: bool,
+) -> String {
     http_only_cookie(name, value, path, max_age, secure, false)
 }
 
@@ -444,7 +470,9 @@ fn http_only_cookie(
     let secure = if secure { "; Secure" } else { "" };
     let http_only = if http_only { "; HttpOnly" } else { "" };
 
-    format!("{name}={value}; Path={path}; Max-Age={max_age}{http_only}; SameSite=Lax{secure}")
+    format!(
+        "{name}={value}; Path={path}; Max-Age={max_age}{http_only}; SameSite=Lax{secure}"
+    )
 }
 
 /// Same name, same path, no value, immediate expiry. A browser matches a
@@ -468,7 +496,10 @@ fn cleared_readable(name: &str, path: &str, secure: bool) -> String {
 /// above, both values restricted to characters that need no escaping. The
 /// dependency would bring percent-decoding, jars and its own signing, none of
 /// which is used here.
-pub(crate) fn read_cookie<'h>(headers: &'h HeaderMap, name: &str) -> Option<&'h str> {
+pub(crate) fn read_cookie<'h>(
+    headers: &'h HeaderMap,
+    name: &str,
+) -> Option<&'h str> {
     headers
         .get_all(COOKIE)
         .iter()
@@ -654,7 +685,9 @@ mod tests {
     fn plain_http_omits_secure_so_local_development_can_sign_in() {
         // A Secure cookie is dropped outright over http://localhost, which would
         // make the whole flow look broken rather than misconfigured.
-        assert!(!cookie(SESSION_COOKIE, "v", "/", 60, false).contains("Secure"));
+        assert!(
+            !cookie(SESSION_COOKIE, "v", "/", 60, false).contains("Secure")
+        );
     }
 
     #[test]
@@ -680,7 +713,8 @@ mod tests {
 
     #[test]
     fn a_redirect_that_sets_a_cookie_is_never_cached() {
-        let response = redirect("/dashboard", &[cookie("a", "b", "/", 60, true)]);
+        let response =
+            redirect("/dashboard", &[cookie("a", "b", "/", 60, true)]);
         let cache_control = response
             .headers()
             .get(axum::http::header::CACHE_CONTROL)
@@ -710,8 +744,16 @@ mod tests {
     fn router() -> axum::Router {
         let config = crate::config::Config::sample();
         let socials = loginwith::providers([
-            GithubProvider::with("gh-id", "gh-secret", config.callback_url("github")),
-            GoogleProvider::with("goo-id", "goo-secret", config.callback_url("google")),
+            GithubProvider::with(
+                "gh-id",
+                "gh-secret",
+                config.callback_url("github"),
+            ),
+            GoogleProvider::with(
+                "goo-id",
+                "goo-secret",
+                config.callback_url("google"),
+            ),
         ])
         .unwrap();
 
@@ -719,7 +761,9 @@ mod tests {
         // on first use keeps the auth tests runnable without a postgres. The
         // day one of them does touch the database, it will fail loudly here
         // rather than quietly passing against a stub.
-        let db = sqlx::postgres::PgPool::connect_lazy("postgres://localhost/unused").unwrap();
+        let db =
+            sqlx::postgres::PgPool::connect_lazy("postgres://localhost/unused")
+                .unwrap();
 
         crate::api::app(config, socials, db)
     }
@@ -756,13 +800,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn starting_a_login_redirects_to_the_provider_carrying_the_state_it_stored() {
+    async fn starting_a_login_redirects_to_the_provider_carrying_the_state_it_stored()
+     {
         let response = get("/api/auth/github?redirect=/notes", None).await;
 
         assert_eq!(response.status(), StatusCode::FOUND);
 
         let location = header(&response, LOCATION);
-        assert!(location.starts_with("https://github.com/login/oauth/authorize?"));
+        assert!(
+            location.starts_with("https://github.com/login/oauth/authorize?")
+        );
         assert!(location.contains("client_id=gh-id"));
 
         let stored = set_cookies(&response);
@@ -831,7 +878,8 @@ mod tests {
 
     #[tokio::test]
     async fn a_declined_login_says_so_and_never_reaches_the_provider() {
-        let response = get("/github/callback?error=access_denied&state=y", None).await;
+        let response =
+            get("/github/callback?error=access_denied&state=y", None).await;
 
         assert_eq!(response.status(), StatusCode::FOUND);
         assert!(header(&response, LOCATION).contains("cancelled"));
@@ -845,7 +893,10 @@ mod tests {
         let response = get("/api/auth/session", None).await;
 
         assert_eq!(response.status(), StatusCode::OK);
-        assert!(header(&response, axum::http::header::CACHE_CONTROL).contains("no-store"));
+        assert!(
+            header(&response, axum::http::header::CACHE_CONTROL)
+                .contains("no-store")
+        );
     }
 
     #[tokio::test]
@@ -949,7 +1000,8 @@ mod tests {
         //
         // No cookie means no database is touched, which is why this one can run
         // here. A cookie naming an unknown session needs postgres.
-        for cookies in [None, Some("theme=dark"), Some("lh_session_old=stale")] {
+        for cookies in [None, Some("theme=dark"), Some("lh_session_old=stale")]
+        {
             assert_eq!(
                 get("/api/notes", cookies).await.status(),
                 StatusCode::UNAUTHORIZED,

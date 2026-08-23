@@ -45,7 +45,9 @@ impl Refusal {
             Self::SelectionTooLong => {
                 "That selection is too long. Please select a shorter passage."
             }
-            Self::BadAnchor => "That selection could not be anchored. Please try again.",
+            Self::BadAnchor => {
+                "That selection could not be anchored. Please try again."
+            }
             Self::NestedReply => "You can only reply to top-level notes.",
             Self::NoSuchNote => "That note could not be found.",
         }

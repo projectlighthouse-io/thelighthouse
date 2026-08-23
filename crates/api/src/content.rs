@@ -122,7 +122,8 @@ mod tests {
     /// Every variant, so a new one cannot be added without being listed here —
     /// which is the prompt to widen the CHECK constraint in a migration too.
     const STATUSES: [Status; 2] = [Status::Draft, Status::Published];
-    const TIERS: [Tier; 3] = [Tier::Foundation, Tier::Intermediate, Tier::Advanced];
+    const TIERS: [Tier; 3] =
+        [Tier::Foundation, Tier::Intermediate, Tier::Advanced];
 
     #[test]
     fn every_status_survives_the_round_trip() {

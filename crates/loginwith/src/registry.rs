@@ -114,7 +114,9 @@ pub struct Providers {
 /// [`Error::Duplicate`] if a provider is registered twice — the second
 /// registration would otherwise be silently ignored and read, much later, as
 /// wrong credentials. [`Error::Http`] if a client cannot be built.
-pub fn providers(list: impl IntoIterator<Item = Registration>) -> Result<Providers, Error> {
+pub fn providers(
+    list: impl IntoIterator<Item = Registration>,
+) -> Result<Providers, Error> {
     let mut drivers: Vec<Client> = Vec::new();
 
     for registration in list {
@@ -171,7 +173,11 @@ mod tests {
 
     fn both() -> Providers {
         providers([
-            GithubProvider::with("gh-id", "gh-secret", "https://l.test/auth/github/callback"),
+            GithubProvider::with(
+                "gh-id",
+                "gh-secret",
+                "https://l.test/auth/github/callback",
+            ),
             GoogleProvider::with(
                 "goo-id",
                 "goo-secret",
@@ -215,8 +221,12 @@ mod tests {
     fn a_provider_that_was_never_registered_has_no_driver() {
         // The name is valid, the credentials were never supplied. Same 404 as
         // an unknown provider, rather than a panic on a missing key.
-        let only_github =
-            providers([GithubProvider::with("id", "secret", "https://l.test/cb")]).unwrap();
+        let only_github = providers([GithubProvider::with(
+            "id",
+            "secret",
+            "https://l.test/cb",
+        )])
+        .unwrap();
 
         assert!(only_github.driver("github").is_some());
         assert!(only_github.driver("google").is_none());
@@ -251,7 +261,8 @@ mod tests {
 
     #[test]
     fn debug_does_not_print_a_secret() {
-        let registration = GithubProvider::with("id", "hunter2", "https://l.test/cb");
+        let registration =
+            GithubProvider::with("id", "hunter2", "https://l.test/cb");
 
         assert!(!format!("{registration:?}").contains("hunter2"));
         assert!(!format!("{:?}", both()).contains("gh-secret"));

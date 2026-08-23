@@ -80,15 +80,17 @@ impl Config {
         // there is no .env, and "not set in .env" sends whoever is reading a
         // failed deploy looking for a file that was never there.
         let required = |key: &str| {
-            get(key).ok_or_else(|| format!("{key} is not set in .env or the environment"))
+            get(key).ok_or_else(|| {
+                format!("{key} is not set in .env or the environment")
+            })
         };
 
         // Empty is a value: `LUXCTL_SECRET=` is a deliberate choice and is kept.
         // A port is the exception — there is no empty port.
         let api_port = required("API_PORT")?;
-        let api_port = api_port
-            .parse()
-            .map_err(|_| format!("API_PORT is not a port number: {api_port:?}"))?;
+        let api_port = api_port.parse().map_err(|_| {
+            format!("API_PORT is not a port number: {api_port:?}")
+        })?;
 
         Ok(Self {
             luxctl_secret: required("LUXCTL_SECRET")?,
@@ -161,7 +163,9 @@ mod tests {
         ("GOOGLE_CLIENT_SECRET", "goo-secret"),
     ];
 
-    fn vars(pairs: Vec<(&'static str, String)>) -> impl Fn(&str) -> Option<String> {
+    fn vars(
+        pairs: Vec<(&'static str, String)>,
+    ) -> impl Fn(&str) -> Option<String> {
         move |key| {
             pairs
                 .iter()
@@ -207,7 +211,8 @@ mod tests {
 
     #[test]
     fn an_empty_value_is_still_a_value() {
-        let config = Config::from_vars(vars(with("LUXCTL_SECRET", ""))).unwrap();
+        let config =
+            Config::from_vars(vars(with("LUXCTL_SECRET", ""))).unwrap();
 
         assert_eq!(config.luxctl_secret, "");
         assert_eq!(config.api_port, 9000);
@@ -224,7 +229,11 @@ mod tests {
     fn a_callback_url_has_exactly_one_slash_before_the_path() {
         // A trailing slash in APP_URL would otherwise produce `//api/auth/...`,
         // which no longer matches what is registered with the provider.
-        let config = Config::from_vars(vars(with("APP_URL", "https://lighthouse.test/"))).unwrap();
+        let config = Config::from_vars(vars(with(
+            "APP_URL",
+            "https://lighthouse.test/",
+        )))
+        .unwrap();
 
         assert_eq!(
             config.callback_url("github"),

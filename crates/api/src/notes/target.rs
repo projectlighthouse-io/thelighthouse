@@ -22,9 +22,17 @@ pub(crate) enum NoteTarget {
 }
 
 /// Resolves the lesson from its slugs and checks the parent in one query.
-pub(crate) async fn resolve(db: &PgPool, payload: &NewNoteRequest) -> NoteTarget {
-    let found =
-        store::lesson_and_parent(db, &payload.book, &payload.lesson, payload.parent_id).await;
+pub(crate) async fn resolve(
+    db: &PgPool,
+    payload: &NewNoteRequest,
+) -> NoteTarget {
+    let found = store::lesson_and_parent(
+        db,
+        &payload.book,
+        &payload.lesson,
+        payload.parent_id,
+    )
+    .await;
 
     let (lesson_id, parent_is_root, parent_is_here) = match found {
         Ok(Some(row)) => row,

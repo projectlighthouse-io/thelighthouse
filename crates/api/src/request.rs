@@ -87,7 +87,11 @@ pub(crate) struct Paging {
 }
 
 impl Paging {
-    fn resolve(page: Option<i64>, per_page: Option<i64>, size: PageSize) -> Self {
+    fn resolve(
+        page: Option<i64>,
+        per_page: Option<i64>,
+        size: PageSize,
+    ) -> Self {
         // Clamped rather than refused. A bad page number is a stale link or a
         // fat finger, and the first page is a better answer than an error.
         let per_page = per_page.unwrap_or(size.default).clamp(1, size.max);
@@ -127,7 +131,11 @@ fn escape_like(term: &str) -> String {
 mod tests {
     use super::*;
 
-    fn query(page: Option<i64>, per_page: Option<i64>, q: Option<&str>) -> ListQuery {
+    fn query(
+        page: Option<i64>,
+        per_page: Option<i64>,
+        q: Option<&str>,
+    ) -> ListQuery {
         ListQuery {
             page,
             per_page,

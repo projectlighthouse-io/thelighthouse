@@ -75,7 +75,13 @@ impl Client {
         secret: impl Into<String>,
         redirect_url: impl Into<String>,
     ) -> Result<Self, Error> {
-        Self::with_endpoints(provider, id, secret, redirect_url, provider.endpoints())
+        Self::with_endpoints(
+            provider,
+            id,
+            secret,
+            redirect_url,
+            provider.endpoints(),
+        )
     }
 
     /// Same as [`Client::new`] but with the hosts overridden.
@@ -143,7 +149,10 @@ impl Client {
     /// [`Error::InvalidState`] when the two states disagree, before anything is
     /// sent anywhere. [`Error::Rejected`] when the provider refuses the code,
     /// and [`Error::Http`] when a request or its body fails.
-    pub async fn user(&self, callback: Callback<'_>) -> Result<SocialUser, Error> {
+    pub async fn user(
+        &self,
+        callback: Callback<'_>,
+    ) -> Result<SocialUser, Error> {
         if !state::matches(callback.expected_state, callback.state) {
             return Err(Error::InvalidState);
         }
@@ -185,7 +194,9 @@ impl Client {
             message: response
                 .error_description
                 .or(response.error)
-                .unwrap_or_else(|| "no access token in the response".to_owned()),
+                .unwrap_or_else(|| {
+                    "no access token in the response".to_owned()
+                }),
         })
     }
 
@@ -252,7 +263,9 @@ mod tests {
 
         assert!(url.starts_with("https://github.com/login/oauth/authorize?"));
         assert!(url.contains("client_id=client-id"));
-        assert!(url.contains("redirect_uri=https%3A%2F%2Flighthouse.test%2Fapi%2Fauth%2Fcallback"));
+        assert!(url.contains(
+            "redirect_uri=https%3A%2F%2Flighthouse.test%2Fapi%2Fauth%2Fcallback"
+        ));
         assert!(url.contains("response_type=code"));
         assert!(url.contains("state=state-value"));
         // The secret is not part of the redirect, only of the exchange.
