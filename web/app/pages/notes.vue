@@ -1,9 +1,50 @@
 <script setup lang="ts">
 definePageMeta({ middleware: 'auth' })
 
-const { notes, page, pages, total, loaded, pending, failed, search, load, goTo } = useNotes()
+const { notes, page, pages, total, loaded, pending, failed, search, load, goTo, edit, remove }
+  = useNotes()
 
 onMounted(load)
+
+/** The note being edited, and the draft of its body. One at a time. */
+const editing = ref<number | null>(null)
+const draft = ref<string>('')
+/** The api's refusal, shown against the note it belongs to. */
+const refused = ref<string | null>(null)
+const saving = ref<boolean>(false)
+
+const MAX_NOTE = 500
+
+function startEditing(id: number, content: string | null): void {
+  editing.value = id
+  draft.value = content ?? ''
+  refused.value = null
+}
+
+function stopEditing(): void {
+  editing.value = null
+  draft.value = ''
+  refused.value = null
+}
+
+async function save(id: number): Promise<void> {
+  saving.value = true
+  refused.value = await edit(id, draft.value)
+  saving.value = false
+
+  // Only leave the editor when the api took it. Closing on a refusal would
+  // throw away what the reader typed along with the reason it was refused.
+  if (!refused.value) stopEditing()
+}
+
+async function discard(id: number): Promise<void> {
+  // Native confirm rather than a modal component: it is one line, it is
+  // keyboard accessible for free, and this is the only destructive action on
+  // the page.
+  if (!globalThis.confirm('Delete this note? This cannot be undone.')) return
+
+  refused.value = await remove(id)
+}
 
 /** The day, in the reader's own locale. The time of day is not worth the row. */
 function on(iso: string | null): string {
@@ -72,12 +113,21 @@ useSeo({
         :key="note.id"
         class="border-pencil-light rounded-md bg-panel px-5 py-4"
       >
-        <NuxtLink
-          :to="`/books/${note.bookSlug}/lessons/${note.lessonSlug}`"
-          class="font-mono text-xs text-quiet transition hover:text-ink"
-        >
-          {{ note.bookTitle ?? note.bookSlug }} — {{ note.lessonTitle ?? note.lessonSlug }}
-        </NuxtLink>
+        <div class="flex items-baseline gap-3">
+          <NuxtLink
+            :to="`/books/${note.bookSlug}/lessons/${note.lessonSlug}`"
+            class="font-mono text-xs text-quiet transition hover:text-ink"
+          >
+            {{ note.bookSlug }} — {{ note.lessonSlug }}
+          </NuxtLink>
+
+          <!-- Only the states worth flagging get a label. "private" is the one
+               that changes what a reader would say next; "reply" explains why a
+               note has no passage of its own. A "public" badge on most rows
+               would be noise. -->
+          <span v-if="!note.isPublic" class="ml-auto font-mono text-xs text-faint">private</span>
+          <span v-else-if="note.parentId" class="ml-auto font-mono text-xs text-faint">reply</span>
+        </div>
 
         <blockquote
           v-if="note.selectedText"
@@ -86,11 +136,64 @@ useSeo({
           {{ note.selectedText }}
         </blockquote>
 
-        <p v-if="note.noteContent" class="text-mono-body mt-3">
+        <div v-if="editing === note.id" class="mt-3">
+          <textarea
+            v-model="draft"
+            rows="3"
+            :maxlength="MAX_NOTE"
+            class="w-full rounded-md border border-rule bg-page px-3 py-2 font-mono text-sm text-ink focus:border-stroke focus:outline-none"
+          />
+
+          <div class="mt-2 flex items-center gap-3">
+            <button
+              type="button"
+              :disabled="saving"
+              class="rounded-md bg-ink px-4 py-1.5 text-sm font-medium text-on-ink transition hover:bg-ink-hover disabled:opacity-40"
+              @click="save(note.id)"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              class="font-mono text-xs text-quiet transition hover:text-ink"
+              @click="stopEditing"
+            >
+              Cancel
+            </button>
+            <span class="ml-auto font-mono text-xs text-faint">
+              {{ draft.trim().length }}/{{ MAX_NOTE }}
+            </span>
+          </div>
+        </div>
+
+        <p v-else-if="note.noteContent" class="text-mono-body mt-3">
           {{ note.noteContent }}
         </p>
 
-        <p class="mt-3 font-mono text-xs text-faint">{{ on(note.createdAt) }}</p>
+        <p v-if="refused && editing === note.id" class="mt-2 font-mono text-xs text-pencil-red">
+          {{ refused }}
+        </p>
+
+        <div class="mt-3 flex items-center gap-4">
+          <p class="font-mono text-xs text-faint">{{ on(note.createdAt) }}</p>
+
+          <div v-if="editing !== note.id" class="ml-auto flex items-center gap-4">
+            <button
+              type="button"
+              class="font-mono text-xs text-quiet transition hover:text-ink"
+              @click="startEditing(note.id, note.noteContent)"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              class="font-mono text-xs text-quiet transition hover:text-pencil-red"
+              @click="discard(note.id)"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
       </article>
 
       <div v-if="pages > 1" class="flex items-center justify-between pt-2">

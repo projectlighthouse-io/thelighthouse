@@ -17,10 +17,15 @@ export interface Note {
   noteContent: string | null
   /** ISO-8601, UTC. `null` for rows migrated without a timestamp. */
   createdAt: string | null
+  /** The note's own column — unchanged when a lesson is renamed. */
+  lessonId: number
+  /** A slug is unique only within a book, so both are needed to name a lesson. */
   lessonSlug: string
-  lessonTitle: string | null
   bookSlug: string
-  bookTitle: string | null
+  /** Whether this note shows in the lesson's thread for other readers. */
+  isPublic: boolean
+  /** Set when this note is a reply. `null` for a top-level note. */
+  parentId: number | null
 }
 
 /** The wire shape, which is snake_case because the columns are. */
@@ -29,14 +34,19 @@ interface NoteResponse {
   selected_text: string | null
   note_content: string | null
   created_at: string | null
+  lesson_id: number
   lesson_slug: string
-  lesson_title: string | null
   book_slug: string
-  book_title: string | null
+  is_public: boolean
+  parent_id: number | null
 }
 
-interface PageResponse {
-  notes: NoteResponse[]
+/**
+ * The envelope every listing endpoint answers with — `items`, not a name per
+ * endpoint, so a second listing reuses this rather than copying it.
+ */
+interface PageResponse<T> {
+  items: T[]
   page: number
   per_page: number
   total: number
@@ -45,16 +55,34 @@ interface PageResponse {
 /** How long the search waits after the last keystroke before asking rust. */
 const DEBOUNCE_MS = 250
 
+/** Shown when the api refused but said nothing a reader can act on. */
+const GENERIC_FAILURE = 'That could not be saved. Please try again.'
+
+/**
+ * The api's own message for a refused write, or something generic.
+ *
+ * Rust answers a validation failure with `{ error }` — those messages are
+ * written for the person who typed the note, so showing them beats replacing
+ * them with a guess. Anything else (a 403, a 429, the network) has no message
+ * worth surfacing verbatim.
+ */
+function problem(error: unknown): string {
+  const data = (error as { data?: { error?: unknown } } | undefined)?.data
+
+  return typeof data?.error === 'string' ? data.error : GENERIC_FAILURE
+}
+
 function toNote(note: NoteResponse): Note {
   return {
     id: note.id,
     selectedText: note.selected_text,
     noteContent: note.note_content,
     createdAt: note.created_at,
+    lessonId: note.lesson_id,
     lessonSlug: note.lesson_slug,
-    lessonTitle: note.lesson_title,
     bookSlug: note.book_slug,
-    bookTitle: note.book_title,
+    isPublic: note.is_public,
+    parentId: note.parent_id,
   }
 }
 
@@ -90,13 +118,13 @@ export function useNotes() {
     failed.value = false
 
     try {
-      const response = await $fetch<PageResponse>('/api/notes', {
+      const response = await $fetch<PageResponse<NoteResponse>>('/api/notes', {
         query: { page: page.value, q: search.value || undefined },
       })
 
       if (ticket !== latest) return
 
-      notes.value = response.notes.map(toNote)
+      notes.value = response.items.map(toNote)
       perPage.value = response.per_page
       total.value = response.total
       // The api clamps, so this is what the page actually is rather than what
@@ -125,6 +153,58 @@ export function useNotes() {
     void load()
   }
 
+  /**
+   * Rewrites one note's body.
+   *
+   * The api answers with the row as stored, so what lands in the list is what
+   * the database holds rather than what was typed — a note the api trimmed or
+   * refused does not sit on screen looking saved.
+   *
+   * Returns the api's message on refusal, or `null` on success. A thrown error
+   * is not a useful thing to hand a template.
+   */
+  async function edit(id: number, content: string): Promise<string | null> {
+    try {
+      const updated = await $fetch<NoteResponse>(`/api/notes/${id}`, {
+        method: 'PATCH',
+        headers: csrfHeader(),
+        body: { note_content: content },
+      })
+
+      const at = notes.value.findIndex(note => note.id === id)
+      if (at !== -1) notes.value[at] = toNote(updated)
+
+      return null
+    }
+    catch (error) {
+      return problem(error)
+    }
+  }
+
+  /**
+   * Deletes one note, and reloads rather than splicing.
+   *
+   * Splicing would leave the page one row short and `total` a row high until
+   * something else refetched, and on the last page it would leave an empty
+   * page the reader is still standing on. A reload costs one request and is
+   * always right.
+   */
+  async function remove(id: number): Promise<string | null> {
+    try {
+      await $fetch(`/api/notes/${id}`, { method: 'DELETE', headers: csrfHeader() })
+
+      // Step back if that was the only row on this page.
+      if (notes.value.length === 1 && page.value > 1) page.value -= 1
+
+      await load()
+
+      return null
+    }
+    catch (error) {
+      return problem(error)
+    }
+  }
+
   let timer: ReturnType<typeof setTimeout> | null = null
 
   // A request per keystroke is a request per keystroke. Debounced, and back to
@@ -142,5 +222,19 @@ export function useNotes() {
     if (timer) clearTimeout(timer)
   })
 
-  return { notes, page, perPage, total, pages, loaded, pending, failed, search, load, goTo }
+  return {
+    notes,
+    page,
+    perPage,
+    total,
+    pages,
+    loaded,
+    pending,
+    failed,
+    search,
+    load,
+    goTo,
+    edit,
+    remove,
+  }
 }

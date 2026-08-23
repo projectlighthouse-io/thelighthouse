@@ -25,6 +25,29 @@ export interface AuthUser {
   name: string | null
   email: string | null
   avatar: string | null
+  /**
+   * The CSRF token for this session, echoed back in a header on every write.
+   *
+   * It arrives here rather than in a readable cookie because rust compares it
+   * against the session row, not against another cookie — see the api's
+   * `require_session`. Reading it needs the session cookie, so it only ever
+   * reaches the reader it belongs to.
+   */
+  csrf: string
+}
+
+/**
+ * The header a state-changing request has to carry, or an empty object when
+ * there is no session yet.
+ *
+ * Empty rather than throwing: the write then fails with the api's own 403,
+ * which is the same answer by a shorter path than a client-side guess at
+ * whether the reader is signed in.
+ */
+export function csrfHeader(): Record<string, string> {
+  const { user } = useAuth()
+
+  return user.value?.csrf ? { 'X-CSRF-Token': user.value.csrf } : {}
 }
 
 /**
