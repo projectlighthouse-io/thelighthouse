@@ -10,6 +10,7 @@ mod auth;
 mod cache;
 mod config;
 mod content;
+mod cookie;
 mod db;
 mod limit;
 mod middleware;

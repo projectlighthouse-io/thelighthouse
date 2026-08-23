@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use crate::{api::AppState, auth, session};
+use crate::{api::AppState, auth, cookie, session};
 
 /// Rejects anything without a live session, and puts the resolved one in
 /// request extensions.
@@ -26,8 +26,7 @@ pub(crate) async fn require_reader(
 ) -> Response {
     let deny = || StatusCode::UNAUTHORIZED.into_response();
 
-    let Some(id) = auth::read_cookie(request.headers(), auth::SESSION_COOKIE)
-    else {
+    let Some(id) = cookie::read(request.headers(), auth::SESSION_COOKIE) else {
         return deny();
     };
 

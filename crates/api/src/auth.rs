@@ -31,10 +31,7 @@
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
-    http::{
-        HeaderMap, HeaderValue, StatusCode,
-        header::{COOKIE, LOCATION, SET_COOKIE},
-    },
+    http::{HeaderMap, HeaderValue, StatusCode, header::LOCATION},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -45,6 +42,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     api::AppState,
     cache::{self, CachePolicy},
+    cookie::{self, Cookie},
     session, users,
 };
 
@@ -154,13 +152,10 @@ async fn start(
 
     redirect(
         &driver.authorize_url(&oauth_state),
-        &[cookie(
-            OAUTH_COOKIE,
-            &pack(&oauth_state, &target),
-            OAUTH_PATH,
-            OAUTH_MAX_AGE,
-            secure,
-        )],
+        &[Cookie::new(OAUTH_COOKIE, &pack(&oauth_state, &target))
+            .path(OAUTH_PATH)
+            .max_age(OAUTH_MAX_AGE)
+            .to_header(secure)],
     )
 }
 
@@ -188,7 +183,7 @@ async fn callback(
     // The attempt is over either way, so the state cookie goes on every path
     // out of here — including the failures, so a stale state cannot be replayed
     // against a second attempt.
-    let discard = [cleared(OAUTH_COOKIE, OAUTH_PATH, secure)];
+    let discard = [expired_oauth(secure)];
 
     if let Some(error) = query.error.as_deref() {
         tracing::info!(%provider, %error, "the provider refused the authorization request");
@@ -197,7 +192,7 @@ async fn callback(
 
     // A missing cookie is an expired attempt, a session that was never started
     // here, or a browser that dropped it. All three are the same retry.
-    let Some(packed) = read_cookie(&headers, OAUTH_COOKIE) else {
+    let Some(packed) = cookie::read(&headers, OAUTH_COOKIE) else {
         return to_login(EXPIRED_FAILURE, &discard);
     };
     let (expected_state, target) = unpack(packed);
@@ -268,9 +263,14 @@ async fn callback(
         &target,
         &[
             // The cookie carries the row's id and nothing else.
-            cookie(SESSION_COOKIE, &opened.id, "/", session::MAX_AGE, secure),
-            readable_cookie(READER_COOKIE, "1", "/", session::MAX_AGE, secure),
-            cleared(OAUTH_COOKIE, OAUTH_PATH, secure),
+            Cookie::new(SESSION_COOKIE, &opened.id)
+                .max_age(session::MAX_AGE)
+                .to_header(secure),
+            Cookie::new(READER_COOKIE, "1")
+                .max_age(session::MAX_AGE)
+                .script_readable()
+                .to_header(secure),
+            expired_oauth(secure),
         ],
     )
 }
@@ -332,7 +332,7 @@ async fn resolve(
     state: &AppState,
     headers: &HeaderMap,
 ) -> Option<ReaderResponse> {
-    let id = read_cookie(headers, SESSION_COOKIE)?;
+    let id = cookie::read(headers, SESSION_COOKIE)?;
     let session = session::load(&state.db, id).await?;
 
     let reader = users::find(&state.db, session.user_id)
@@ -364,22 +364,25 @@ async fn resolve(
 /// anything that changes stored state — get the double-submit token described
 /// in docs/rebuild.md when they exist.
 async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    if let Some(id) = read_cookie(&headers, SESSION_COOKIE) {
+    if let Some(id) = cookie::read(&headers, SESSION_COOKIE) {
         session::delete(&state.db, id).await;
     }
 
+    let secure = state.config.cookie_secure();
     let mut response = StatusCode::NO_CONTENT.into_response();
     let headers = response.headers_mut();
 
     // The path must match the one it was set with, or the browser keeps the
     // original and the reader stays signed in.
-    append_cookies(
+    cookie::attach(
         headers,
         &[
-            cleared(SESSION_COOKIE, "/", state.config.cookie_secure()),
+            Cookie::expiring(SESSION_COOKIE).to_header(secure),
             // Cleared with the session, or the frontend keeps drawing a signed-in
             // header for somebody who is not.
-            cleared_readable(READER_COOKIE, "/", state.config.cookie_secure()),
+            Cookie::expiring(READER_COOKIE)
+                .script_readable()
+                .to_header(secure),
         ],
     );
     cache::apply(headers, CachePolicy::NoStore, None);
@@ -402,7 +405,7 @@ fn redirect(location: &str, cookies: &[String]) -> Response {
             .unwrap_or_else(|_| HeaderValue::from_static("/")),
     );
 
-    append_cookies(headers, cookies);
+    cookie::attach(headers, cookies);
     // A cached redirect carrying Set-Cookie hands one reader's session to the
     // next caller of the same URL.
     cache::apply(headers, CachePolicy::NoStore, None);
@@ -420,96 +423,13 @@ fn to_login(message: &str, cookies: &[String]) -> Response {
     redirect(&format!("/login?{query}"), cookies)
 }
 
-fn append_cookies(headers: &mut HeaderMap, cookies: &[String]) {
-    for value in cookies {
-        // `append`, not `insert`: two Set-Cookie headers set two cookies, one
-        // insert would drop the first.
-        if let Ok(value) = HeaderValue::from_str(value) {
-            headers.append(SET_COOKIE, value);
-        }
-    }
-}
-
-fn cookie(
-    name: &str,
-    value: &str,
-    path: &str,
-    max_age: i64,
-    secure: bool,
-) -> String {
-    http_only_cookie(name, value, path, max_age, secure, true)
-}
-
-/// The readable companion. Same lifetime and path as the session, without
-/// `HttpOnly` so a script can see it.
-///
-/// Only ever used for [`READER_COOKIE`], which holds no secret. Anything with a
-/// value worth stealing goes through [`cookie`].
-fn readable_cookie(
-    name: &str,
-    value: &str,
-    path: &str,
-    max_age: i64,
-    secure: bool,
-) -> String {
-    http_only_cookie(name, value, path, max_age, secure, false)
-}
-
-fn http_only_cookie(
-    name: &str,
-    value: &str,
-    path: &str,
-    max_age: i64,
-    secure: bool,
-    http_only: bool,
-) -> String {
-    // `SameSite=Lax`, not `Strict`. Strict would withhold the state cookie on
-    // the callback — that arrives as a top-level navigation *from the
-    // provider's origin*, which is exactly what Strict is for suppressing — and
-    // the login would fail every time with a state mismatch.
-    let secure = if secure { "; Secure" } else { "" };
-    let http_only = if http_only { "; HttpOnly" } else { "" };
-
-    format!(
-        "{name}={value}; Path={path}; Max-Age={max_age}{http_only}; SameSite=Lax{secure}"
-    )
-}
-
-/// Same name, same path, no value, immediate expiry. A browser matches a
-/// replacement on name *and* path, so clearing with the wrong path silently
-/// leaves the cookie in place.
-fn cleared(name: &str, path: &str, secure: bool) -> String {
-    cookie(name, "", path, 0, secure)
-}
-
-/// Clears a cookie that was set readable, keeping the flags symmetrical with
-/// how it was written. A browser will delete it either way, but a cookie whose
-/// set and clear disagree about `HttpOnly` is a puzzle for whoever reads the
-/// response next.
-fn cleared_readable(name: &str, path: &str, secure: bool) -> String {
-    readable_cookie(name, "", path, 0, secure)
-}
-
-/// Reads one cookie out of the request.
-///
-/// Hand rolled rather than a cookie crate: there are two cookies, both minted
-/// above, both values restricted to characters that need no escaping. The
-/// dependency would bring percent-decoding, jars and its own signing, none of
-/// which is used here.
-pub(crate) fn read_cookie<'h>(
-    headers: &'h HeaderMap,
-    name: &str,
-) -> Option<&'h str> {
-    headers
-        .get_all(COOKIE)
-        .iter()
-        .filter_map(|value| value.to_str().ok())
-        .flat_map(|value| value.split(';'))
-        .filter_map(|pair| pair.trim().split_once('='))
-        // Exact match on the name: `lh_session_backup` must not answer for
-        // `lh_session`.
-        .find(|(key, _)| *key == name)
-        .map(|(_, value)| value)
+/// The oauth cookie, expired the same way it was set. Every path out of the
+/// callback carries one, so a stale state cannot be replayed against a second
+/// attempt.
+fn expired_oauth(secure: bool) -> String {
+    Cookie::expiring(OAUTH_COOKIE)
+        .path(OAUTH_PATH)
+        .to_header(secure)
 }
 
 /// The state and the landing path, in one cookie.
@@ -641,63 +561,6 @@ mod tests {
         assert_eq!(unpack(&packed).1, DEFAULT_REDIRECT);
     }
 
-    fn with_cookie(header: &str) -> HeaderMap {
-        let mut headers = HeaderMap::new();
-        headers.insert(COOKIE, HeaderValue::from_str(header).unwrap());
-        headers
-    }
-
-    #[test]
-    fn one_cookie_is_found_among_many() {
-        let headers = with_cookie("theme=dark; lh_session=abc.def; locale=bn");
-
-        assert_eq!(read_cookie(&headers, "lh_session"), Some("abc.def"));
-        assert_eq!(read_cookie(&headers, "theme"), Some("dark"));
-        assert_eq!(read_cookie(&headers, "absent"), None);
-    }
-
-    #[test]
-    fn a_name_that_merely_starts_the_same_does_not_answer() {
-        let headers = with_cookie("lh_session_old=stale; lh_sessionx=no");
-
-        assert_eq!(read_cookie(&headers, "lh_session"), None);
-    }
-
-    #[test]
-    fn a_cookie_split_across_headers_is_still_read() {
-        let mut headers = with_cookie("theme=dark");
-        headers.append(COOKIE, HeaderValue::from_static("lh_session=abc.def"));
-
-        assert_eq!(read_cookie(&headers, "lh_session"), Some("abc.def"));
-    }
-
-    #[test]
-    fn a_session_cookie_is_not_reachable_from_script_and_not_sent_cross_site() {
-        let value = cookie(SESSION_COOKIE, "v", "/", session::MAX_AGE, true);
-
-        assert!(value.contains("HttpOnly"), "xss could read the session");
-        assert!(value.contains("SameSite=Lax"));
-        assert!(value.contains("Secure"));
-        assert!(value.contains("Path=/"));
-    }
-
-    #[test]
-    fn plain_http_omits_secure_so_local_development_can_sign_in() {
-        // A Secure cookie is dropped outright over http://localhost, which would
-        // make the whole flow look broken rather than misconfigured.
-        assert!(
-            !cookie(SESSION_COOKIE, "v", "/", 60, false).contains("Secure")
-        );
-    }
-
-    #[test]
-    fn clearing_uses_the_path_the_cookie_was_set_with() {
-        let value = cleared(OAUTH_COOKIE, OAUTH_PATH, true);
-
-        assert!(value.contains("Max-Age=0"));
-        assert!(value.contains(&format!("Path={OAUTH_PATH}")));
-    }
-
     #[test]
     fn a_failure_message_is_escaped_into_the_login_url() {
         let response = to_login("Sign-in was cancelled.", &[]);
@@ -714,7 +577,7 @@ mod tests {
     #[test]
     fn a_redirect_that_sets_a_cookie_is_never_cached() {
         let response =
-            redirect("/dashboard", &[cookie("a", "b", "/", 60, true)]);
+            redirect("/dashboard", &[Cookie::new("a", "b").to_header(true)]);
         let cache_control = response
             .headers()
             .get(axum::http::header::CACHE_CONTROL)
@@ -729,12 +592,19 @@ mod tests {
         let response = redirect(
             "/dashboard",
             &[
-                cookie(SESSION_COOKIE, "v", "/", 60, true),
-                cleared(OAUTH_COOKIE, OAUTH_PATH, true),
+                Cookie::new(SESSION_COOKIE, "v").max_age(60).to_header(true),
+                expired_oauth(true),
             ],
         );
 
-        assert_eq!(response.headers().get_all(SET_COOKIE).iter().count(), 2);
+        assert_eq!(
+            response
+                .headers()
+                .get_all(axum::http::header::SET_COOKIE)
+                .iter()
+                .count(),
+            2
+        );
     }
 
     // These exist because the mounting is the part that fails silently: these
@@ -771,7 +641,7 @@ mod tests {
     async fn get(uri: &str, cookie_header: Option<&str>) -> Response {
         let mut request = Request::builder().uri(uri);
         if let Some(value) = cookie_header {
-            request = request.header(COOKIE, value);
+            request = request.header(axum::http::header::COOKIE, value);
         }
 
         router()
@@ -792,7 +662,7 @@ mod tests {
     fn set_cookies(response: &Response) -> Vec<String> {
         response
             .headers()
-            .get_all(SET_COOKIE)
+            .get_all(axum::http::header::SET_COOKIE)
             .iter()
             .filter_map(|v| v.to_str().ok())
             .map(str::to_owned)
