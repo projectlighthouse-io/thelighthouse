@@ -1,0 +1,6 @@
+# The slug deliberately disagrees with the directory, so the loader has
+# something to refuse.
+slug: not-mislabelled
+title: A Mislabelled Book
+status: draft
+tier: foundation

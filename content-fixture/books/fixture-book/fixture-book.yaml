@@ -1,0 +1,17 @@
+slug: fixture-book
+title: A Fixture Book
+description: not a real book; it exists so the loader has a tree to walk
+status: published
+tier: foundation
+thumbnail_url: https://example.test/fixture.webp
+price: 0
+first_lesson_slug: free-lesson
+
+chapters:
+  - id: 1
+    title: The Only Chapter
+    sort_order: 1
+
+seo:
+  meta_title: A Fixture Book
+  meta_description: a fake book, for tests

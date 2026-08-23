@@ -1,9 +1,8 @@
 //! The closed sets that content columns store as integers, and their names.
 //!
-//! `content` rather than `books` because [`Status`] is shared: a book and a
-//! lesson are both drafted and both published, and one enum for both is what
-//! stops the two tables drifting into different ideas of what "published"
-//! means.
+//! Shared by book and lesson: both are drafted and both are published, and one
+//! enum for both is what stops the two tables drifting into different ideas of
+//! what "published" means.
 //!
 //! The database stores `status` and `tier` as `smallint`. The numbers are the
 //! storage; these enums are the meaning, and they are the only place the two
@@ -23,14 +22,7 @@
 //! a row that is silently missing from every listing rather than one that fails
 //! loudly on write.
 
-// Nothing queries `books` yet — the content endpoints are a later phase — so
-// every item here is currently unused. The alternative to this allow is holding
-// the schema's meaning in someone's head until the first query needs it, which
-// is how a smallint column ends up decoded three different ways. Remove the
-// allow with the first reader.
-#![allow(dead_code)]
-
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Where a piece of content is in its life, from written to readable. Books and
 /// lessons both use it.
@@ -38,9 +30,12 @@ use serde::Serialize;
 /// Not a boolean. `is_published` was one, and it could not say "this is written
 /// but not ready", which is the state most content is in for most of the time
 /// it is being worked on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Status {
+    #[default]
     /// Written, synced, and not for readers yet. A local run shows drafts so
     /// they can be read while being written; production does not, which is the
     /// whole point of the distinction.
@@ -59,9 +54,12 @@ pub(crate) enum Status {
 /// Deliberately not a replacement for the old `required_tier`. That column said
 /// which subscription unlocked a course. This says nothing about payment, and
 /// nothing here should ever be consulted to decide access.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Tier {
+    #[default]
     /// Assumes a working knowledge of one language and nothing else.
     Foundation,
     /// Assumes the foundation material, or the equivalent from elsewhere.

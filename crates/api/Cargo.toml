@@ -31,6 +31,19 @@ sqlx = { version = "0.8", default-features = false, features = [
     "chrono",
     "uuid",
 ] }
+# The content repo: yaml beside markdown, walked from `CONTENT_PATH`.
+#
+# `serde_norway`, not `serde_yaml` — dtolnay archived that one and its published
+# version literally reads `0.9.34+deprecated`; `serde_yml` says "DEPRECATED —
+# unmaintained" on the tin. This is the fork that is still maintained, and a
+# public repo should not ship a dependency that announces its own abandonment.
+serde_norway = "0.9"
+# GFM, not plain CommonMark. The laravel app renders lessons with
+# `GithubFlavoredMarkdownExtension`, so tables, strikethrough and task lists are
+# already in the prose. comrak is the cmark-gfm port and matches it;
+# pulldown-cmark is lighter but differs at exactly those edges.
+comrak = "0.54"
+walkdir = "2"
 # Already in the tree — sqlx's `chrono` feature pulls it — but not nameable
 # without being declared. Timestamp columns decode as `NaiveDateTime` and are
 # formatted here rather than by `to_char` in every query that selects one.
