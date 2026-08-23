@@ -30,7 +30,7 @@ export interface AuthUser {
    *
    * It arrives here rather than in a readable cookie because rust compares it
    * against the session row, not against another cookie — see the api's
-   * `require_session`. Reading it needs the session cookie, so it only ever
+   * `require_csrf`. Reading it needs the session cookie, so it only ever
    * reaches the reader it belongs to.
    */
   csrf: string
