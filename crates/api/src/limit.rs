@@ -20,11 +20,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// Writes per window, per reader.
-const LIMIT: u32 = 10;
-
-const WINDOW: Duration = Duration::from_secs(60);
-
 /// When the map is larger than this, expired windows are dropped before adding
 /// another. Without it, one entry per reader who has ever written accumulates
 /// for the life of the process.
@@ -49,14 +44,22 @@ pub(crate) struct RateLimit {
 }
 
 impl RateLimit {
-    pub(crate) fn new() -> Self {
-        Self::with(LIMIT, WINDOW)
+    /// Ten writes a minute, which is what `RateLimiter::for('notes')` allows in
+    /// the laravel app. Nobody types ten notes in a minute, so hitting it means
+    /// a script, a stuck retry loop, or a bug.
+    ///
+    /// A function, not a `const` item: a `const` is substituted at each mention,
+    /// so two references would be two limiters with separate counters.
+    pub(crate) fn note_writes() -> Self {
+        Self::new(10, Duration::from_secs(60))
     }
 
-    /// Split out so a test can use a window it can outlast.
-    fn with(limit: u32, window: Duration) -> Self {
+    /// The budget is the caller's, not this module's: a search box and a note
+    /// editor are not the same kind of traffic, and one number for both is one
+    /// that is wrong for at least one of them.
+    pub(crate) fn new(per_window: u32, window: Duration) -> Self {
         Self {
-            limit,
+            limit: per_window,
             window,
             windows: Mutex::new(HashMap::new()),
         }
@@ -115,11 +118,14 @@ impl RateLimit {
 mod tests {
     use super::*;
 
+    /// The note budget, so the numbers below read against a real setting.
+    const BUDGET: u32 = 10;
+
     #[test]
     fn the_first_ten_writes_pass_and_the_eleventh_does_not() {
-        let limit = RateLimit::new();
+        let limit = RateLimit::note_writes();
 
-        for attempt in 1..=LIMIT {
+        for attempt in 1..=BUDGET {
             assert_eq!(limit.check(1), None, "write {attempt} was refused");
         }
 
@@ -128,9 +134,9 @@ mod tests {
 
     #[test]
     fn one_reader_hitting_the_limit_does_not_stop_another() {
-        let limit = RateLimit::new();
+        let limit = RateLimit::note_writes();
 
-        for _ in 0..=LIMIT {
+        for _ in 0..=BUDGET {
             let _ = limit.check(1);
         }
 
@@ -140,21 +146,21 @@ mod tests {
 
     #[test]
     fn a_refusal_says_how_long_to_wait() {
-        let limit = RateLimit::new();
+        let limit = RateLimit::note_writes();
 
-        for _ in 0..LIMIT {
+        for _ in 0..BUDGET {
             let _ = limit.check(1);
         }
 
         let retry = limit.check(1).unwrap();
 
         assert!(retry >= 1);
-        assert!(retry <= WINDOW.as_secs());
+        assert!(retry <= 60);
     }
 
     #[test]
     fn the_window_expires_and_the_count_starts_again() {
-        let limit = RateLimit::with(2, Duration::from_millis(30));
+        let limit = RateLimit::new(2, Duration::from_millis(30));
 
         assert_eq!(limit.check(1), None);
         assert_eq!(limit.check(1), None);
@@ -171,7 +177,7 @@ mod tests {
         // which makes the prune's effect exact rather than a race with how fast
         // this loop runs. What is under test is that pruning happens at all —
         // the threshold is a ceiling on the map, not a promise it stays empty.
-        let limit = RateLimit::with(1, Duration::ZERO);
+        let limit = RateLimit::new(1, Duration::ZERO);
         let readers = i64::try_from(PRUNE_ABOVE).unwrap() * 4;
 
         for key in 0..readers {

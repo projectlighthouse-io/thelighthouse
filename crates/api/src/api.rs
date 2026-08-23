@@ -47,7 +47,7 @@ pub(crate) fn app(config: Config, socials: Providers, db: PgPool) -> Router {
         config,
         socials,
         db,
-        limits: Arc::new(RateLimit::new()),
+        limits: Arc::new(RateLimit::note_writes()),
     };
 
     // luxctl's surface. Everything mounted here inherits the signature check.
