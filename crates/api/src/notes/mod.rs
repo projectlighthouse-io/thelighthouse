@@ -17,11 +17,11 @@
 //!   refusal.rs why a write was refused, and its wire code
 //! ```
 //!
-//! Behind `require_session`, which resolves the cookie to a user id, checks the
-//! CSRF token on writes and counts them against the rate limit. Every query in
-//! `store` binds that id, so no parameter can name somebody else's notes — the
-//! two routes taking an id in the path scope by owner and answer 404, making
-//! "not yours" and "no such note" indistinguishable from outside.
+//! Every route needs a reader; the writes also need a CSRF token and a place
+//! in the write limit — see `routes` for which gate is mounted where. Every
+//! query in `store` binds that reader's id, so no parameter can name somebody
+//! else's notes; the two routes taking an id in the path scope by owner and
+//! answer 404, making "not yours" and "no such note" indistinguishable.
 //!
 //! `is_public` and `parent_id` are written but nothing reads them yet. They are
 //! what a note *means*, and the write is where that is decided; the lesson
@@ -46,22 +46,39 @@ mod target;
 
 use axum::{
     Router,
-    routing::{get, patch},
+    middleware::{from_fn, from_fn_with_state},
+    routing::{delete, get, patch, post},
 };
 
-use crate::api::AppState;
+use crate::{
+    api::AppState,
+    middleware::{
+        csrf::require_csrf, reader::require_reader, throttle::throttle,
+    },
+};
 
 /// Absolute paths, so this merges alongside the signed routes rather than
-/// nesting under the same `/api` prefix. The layer is applied where the router
-/// is assembled — see `api::app`.
+/// nesting under the same `/api` prefix. Caddy already routes `/api/notes*`, so
+/// the `{id}` routes need no rule of their own.
 ///
-/// Caddy already routes `/api/notes*`, so the `{id}` routes need no rule of
-/// their own.
-pub(crate) fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/api/notes", get(handler::list).post(handler::create))
-        .route(
-            "/api/notes/{id}",
-            patch(handler::update).delete(handler::remove),
-        )
+/// **Reads and writes are separate routers because they need different gates.**
+/// Every route here needs a reader; only the writes need a CSRF token and a
+/// place in the rate limit. Splitting them says that at the mount point instead
+/// of leaving a single layer to work it out from the method.
+///
+/// The write gates are applied *inside* `require_reader` — both read the
+/// `Session` it inserts, and both refuse when it is absent.
+pub(crate) fn routes(state: &AppState) -> Router<AppState> {
+    let reads = Router::new().route("/api/notes", get(handler::list));
+
+    let writes = Router::new()
+        .route("/api/notes", post(handler::create))
+        .route("/api/notes/{id}", patch(handler::update))
+        .route("/api/notes/{id}", delete(handler::remove))
+        .route_layer(from_fn_with_state(state.clone(), throttle))
+        .route_layer(from_fn(require_csrf));
+
+    reads
+        .merge(writes)
+        .route_layer(from_fn_with_state(state.clone(), require_reader))
 }

@@ -290,7 +290,7 @@ struct ReaderResponse {
     email: String,
     avatar: Option<String>,
     /// The CSRF token for this session, which the frontend echoes in a header
-    /// on every write — see `api::CSRF_HEADER`.
+    /// on every write — see `middleware::csrf::CSRF_HEADER`.
     ///
     /// Handed out here rather than in a second readable cookie. A cookie can be
     /// written by any sibling subdomain, so comparing a header against a cookie

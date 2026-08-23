@@ -12,6 +12,7 @@ mod config;
 mod content;
 mod db;
 mod limit;
+mod middleware;
 mod notes;
 mod request;
 mod response;

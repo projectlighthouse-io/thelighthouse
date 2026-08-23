@@ -1,12 +1,9 @@
-//! The HTTP surface: routes, the signature boundary, and response shaping.
+//! What is mounted where, and behind which gates.
 //!
-//! Everything that decides what a request is allowed to do, or what a caller is
-//! allowed to keep, lives here. `main` only starts it. That split is the point —
-//! the signature layer and the cache policy are the two things worth being able
-//! to read end to end without boot code in between.
+//! `main` starts this; the gates themselves are `middleware`. Reading `app`
+//! top to bottom should be enough to say what any request can reach — which is
+//! why the layering lives here and not spread across the modules being mounted.
 //!
-//! What is real here is the shape: it binds loopback only, verifies the luxctl
-//! signature in a layer rather than per handler, and answers the health probe.
 //! The content, entitlement and payment endpoints from docs/rebuild.md replace
 //! the stub routes below.
 
@@ -14,18 +11,14 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    body::{Body, to_bytes},
-    extract::{Request, State},
-    http::{HeaderMap, HeaderValue, Method, StatusCode, header::RETRY_AFTER},
-    middleware::{self, Next},
+    extract::State,
+    http::{HeaderMap, StatusCode},
+    middleware::from_fn_with_state,
     response::{IntoResponse, Response},
     routing::get,
 };
-use hmac::{Hmac, Mac};
 use loginwith::Providers;
-use sha2::Sha256;
 use sqlx::postgres::PgPool;
-use subtle::ConstantTimeEq;
 
 use crate::{
     auth,
@@ -33,15 +26,9 @@ use crate::{
     config::Config,
     db,
     limit::RateLimit,
-    notes, session, telemetry,
+    middleware::signature::require_signature,
+    notes, telemetry,
 };
-
-type HmacSha256 = Hmac<Sha256>;
-
-/// A signed body larger than this is refused outright. The whole body has to be
-/// buffered to compute the HMAC over it, so without a ceiling an unauthenticated
-/// caller can make the process allocate as much as it likes.
-const MAX_SIGNED_BODY: usize = 1024 * 1024;
 
 /// What every handler can reach. Cheap to clone — `PgPool` and `Providers` are
 /// both handles to something shared, and `Config` is a handful of strings.
@@ -63,199 +50,28 @@ pub(crate) fn app(config: Config, socials: Providers, db: PgPool) -> Router {
         limits: Arc::new(RateLimit::new()),
     };
 
-    // Everything mounted here inherits the signature check.
+    // luxctl's surface. Everything mounted here inherits the signature check.
     let signed = Router::new()
         .route("/ping", get(ping))
         .route("/books", get(books))
         .route("/me", get(me))
-        .route_layer(middleware::from_fn_with_state(
+        .route_layer(from_fn_with_state(
             state.config.clone(),
             require_signature,
         ));
 
-    // ...and everything mounted here inherits the session check. Absolute
-    // paths, so it merges alongside `signed` rather than nesting under the
-    // same prefix.
-    let reader = notes::routes().route_layer(middleware::from_fn_with_state(
-        state.clone(),
-        require_session,
-    ));
-
     Router::new()
         .route("/health", get(health))
         .nest("/api", signed)
-        .merge(reader)
-        // Merged rather than nested under the same `/api`, and deliberately
-        // outside the signature layer: an OAuth callback is a browser
-        // navigation and cannot carry an HMAC. Those four routes authenticate
-        // themselves — see `auth`.
+        // Absolute paths, so these merge alongside `signed` rather than nesting
+        // under the same prefix. Notes carries its own gates — see its `routes`.
+        .merge(notes::routes(&state))
+        // Deliberately outside every gate: an OAuth callback is a browser
+        // navigation and cannot carry an HMAC or a session. Those four routes
+        // authenticate themselves — see `auth`.
         .merge(auth::routes())
-        .layer(middleware::from_fn(telemetry::trace_request))
+        .layer(axum::middleware::from_fn(telemetry::trace_request))
         .with_state(state)
-}
-
-fn hex_decode(s: &str) -> Option<Vec<u8>> {
-    if !s.len().is_multiple_of(2) {
-        return None;
-    }
-    (0..s.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok())
-        .collect()
-}
-
-fn signature_matches(secret: &str, body: &[u8], provided: &str) -> bool {
-    let Some(provided) = hex_decode(provided) else {
-        return false;
-    };
-    let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) else {
-        return false;
-    };
-    mac.update(body);
-
-    // Constant time. A byte-by-byte compare leaks the correct prefix through
-    // timing, which is enough to forge a signature given enough attempts.
-    mac.finalize().into_bytes().ct_eq(&provided).into()
-}
-
-/// Rejects anything without a valid luxctl signature.
-///
-/// This is a layer, not a call inside each handler, and that is the point: a
-/// new endpoint under `/api` is protected because of where it is mounted, not
-/// because someone remembered. Forgetting is no longer possible — you would
-/// have to remove the layer to expose something.
-///
-/// Caddy checks only that the header exists. It cannot verify an HMAC, so this
-/// is the real boundary and must never trust the proxy's judgement.
-async fn require_signature(
-    State(config): State<Config>,
-    request: Request,
-    next: Next,
-) -> Response {
-    // 404 everywhere below, never 401 or 403: those confirm the endpoint is
-    // there, which is free reconnaissance for anyone probing.
-    let deny = || StatusCode::NOT_FOUND.into_response();
-
-    let provided = request
-        .headers()
-        .get("x-luxctl-signature")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_owned)
-        .unwrap_or_default();
-
-    // The body has to be buffered to sign over it, then handed onward intact.
-    let (parts, body) = request.into_parts();
-    let Ok(bytes) = to_bytes(body, MAX_SIGNED_BODY).await else {
-        return deny();
-    };
-
-    if !signature_matches(&config.luxctl_secret, &bytes, &provided) {
-        return deny();
-    }
-
-    next.run(Request::from_parts(parts, Body::from(bytes)))
-        .await
-}
-
-/// Where the frontend sends the CSRF token it read from `/api/auth/session`.
-///
-/// A header rather than a form field: a cross-site form POST can carry any body
-/// it likes, but it cannot set a custom header without a CORS preflight that
-/// this origin never answers.
-pub(crate) const CSRF_HEADER: &str = "x-csrf-token";
-
-/// Rejects anything without a live session, and hands the resolved one on.
-///
-/// Three checks, in order, and all three for the same reason [`require_signature`]
-/// exists: an endpoint under this layer is protected because of where it is
-/// mounted, not because a handler remembered. The handler takes
-/// `Extension<Session>` and can be sure of it.
-///
-/// 1. **A live session.** 401, not 404 — unlike the luxctl surface, these routes
-///    are the frontend's and the browser already knows they exist, so hiding
-///    them buys nothing and would make an expired session look like a typo.
-/// 2. **A CSRF token, on anything that changes state.** `SameSite=Lax` already
-///    stops the common cross-site form POST, and is not enough on its own
-///    (docs/rebuild.md). The token is minted with the session and lives in its
-///    row, so this compares what the caller sent against what this process
-///    stored rather than against another cookie — a plain double-submit trusts
-///    a cookie an attacker on a sibling subdomain can write.
-/// 3. **The write limit.** Ten a minute per reader, keyed by user id rather than
-///    by address, so a shared network is not one bucket.
-///
-/// Reads skip 2 and 3. A GET that needed a CSRF token would be a GET that
-/// changes something, which is its own bug.
-async fn require_session(
-    State(state): State<AppState>,
-    mut request: Request,
-    next: Next,
-) -> Response {
-    let deny = || StatusCode::UNAUTHORIZED.into_response();
-
-    let Some(id) = auth::read_cookie(request.headers(), auth::SESSION_COOKIE)
-    else {
-        return deny();
-    };
-
-    // Cloned because `load` borrows the pool out of `state` while the cookie is
-    // still borrowed out of `request`, which is then handed on mutably.
-    let id = id.to_owned();
-
-    let Some(session) = session::load(&state.db, &id).await else {
-        return deny();
-    };
-
-    if changes_state(request.method()) {
-        let provided = request
-            .headers()
-            .get(CSRF_HEADER)
-            .and_then(|value| value.to_str().ok())
-            .unwrap_or_default();
-
-        if !csrf_matches(&session.csrf, provided) {
-            tracing::info!(
-                user_id = session.user_id,
-                "a write arrived without a valid csrf token"
-            );
-            // 403, not 401: the reader is signed in. Answering 401 would send
-            // the frontend to re-authenticate, which cannot fix a missing header
-            // and would look like being signed out at random.
-            return StatusCode::FORBIDDEN.into_response();
-        }
-
-        if let Some(retry_after) = state.limits.check(session.user_id) {
-            let mut response = StatusCode::TOO_MANY_REQUESTS.into_response();
-            if let Ok(value) = HeaderValue::from_str(&retry_after.to_string()) {
-                response.headers_mut().insert(RETRY_AFTER, value);
-            }
-            return response;
-        }
-    }
-
-    request.extensions_mut().insert(session);
-
-    next.run(request).await
-}
-
-/// Whether a method is one the CSRF and rate-limit checks apply to.
-///
-/// The safe methods are listed rather than the unsafe ones, so a method nobody
-/// thought about — or one a future axum adds — is treated as a write. Getting
-/// this backwards is a mutation that skips both checks.
-fn changes_state(method: &Method) -> bool {
-    !matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS)
-}
-
-/// Constant time, and an empty expectation never matches — the same rules the
-/// oauth state comparison follows, for the same reason.
-fn csrf_matches(expected: &str, provided: &str) -> bool {
-    if expected.is_empty() {
-        return false;
-    }
-
-    let (expected, provided) = (expected.as_bytes(), provided.as_bytes());
-
-    expected.len() == provided.len() && bool::from(expected.ct_eq(provided))
 }
 
 /// Unsigned on purpose. Caddy never routes to it, so it is reachable only from
@@ -280,7 +96,7 @@ async fn health(State(state): State<AppState>) -> Response {
 /// kind of response a CDN may hold. Anything that consults a session or an
 /// entitlement must not use this policy.
 async fn books(headers: HeaderMap) -> Response {
-    json_response(&headers, CachePolicy::public_content(), ["placeholder"])
+    revalidating(&headers, CachePolicy::public_content(), ["placeholder"])
 }
 
 /// Stands in for the reader's own state — progress, bookmarks.
@@ -289,7 +105,7 @@ async fn books(headers: HeaderMap) -> Response {
 /// hold it, but their own browser revalidating with an `ETag` is both safe and
 /// the difference between a snappy dashboard and one that refetches everything.
 async fn me(headers: HeaderMap) -> Response {
-    json_response(&headers, CachePolicy::Private, "placeholder")
+    revalidating(&headers, CachePolicy::Private, "placeholder")
 }
 
 /// Stands in for the luxctl surface: eleven endpoints, all behind the layer.
@@ -297,21 +113,21 @@ async fn me(headers: HeaderMap) -> Response {
 /// Signed, so session-dependent: `NoStore`. A luxctl response is scoped to one
 /// reader's progress and must not be held anywhere.
 async fn ping(headers: HeaderMap) -> Response {
-    json_response(&headers, CachePolicy::NoStore, "pong")
+    revalidating(&headers, CachePolicy::NoStore, "pong")
 }
 
-/// Serialises, sets the cache headers, and answers 304 when the caller's copy
-/// is already current.
+/// A json body that answers 304 when the caller's copy is already current.
 ///
-/// Every JSON response goes through here so the policy is always stated. A
-/// handler cannot accidentally return a bare body with no `Cache-Control`.
-fn json_response<T: serde::Serialize>(
+/// `response::json` with an `ETag` on top. Only worth it where a client repeats
+/// the same request often enough for the saved bytes to matter, which is why
+/// the note endpoints do not use it.
+fn revalidating<T: serde::Serialize>(
     request_headers: &HeaderMap,
     cache_policy: CachePolicy,
     value: T,
 ) -> Response {
     let Ok(body) = serde_json::to_vec(&value) else {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        return crate::response::server_error();
     };
 
     let etag = cache::etag_for(&body);
@@ -328,73 +144,6 @@ fn json_response<T: serde::Serialize>(
 
     let mut response = Json(value).into_response();
     cache::apply(response.headers_mut(), cache_policy, etag);
+
     response
-}
-
-#[cfg(test)]
-mod tests {
-    use std::fmt::Write as _;
-
-    use super::*;
-
-    #[test]
-    fn rejects_a_wrong_signature() {
-        assert!(!signature_matches("secret", b"", "00"));
-        assert!(!signature_matches("secret", b"", "not-hex"));
-        assert!(!signature_matches("secret", b"", ""));
-    }
-
-    #[test]
-    fn only_the_safe_methods_skip_the_csrf_and_limit_checks() {
-        for safe in [Method::GET, Method::HEAD, Method::OPTIONS] {
-            assert!(!changes_state(&safe), "{safe} was treated as a write");
-        }
-
-        for write in [
-            Method::POST,
-            Method::PUT,
-            Method::PATCH,
-            Method::DELETE,
-            // Not a method anything here serves, and that is the point: the
-            // list above is the allowlist, so anything unrecognised is checked
-            // rather than waved through.
-            Method::TRACE,
-        ] {
-            assert!(changes_state(&write), "{write} skipped the checks");
-        }
-    }
-
-    #[test]
-    fn a_csrf_token_must_match_exactly() {
-        assert!(csrf_matches("token", "token"));
-        assert!(!csrf_matches("token", "tokeN"));
-        assert!(!csrf_matches("token", "toke"));
-        assert!(!csrf_matches("token", "tokens"));
-    }
-
-    #[test]
-    fn a_session_with_no_token_accepts_nothing() {
-        // Including another empty string. A session that somehow carries no
-        // token must refuse every write, not accept the one that sends none.
-        assert!(!csrf_matches("", ""));
-        assert!(!csrf_matches("", "anything"));
-        assert!(!csrf_matches("token", ""));
-    }
-
-    #[test]
-    fn accepts_a_correct_signature() {
-        let mut mac = HmacSha256::new_from_slice(b"secret").unwrap();
-        mac.update(b"payload");
-        let sig = mac.finalize().into_bytes();
-        let hex = sig.iter().fold(String::new(), |mut out, b| {
-            let _ = write!(out, "{b:02x}");
-            out
-        });
-
-        assert!(signature_matches("secret", b"payload", &hex));
-        // same signature, different body
-        assert!(!signature_matches("secret", b"tampered", &hex));
-        // right body, wrong secret
-        assert!(!signature_matches("other", b"payload", &hex));
-    }
 }

@@ -41,7 +41,7 @@ pub(crate) const MAX_AGE: i64 = 60 * 60 * 24 * 30;
 /// within an hour of a thirty-day budget, which is close enough to free.
 const TOUCH_AFTER: i32 = 60 * 60;
 
-/// A resolved session. Put in request extensions by `require_session`, so a
+/// A resolved session. Put in request extensions by `middleware::reader`, so a
 /// handler behind that layer can take it as an extractor and be sure of it.
 #[derive(Clone, Debug)]
 pub(crate) struct Session {
@@ -54,7 +54,7 @@ pub(crate) struct Session {
     ///
     /// Minted per session and never leaves the row except through
     /// `/api/auth/session`, which already needs the session cookie to answer.
-    /// Compared in `api::require_session`.
+    /// Compared in `middleware::csrf`.
     pub(crate) csrf: String,
 }
 
