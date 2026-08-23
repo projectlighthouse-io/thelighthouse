@@ -9,18 +9,36 @@ workspace = true
 [dependencies]
 loginwith = { path = "../loginwith" }
 axum = "0.8"
-# No `macros` feature on purpose. `sqlx::query!` checks SQL against a live
-# database at compile time, which means either a reachable server or a checked-in
-# .sqlx/ cache during `cargo build` — and the docker build has neither. The
-# runtime API costs the compile-time check and buys a build that works anywhere.
+# `derive` but not `macros` — and they are not the same thing. sqlx defines
+# `macros = ["derive", "sqlx-macros/macros"]`, so the narrower half can be taken
+# on its own:
+#
+#   derive  `#[derive(FromRow)]`, which maps a row to a struct by column name.
+#           No database involved, at compile time or any other time.
+#   macros  `sqlx::query!`, which checks SQL against a live database while
+#           compiling. That needs a reachable server or a checked-in .sqlx/
+#           cache during `cargo build`, and the docker build has neither.
+#
+# So the build still works anywhere, and rows still map by name rather than by
+# position — a reordered SELECT is then a compile error or a decode error, not
+# every field silently shifting by one.
 sqlx = { version = "0.8", default-features = false, features = [
     "runtime-tokio",
     "tls-rustls-ring",
     "postgres",
+    "derive",
     "migrate",
     "chrono",
     "uuid",
 ] }
+# Already in the tree — sqlx's `chrono` feature pulls it — but not nameable
+# without being declared. Timestamp columns decode as `NaiveDateTime` and are
+# formatted here rather than by `to_char` in every query that selects one.
+#
+# `clock` is not needed: nothing reads the current time through chrono, and
+# `NOW()` in a statement is postgres's clock, which is the one that should be
+# setting these columns anyway.
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 # The session payload and the oauth cookie's redirect. Both go in a cookie
 # value, where a raw `,` or `;` would end the value early.
 base64 = "0.22"
