@@ -75,12 +75,7 @@ pub(crate) async fn lesson(
 
     response::json(
         StatusCode::OK,
-        LessonView::of(
-            book_entry,
-            lesson_entry,
-            body::render(&prose.free),
-            prose.has_paid_part(),
-        ),
+        LessonView::of(book_entry, lesson_entry, &prose),
         CachePolicy::public_content(),
     )
 }

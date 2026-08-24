@@ -7,6 +7,7 @@
 use serde::Serialize;
 
 use crate::ohara::{
+    body::{self, Body, Heading},
     catalog::{BookEntry, LessonEntry},
     price::Price,
 };
@@ -133,12 +134,24 @@ pub(crate) struct LessonView<'b> {
     sort_order: i32,
     /// The free half, as html.
     html: String,
+    /// The free half's `##` headings. Only the free half — a contents list of
+    /// sections a reader cannot open would leak the shape of what they have
+    /// not bought.
+    toc: Vec<Heading>,
+    read_minutes: usize,
     /// Whether anything is being withheld. What the "read the rest" call to
     /// action keys off, and false for a lesson with no paywall at all.
     has_paid_part: bool,
+    /// How many `##` sections are behind the paywall. A count, never a list:
+    /// "4 more sections" is a reason to buy, their titles are a spoiler.
+    remaining_sections: usize,
+    /// Which lesson of the book this is, counting published ones only.
+    position: usize,
+    total: usize,
+    percent: usize,
     book: BookRef<'b>,
-    previous: Option<&'b str>,
-    next: Option<&'b str>,
+    previous: Option<LessonRef<'b>>,
+    next: Option<LessonRef<'b>>,
     seo: SeoView<'b>,
 }
 
@@ -146,10 +159,22 @@ impl<'b> LessonView<'b> {
     pub(crate) fn of(
         book: &'b BookEntry,
         entry: &'b LessonEntry,
-        html: String,
-        has_paid_part: bool,
+        prose: &Body,
     ) -> Self {
         let (previous, next) = book.neighbours(&entry.lesson.slug);
+        let ordered: Vec<&LessonEntry> = book.lessons().collect();
+        let position = ordered
+            .iter()
+            .position(|other| other.lesson.slug == entry.lesson.slug)
+            .map_or(1, |at| at + 1);
+
+        // Counted from the paid markdown, which only this process ever holds.
+        // The number is how the page says "4 more sections" without the
+        // frontend having seen a word of them.
+        let remaining_sections = prose
+            .paid
+            .as_deref()
+            .map_or(0, |paid| body::headings(paid).len());
 
         Self {
             slug: &entry.lesson.slug,
@@ -157,24 +182,65 @@ impl<'b> LessonView<'b> {
             description: entry.lesson.description.as_deref(),
             chapter_id: entry.chapter_id,
             sort_order: entry.sort_order,
-            html,
-            has_paid_part,
+            html: body::render(&prose.free),
+            toc: body::headings(&prose.free),
+            read_minutes: body::read_minutes(&prose.free),
+            has_paid_part: prose.has_paid_part(),
+            remaining_sections,
+            position,
+            total: ordered.len(),
+            percent: percent(position, ordered.len()),
             book: BookRef {
                 slug: &book.book.slug,
                 title: &book.book.title,
+                thumbnail_url: book.book.thumbnail_url.as_deref(),
             },
-            previous,
-            next,
+            previous: LessonRef::of(book, previous),
+            next: LessonRef::of(book, next),
             seo: SeoView::of_lesson(entry),
         }
     }
 }
 
-/// Enough of the book to render a breadcrumb without a second request.
+/// How far through the book this lesson is, 1 to 100.
+fn percent(position: usize, total: usize) -> usize {
+    if total == 0 {
+        return 0;
+    }
+
+    // Integer division on purpose: a progress bar is not money, and a float
+    // here would only be rounded for display anyway.
+    #[allow(clippy::integer_division)]
+    {
+        (position * 100 / total).min(100)
+    }
+}
+
+/// Enough of the book to render a breadcrumb and a share card without a second
+/// request.
 #[derive(Debug, Serialize)]
 pub(crate) struct BookRef<'b> {
     slug: &'b str,
     title: &'b str,
+    thumbnail_url: Option<&'b str>,
+}
+
+/// Enough of a neighbouring lesson to render the link to it.
+#[derive(Debug, Serialize)]
+pub(crate) struct LessonRef<'b> {
+    slug: &'b str,
+    title: &'b str,
+}
+
+impl<'b> LessonRef<'b> {
+    fn of(book: &'b BookEntry, slug: Option<&'b str>) -> Option<Self> {
+        let entry = book.lesson(slug?)?;
+
+        Some(Self {
+            slug: &entry.lesson.slug,
+            title: &entry.lesson.title,
+        })
+    }
 }
 
 /// The paid half, and nothing else.

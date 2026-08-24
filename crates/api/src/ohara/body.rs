@@ -95,6 +95,63 @@ pub(crate) fn render(markdown: &str) -> String {
     markdown_to_html(markdown, &options)
 }
 
+/// A heading in the table of contents, and the anchor it scrolls to.
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct Heading {
+    pub(crate) id: String,
+    pub(crate) text: String,
+}
+
+/// The `##` headings, in order.
+///
+/// Only `##`: a lesson's `#` is its title, which the page already shows, and
+/// `###` would make the contents longer than the section list is useful.
+///
+/// Fenced code is skipped, because `# comment` inside a shell block is not a
+/// heading and a contents list full of them is worse than none.
+pub(crate) fn headings(markdown: &str) -> Vec<Heading> {
+    let mut fenced = false;
+
+    markdown
+        .lines()
+        .filter(|line| {
+            if line.trim_start().starts_with("```") {
+                fenced = !fenced;
+            }
+            !fenced
+        })
+        .filter_map(|line| line.strip_prefix("## "))
+        .map(|text| Heading {
+            id: anchor(text),
+            text: text.trim().to_owned(),
+        })
+        .collect()
+}
+
+/// A heading's anchor, matching what the frontend generated before rust took
+/// this over — lowercase, punctuation dropped, spaces to hyphens.
+fn anchor(heading: &str) -> String {
+    heading
+        .trim()
+        .to_lowercase()
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || c.is_whitespace() || *c == '-')
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+/// Minutes to read, at 220 words a minute, and never zero.
+///
+/// Counts the markdown rather than the html, so tags are not words. It is an
+/// estimate on the page and treated as one.
+pub(crate) fn read_minutes(markdown: &str) -> usize {
+    let words = markdown.split_whitespace().count();
+
+    (words.div_ceil(220)).max(1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,5 +234,42 @@ mod tests {
         let html = render("<script>alert(1)</script>\n");
 
         assert!(!html.contains("<script>"), "{html}");
+    }
+
+    #[test]
+    fn contents_are_the_h2s_with_anchors() {
+        let found =
+            headings("# Title\n\n## First Part\n\ntext\n\n## And Then?\n");
+
+        assert_eq!(
+            found,
+            [
+                Heading {
+                    id: "first-part".to_owned(),
+                    text: "First Part".to_owned()
+                },
+                Heading {
+                    id: "and-then".to_owned(),
+                    text: "And Then?".to_owned()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_comment_inside_a_code_fence_is_not_a_heading() {
+        let found = headings(
+            "## Real\n\n```sh\n## not a heading\n```\n\n## Also Real\n",
+        );
+
+        assert_eq!(found.len(), 2, "{found:?}");
+    }
+
+    #[test]
+    fn reading_time_rounds_up_and_is_never_zero() {
+        assert_eq!(read_minutes(""), 1);
+        assert_eq!(read_minutes("one two three"), 1);
+        assert_eq!(read_minutes(&"word ".repeat(220)), 1);
+        assert_eq!(read_minutes(&"word ".repeat(221)), 2);
     }
 }

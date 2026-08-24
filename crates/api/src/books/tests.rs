@@ -130,7 +130,40 @@ async fn a_lesson_arrives_rendered_with_its_neighbours() {
     assert!(at(&lesson, "/html").as_str().unwrap().contains("<p>"));
     assert_eq!(at(&lesson, "/book/slug"), "fixture-book");
     assert!(at(&lesson, "/previous").is_null());
-    assert_eq!(at(&lesson, "/next"), "split-lesson");
+    // A neighbour carries its title, so the "next up" link needs no second
+    // request to render.
+    assert_eq!(at(&lesson, "/next/slug"), "split-lesson");
+    assert_eq!(at(&lesson, "/next/title"), "A Split Lesson");
+}
+
+#[tokio::test]
+async fn a_lesson_says_where_it_sits_in_the_book() {
+    let lesson = json("/api/books/fixture-book/lessons/split-lesson").await;
+
+    assert_eq!(at(&lesson, "/position"), 2);
+    assert_eq!(at(&lesson, "/total"), 2);
+    assert_eq!(at(&lesson, "/percent"), 100);
+    assert!(at(&lesson, "/read_minutes").as_u64().unwrap() >= 1);
+}
+
+#[tokio::test]
+async fn the_contents_list_covers_the_free_half_only() {
+    let lesson = json("/api/books/fixture-book/lessons/split-lesson").await;
+    let toc = at(&lesson, "/toc").as_array().unwrap().clone();
+
+    // One heading above the marker, two below it.
+    assert_eq!(toc.len(), 1, "{toc:?}");
+    assert_eq!(at(&lesson, "/toc/0/text"), "A Free Section");
+    assert_eq!(at(&lesson, "/toc/0/id"), "a-free-section");
+
+    // A count, never the titles: "2 more sections" is a reason to buy, and
+    // "A Paid Section" is a spoiler. Neither paid heading may appear anywhere
+    // in this response.
+    assert_eq!(at(&lesson, "/remaining_sections"), 2);
+
+    let whole = serde_json::to_string(&lesson).unwrap();
+    assert!(!whole.contains("A Paid Section"), "{whole}");
+    assert!(!whole.contains("Another Paid Section"), "{whole}");
 }
 
 #[tokio::test]
