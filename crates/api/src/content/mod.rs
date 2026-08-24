@@ -4,16 +4,23 @@
 //!   <CONTENT_PATH>/
 //!     books/
 //!       build-your-own-container/
-//!         build-your-own-container.yaml
+//!         book.yaml
 //!         lessons/
-//!           there-is-no-such-thing/
-//!             there-is-no-such-thing.yaml
-//!             there-is-no-such-thing.md
+//!           03-there-is-no-such-thing/
+//!             lesson.yaml
+//!             lesson.md
+//!     pricing/
+//!       ppp.yaml
 //! ```
 //!
-//! **The directory is named after the thing in it, twice.** A book's yaml is
-//! `<slug>/<slug>.yaml` rather than `book.yaml`, and the same for a lesson, so
-//! a file open in an editor says which book it belongs to without the path.
+//! **The directory names the instance, the file names the type.** Every lesson
+//! is `lesson.yaml` and `lesson.md`; which lesson it is comes from the folder.
+//! Renumbering a book is then one rename per lesson rather than three, and a
+//! folder whose name drifts from its files is not expressible.
+//!
+//! **A lesson folder is `<sort_order>-<slug>`.** Both halves are load-bearing:
+//! the number orders the book, the rest is checked against the yaml's `slug`.
+//! Neither is repeated in a yaml field, so neither can disagree with itself.
 //!
 //! **This repo knows the structure. It never contains the content.** The prose
 //! is the product, it lives in a private repo, and nothing here should tempt
@@ -24,8 +31,10 @@
 //!   mod.rs     the layout above, and walking it
 //!   status.rs  the smallints `status` and `tier` store
 //!   book.rs    a book's yaml
-//!   lesson.rs  a lesson's yaml
+//!   lesson.rs  a lesson's yaml, and its folder name
 //!   body.rs    markdown: the paywall split, and rendering both halves
+//!   price.rs   what a book costs
+//!   ppp.rs     what it costs somewhere poorer
 //! ```
 
 // Nothing reads the content repo yet — the sync binary and the lesson endpoint
@@ -37,6 +46,8 @@
 pub(crate) mod body;
 pub(crate) mod book;
 pub(crate) mod lesson;
+pub(crate) mod ppp;
+pub(crate) mod price;
 pub(crate) mod status;
 
 use std::{
@@ -95,58 +106,61 @@ impl Content {
     /// The slug is the directory name — not a field read out of the yaml. Those
     /// two can disagree, and [`Self::book`] is where that is caught; here the
     /// directory is what exists.
+    ///
+    /// # Errors
+    ///
+    /// `books/` missing or unreadable.
     pub(crate) fn book_slugs(&self) -> Result<Vec<String>, Error> {
-        let dir = self.books_dir();
-
-        let mut slugs: Vec<String> = std::fs::read_dir(&dir)
-            .map_err(|cause| Error::Unreadable {
-                path: dir.clone(),
-                cause,
-            })?
-            .filter_map(Result::ok)
-            .filter(|entry| entry.path().is_dir())
-            .filter_map(|entry| entry.file_name().into_string().ok())
-            .collect();
-
-        // Directory order is whatever the filesystem says, which differs
-        // between machines. Sorting makes a sync run reproducible.
-        slugs.sort();
-
-        Ok(slugs)
+        dirs_in(&self.books_dir())
     }
 
-    /// Every lesson slug within a book, in directory order.
+    /// Every lesson folder within a book — `07-borrowing`, not `borrowing`.
     ///
-    /// Order here is *not* reading order — `sort_order` in each lesson's yaml
-    /// is. Sorted for reproducibility, same as above.
-    pub(crate) fn lesson_slugs(
+    /// Folder names and not slugs, because the number is half the name and the
+    /// caller needs it: it is the lesson's `sort_order`. [`lesson::Folder`]
+    /// takes them apart.
+    ///
+    /// Alphabetical order *is* reading order here, since the numbers are zero
+    /// padded — but only up to 99 lessons, and only by accident. Anything that
+    /// needs the order should parse it rather than trust this.
+    ///
+    /// # Errors
+    ///
+    /// The book's `lessons/` missing or unreadable.
+    pub(crate) fn lesson_folders(
         &self,
         book: &str,
     ) -> Result<Vec<String>, Error> {
-        let dir = self.book_dir(book).join("lessons");
-
-        let mut slugs: Vec<String> = std::fs::read_dir(&dir)
-            .map_err(|cause| Error::Unreadable {
-                path: dir.clone(),
-                cause,
-            })?
-            .filter_map(Result::ok)
-            .filter(|entry| entry.path().is_dir())
-            .filter_map(|entry| entry.file_name().into_string().ok())
-            .collect();
-
-        slugs.sort();
-
-        Ok(slugs)
+        dirs_in(&self.book_dir(book).join("lessons"))
     }
 
     pub(crate) fn book_dir(&self, book: &str) -> PathBuf {
         self.books_dir().join(book)
     }
 
-    pub(crate) fn lesson_dir(&self, book: &str, lesson: &str) -> PathBuf {
-        self.book_dir(book).join("lessons").join(lesson)
+    pub(crate) fn lesson_dir(&self, book: &str, folder: &str) -> PathBuf {
+        self.book_dir(book).join("lessons").join(folder)
     }
+}
+
+/// Subdirectory names, sorted.
+///
+/// Sorted because directory order is whatever the filesystem says and differs
+/// between machines, which would make a sync run unreproducible.
+fn dirs_in(dir: &Path) -> Result<Vec<String>, Error> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .map_err(|cause| Error::Unreadable {
+            path: dir.to_owned(),
+            cause,
+        })?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+
+    names.sort();
+
+    Ok(names)
 }
 
 /// Reads a file, naming it if that fails.
@@ -183,15 +197,16 @@ mod tests {
             ["fixture-book", "mislabelled"]
         );
         assert_eq!(
-            content.lesson_slugs("fixture-book").unwrap(),
-            ["free-lesson", "split-lesson"]
+            content.lesson_folders("fixture-book").unwrap(),
+            ["01-free-lesson", "02-split-lesson"]
         );
     }
 
     #[test]
     fn a_missing_book_names_the_path_it_looked_in() {
-        let error =
-            fixture::content().lesson_slugs("no-such-book").unwrap_err();
+        let error = fixture::content()
+            .lesson_folders("no-such-book")
+            .unwrap_err();
 
         assert!(error.to_string().contains("no-such-book"), "{error}");
     }

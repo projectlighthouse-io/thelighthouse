@@ -4,13 +4,17 @@ description: not a real book; it exists so the loader has a tree to walk
 status: published
 tier: foundation
 thumbnail_url: https://example.test/fixture.webp
-price: 0
-first_lesson_slug: free-lesson
+
+price:
+  amount: 2900
+  currency: usd
 
 chapters:
   - id: 1
     title: The Only Chapter
-    sort_order: 1
+    lessons:
+      - "01-free-lesson"
+      - "02-split-lesson"
 
 seo:
   meta_title: A Fixture Book

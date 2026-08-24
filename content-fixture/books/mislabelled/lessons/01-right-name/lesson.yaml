@@ -1,0 +1,6 @@
+# The slug deliberately disagrees with the folder, so the loader has something
+# to refuse. Kept in the `mislabelled` book so `fixture-book` stays a tree that
+# loads cleanly end to end.
+slug: wrong-name
+title: A Mislabelled Lesson
+status: draft

@@ -1,0 +1,11 @@
+# Fake rates, real shape. The numbers are chosen so the tests can do the
+# arithmetic in their heads: 70% off $29.00 is $8.70, and 70% off $9.00 is
+# $2.70, which is under the floor.
+floor: 500
+
+tiers:
+  - percent_off: 70
+    countries: [bd, pk]
+
+  - percent_off: 40
+    countries: [br, mx]
