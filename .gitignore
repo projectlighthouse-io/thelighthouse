@@ -5,3 +5,10 @@ node_modules/
 !.env.example
 .DS_Store
 CLAUDE.local.md
+
+# The content repo, if it is ever checked out or copied in here — a deploy that
+# clones it alongside the source is the likely way that happens. This repo is
+# public and the prose is the product, so the guard is cheap and the mistake is
+# not undoable. `fixture/` is the fake content, and stays tracked.
+ohara/
+content/
