@@ -37,9 +37,29 @@ terminate() {
 }
 trap terminate TERM INT
 
-# Blocks until the first process exits, whichever it is.
-wait -n
-echo "==> a process exited, stopping the container"
-kill -TERM "$api" "$nuxt" "$caddy" 2>/dev/null || true
-wait
-exit 1
+# SIGHUP reaches this script, not the api — `docker kill -s HUP` signals pid 1.
+# Trapping it matters twice over: it forwards the reload to the process that can
+# act on it, and it stops bash doing its default thing on HUP, which is to die
+# and take the container with it.
+reload() {
+	echo "==> rereading content"
+	kill -HUP "$api" 2>/dev/null || true
+}
+trap reload HUP
+
+# `wait -n` returns when a child exits *or* when a trapped signal arrives, and
+# the two must not be confused: a reload would otherwise look like a process
+# exiting and stop the container. So wake for any reason, then check whether one
+# of the three actually died.
+while true; do
+	wait -n || true
+
+	for pid in "$api" "$nuxt" "$caddy"; do
+		if ! kill -0 "$pid" 2>/dev/null; then
+			echo "==> a process exited, stopping the container"
+			kill -TERM "$api" "$nuxt" "$caddy" 2>/dev/null || true
+			wait
+			exit 1
+		fi
+	done
+done

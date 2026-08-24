@@ -15,9 +15,17 @@ IMAGE    := thelighthouse
 VERSION  := $(shell cat VERSION)
 TAG      := $(REGISTRY)/$(IMAGE):$(VERSION)
 
+# Ohara, the content repo. Private, its own repo, never checked into this one —
+# see .gitignore. Keep in step with CONTENT_PATH in .env.
+CONTENT_PATH ?= ../ohara
+
+# The running container, for the signal that makes it reread ohara.
+CONTAINER ?= thelighthouse
+
 .DEFAULT_GOAL := help
 .PHONY: help web up down db db-down db-reset psql migrate migrate-status fmt fmt-check \
-        lint test build check audit image run login push clean
+        lint test build check audit image run login push clean \
+        content content-check content-sync
 
 help: ## show this
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -124,3 +132,34 @@ push: login ## push the image to the registry
 
 clean: ## drop build artefacts
 	rm -rf target
+
+# content
+#
+# Three steps that are deliberately separate, because they fail in different
+# places and only the first two are safe to run without thinking:
+#
+#   content        pull ohara       — touches the content repo, not this one
+#   content-check  does it parse?   — the gate; run it before a deploy
+#   content-sync   pull, check, hup — the whole thing, against a container
+#
+# There is no step that writes content into a database. Ohara is read from disk
+# and held in memory; `content-sync` is what makes a running process reread it.
+
+content: ## pull the latest ohara
+	@test -d "$(CONTENT_PATH)/.git" \
+		|| { echo "no content repo at $(CONTENT_PATH)"; exit 1; }
+	git -C "$(CONTENT_PATH)" pull --ff-only
+	@echo "\nohara at $$(git -C "$(CONTENT_PATH)" rev-parse --short HEAD)"
+
+# The same walk the api does at boot, so a book that would stop the process from
+# starting fails here instead — with the offending file named.
+content-check: ## parse every book and lesson, and say what is wrong
+	@CONTENT_PATH="$(CONTENT_PATH)" cargo run --quiet --bin lighthouse-api -- --check-content
+
+# `docker kill` only sends the signal; the container keeps running. The
+# entrypoint traps HUP and forwards it to the api, which rereads ohara and swaps
+# the catalogue over. In-flight requests finish against the old one, and a
+# content repo that does not parse leaves the previous one in place.
+content-sync: content content-check ## pull, check, and make the container reread
+	docker kill -s HUP $(CONTAINER)
+	@echo "\nsignalled $(CONTAINER); check its logs for 'content reloaded'"

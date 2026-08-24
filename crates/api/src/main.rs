@@ -38,6 +38,13 @@ use config::Config;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     telemetry::init();
 
+    // Before `Config`, deliberately: checking the content needs `CONTENT_PATH`
+    // and nothing else, and a deploy gate that also demanded oauth secrets and
+    // a reachable database would not be a content check.
+    if std::env::args().any(|arg| arg == "--check-content") {
+        return check_content();
+    }
+
     // Every read of the environment happens here. Past this line the process
     // deals in `Config`, so a key can only be missing at startup.
     let config = Config::load()?;
@@ -92,6 +99,65 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, api::app(config, socials, db, catalog))
         .with_graceful_shutdown(shutdown())
         .await?;
+
+    Ok(())
+}
+
+/// Walks the content repo, reports what is in it, and exits.
+///
+/// The same walk the boot does, so a book that would stop this process from
+/// starting fails in the deploy step instead — with the offending file named.
+/// Run it before shipping: `make content-check`.
+///
+/// Also prints the lesson folders no chapter lists. Those are drafts and not
+/// errors, but "I wrote a lesson and it never appeared" is the mistake this
+/// design makes easy, so the check says them out loud.
+fn check_content() -> Result<(), Box<dyn std::error::Error>> {
+    let path =
+        std::env::var("CONTENT_PATH").map_err(|_| "CONTENT_PATH is not set")?;
+
+    let content = ohara::Content::at(&path);
+    let catalog = ohara::catalog::Catalog::load(content.clone())?;
+    let snapshot = catalog.current();
+
+    let mut lessons = 0;
+    let mut drafts = Vec::new();
+
+    for book in snapshot.books() {
+        let published: Vec<&str> =
+            book.lessons().map(|entry| entry.folder.as_str()).collect();
+
+        lessons += published.len();
+
+        println!(
+            "{:24} {:3} lessons  {}",
+            book.book.slug,
+            published.len(),
+            if book.book.price.is_free() {
+                "free".to_owned()
+            } else {
+                format!("{}", book.book.price.amount)
+            }
+        );
+
+        for folder in content.lesson_folders(&book.book.slug)? {
+            if !published.contains(&folder.as_str()) {
+                drafts.push(format!("{}/{folder}", book.book.slug));
+            }
+        }
+    }
+
+    println!(
+        "\n{} books, {lessons} lessons, from {path}",
+        snapshot.books().count()
+    );
+
+    if !drafts.is_empty() {
+        println!("\nnot listed by any chapter, so not published:");
+        for draft in drafts {
+            println!("  {draft}");
+        }
+    }
 
     Ok(())
 }
