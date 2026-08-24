@@ -1,21 +1,31 @@
 <script setup lang="ts">
-import type { Chapter, LessonSummary } from '@/types/Content'
-import { books } from '@/data/Books'
-import { curriculum } from '@/data/Curriculum'
+import type { Book, Chapter, LessonSummary } from '@/types/Content'
+
+interface BookDetailResponse {
+  book: Book
+  chapters: Chapter[]
+  lessons: LessonSummary[]
+}
 
 const route = useRoute()
 const slug = computed<string>(() => String(route.params.slug))
 
-const book = computed(() => books.find(b => b.slug === slug.value))
-const plan = computed(() => curriculum[slug.value])
+// From ohara, through the rust api. During SSR this calls the handler directly,
+// so it costs no HTTP round trip.
+const { data } = await useAsyncData(
+  () => `book:${slug.value}`,
+  () => $fetch<BookDetailResponse>(`/_api/books/${slug.value}`),
+  { watch: [slug] },
+)
 
 // an unknown slug is a real 404, not an empty page
-if (!book.value) {
+if (!data.value) {
   throw createError({ statusCode: 404, statusMessage: 'Book not found', fatal: true })
 }
 
-const lessons = computed<LessonSummary[]>(() => plan.value?.lessons ?? [])
-const chapters = computed<Chapter[]>(() => plan.value?.chapters ?? [])
+const book = computed(() => data.value?.book)
+const lessons = computed<LessonSummary[]>(() => data.value?.lessons ?? [])
+const chapters = computed<Chapter[]>(() => data.value?.chapters ?? [])
 
 const lessonsFor = (chapter: Chapter): LessonSummary[] =>
   lessons.value.filter(l => l.chapterId === chapter.id)

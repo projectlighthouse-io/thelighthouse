@@ -60,12 +60,35 @@ export default defineNuxtConfig({
 
   modules: ['@nuxt/eslint'],
 
-  // Every public page renders from static data, so there is nothing to compute
+  // Server side only — this key never reaches the browser. The api binds
+  // loopback and caddy is the only public listener, so an SSR fetch to it never
+  // leaves the container. NUXT_API_BASE overrides it.
+  runtimeConfig: {
+    apiBase: 'http://127.0.0.1:9000',
+  },
+
+  // Most public pages render from static data, so there is nothing to compute
   // per request — prerender them and serve files. What is left on the server is
-  // only what depends on a session.
+  // only what depends on a session, or on content that changes without a build.
   routeRules: {
     '/': { prerender: true },
-    '/books/**': { prerender: true },
+
+    // *Not* prerendered, unlike everything else public. Books come from ohara,
+    // which is reread at runtime on SIGHUP — baking them into files at build
+    // time would mean a content fix needs a deploy, which is the thing that
+    // design exists to avoid.
+    //
+    // The cache-control mirrors what the api sends for the same content, so the
+    // document and the data it came from expire together. No `Vary: Cookie`:
+    // these pages are identical for everyone, which is what lets the edge hold
+    // them at all.
+    '/books/**': {
+      headers: {
+        'cache-control':
+          'public, max-age=0, s-maxage=300, stale-while-revalidate=86400',
+      },
+    },
+
     '/projects/**': { prerender: true },
     '/blog/**': { prerender: true },
     '/syntax/**': { prerender: true },
@@ -103,8 +126,13 @@ export default defineNuxtConfig({
     prerender: {
       crawlLinks: true,
       failOnError: false,
-      // reachable only from the sitemap, so the crawler would miss them
-      routes: ['/robots.txt', '/sitemap.xml'],
+      // Not reachable by the crawler, so it has to be named.
+      //
+      // `/sitemap.xml` is *not* here any more: it lists every book and lesson,
+      // those come from ohara, and ohara is reread at runtime. Baked at build
+      // time it would advertise the previous set of lessons until the next
+      // deploy.
+      routes: ['/robots.txt'],
     },
   },
 

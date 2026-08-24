@@ -1,46 +1,49 @@
-import { books } from '@/data/Books'
-import { curriculum } from '@/data/Curriculum'
-import { lessonFixture } from '#server/data/LessonFixture'
-import { renderLesson } from '#server/utils/LessonBody'
+import type { ApiLesson } from '#server/utils/Lighthouse'
+import { fromApi } from '#server/utils/Lighthouse'
 
 /**
- * Chooses the body and renders it, server side.
+ * A lesson, from ohara by way of the rust api.
  *
- * This is deliberately the shape the rust endpoint will have — the entitlement
- * check picks the fragment and only the chosen one crosses the wire, so a
- * frontend bug cannot reveal a paid body. Swapping this handler for a fetch to
- * rust in phase 4 leaves the page untouched.
+ * The url says `pages` and the api says `lessons`. That is not an oversight:
+ * `/books/x/pages/y` is the address readers and search engines already have,
+ * and the api path is internal and free to be named after the thing.
+ *
+ * **Only the free half ever arrives here.** The api decides which fragment to
+ * send and sends exactly one, so no bug in nitro or in the page can reveal a
+ * paid body — there is nothing to reveal. `remainingSections` is a count the
+ * api computed from prose this process never saw.
  */
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
   const bookSlug = getRouterParam(event, 'book')
   const lessonSlug = getRouterParam(event, 'lesson')
 
-  const book = books.find(b => b.slug === bookSlug)
-  const lessons = curriculum[bookSlug ?? '']?.lessons ?? []
-  const index = lessons.findIndex(l => l.slug === lessonSlug)
-  const lesson = lessons[index]
-
-  if (!book || !lesson) {
-    throw createError({ statusCode: 404, statusMessage: 'Lesson not found' })
-  }
-
-  const rendered = renderLesson(lessonFixture, lesson.locked ? 1 : Number.MAX_SAFE_INTEGER)
-  const previous = lessons[index - 1]
-  const next = lessons[index + 1]
+  const lesson = await fromApi<ApiLesson>(
+    `/api/books/${bookSlug}/lessons/${lessonSlug}`,
+  )
 
   return {
-    book: { slug: book.slug, title: book.title, thumbnailUrl: book.thumbnailUrl },
+    book: {
+      slug: lesson.book.slug,
+      title: lesson.book.title,
+      thumbnailUrl: lesson.book.thumbnail_url ?? '',
+    },
     lesson: {
       slug: lesson.slug,
       title: lesson.title,
-      description: lesson.description,
-      locked: lesson.locked,
+      description: lesson.description ?? '',
+      // "Locked" on the page means "there is more, and you cannot see it".
+      // Entitlement is the api's answer, not this handler's; today a reader
+      // who may read the rest fetches it from the paid url.
+      locked: lesson.has_paid_part,
     },
-    ...rendered,
-    position: index + 1,
-    total: lessons.length,
-    percent: Math.round(((index + 1) / Math.max(1, lessons.length)) * 100),
-    previous: previous ? { slug: previous.slug, title: previous.title } : null,
-    next: next ? { slug: next.slug, title: next.title } : null,
+    html: lesson.html,
+    toc: lesson.toc,
+    readMinutes: lesson.read_minutes,
+    remainingSections: lesson.remaining_sections,
+    position: lesson.position,
+    total: lesson.total,
+    percent: lesson.percent,
+    previous: lesson.previous,
+    next: lesson.next,
   }
 })

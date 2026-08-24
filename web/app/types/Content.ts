@@ -4,7 +4,14 @@ export interface Book {
   description: string
   thumbnailUrl: string
   pages: number
+  /**
+   * A price tag, or null when the book is free. Never a number: the money
+   * arithmetic stays in minor units on the rust side, and a float here is how
+   * a display value ends up being charged.
+   */
   price: string | null
+  /** Where "start reading" goes. Null for a book with no published lessons. */
+  firstLesson?: string | null
   inProgress: boolean
 }
 
