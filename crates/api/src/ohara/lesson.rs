@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn a_lesson_whose_slug_disagrees_with_its_folder_is_refused() {
-        let error = fixture::content()
+        let error = fixture::broken()
             .lesson("mislabelled", "01-right-name")
             .unwrap_err();
         let message = error.to_string();

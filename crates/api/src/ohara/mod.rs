@@ -48,6 +48,7 @@
 
 pub(crate) mod body;
 pub(crate) mod book;
+pub(crate) mod catalog;
 pub(crate) mod lesson;
 pub(crate) mod ppp;
 pub(crate) mod price;
@@ -179,10 +180,23 @@ pub(crate) mod fixture {
     use super::Content;
 
     /// The thin, fake content repo this crate ships for tests.
+    ///
+    /// Loads cleanly, end to end. Everything deliberately wrong lives in
+    /// [`broken`] instead, because a catalogue walks the whole repo and one
+    /// planted mistake would make every test about something else fail.
     pub(crate) fn content() -> Content {
         Content::at(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../content-fixture"
+        ))
+    }
+
+    /// A repo where things are wrong on purpose, for the tests that check they
+    /// are refused.
+    pub(crate) fn broken() -> Content {
+        Content::at(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../content-fixture-broken"
         ))
     }
 }
@@ -195,10 +209,7 @@ mod tests {
     fn the_fixture_lists_its_books_and_lessons() {
         let content = fixture::content();
 
-        assert_eq!(
-            content.book_slugs().unwrap(),
-            ["fixture-book", "mislabelled"]
-        );
+        assert_eq!(content.book_slugs().unwrap(), ["fixture-book"]);
         assert_eq!(
             content.lesson_folders("fixture-book").unwrap(),
             ["01-free-lesson", "02-split-lesson"]

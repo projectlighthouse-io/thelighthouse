@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn a_slug_that_disagrees_with_its_directory_is_refused() {
-        let error = fixture::content().book("mislabelled").unwrap_err();
+        let error = fixture::broken().book("mislabelled").unwrap_err();
         let message = error.to_string();
 
         assert!(message.contains("mislabelled"), "{message}");
