@@ -78,11 +78,16 @@ export default defineNuxtConfig({
     // time would mean a content fix needs a deploy, which is the thing that
     // design exists to avoid.
     //
+    // `prerender: false` is load-bearing and not a default being restated:
+    // `nitro.prerender.crawlLinks` follows every link it finds, so these routes
+    // get discovered and baked unless they say no here.
+    //
     // The cache-control mirrors what the api sends for the same content, so the
     // document and the data it came from expire together. No `Vary: Cookie`:
     // these pages are identical for everyone, which is what lets the edge hold
     // them at all.
     '/books/**': {
+      prerender: false,
       headers: {
         'cache-control':
           'public, max-age=0, s-maxage=300, stale-while-revalidate=86400',
