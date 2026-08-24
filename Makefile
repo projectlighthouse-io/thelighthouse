@@ -23,7 +23,7 @@ CONTENT_PATH ?= ../ohara
 CONTAINER ?= thelighthouse
 
 .DEFAULT_GOAL := help
-.PHONY: help web up down db db-down db-reset psql migrate migrate-status fmt fmt-check \
+.PHONY: help web up dev down db db-down db-reset psql migrate migrate-status fmt fmt-check \
         lint test build check audit image run login push clean \
         content content-check content-sync
 
@@ -53,6 +53,18 @@ up: ## start postgres and caddy, and wait for them
 	@echo "\n  caddy    http://localhost:$(CADDY_PORT)"
 	@echo "  api      cargo run -p lighthouse-api"
 	@echo "  nuxt     cd web && HOST=127.0.0.1 PORT=3000 npm run dev\n"
+
+# Both in one terminal, with caddy already in front of them. Ctrl-C stops the
+# pair — `kill 0` signals the whole process group, so nuxt does not survive the
+# api and keep port 3000 for the next run.
+#
+# HOST=127.0.0.1 is not optional; see the note above `up`.
+dev: up ## run the api and nuxt together, behind caddy
+	@echo "  visit http://localhost:$(CADDY_PORT)\n"
+	@trap 'kill 0' INT TERM; \
+		cargo run -q -p lighthouse-api & \
+		(cd web && HOST=127.0.0.1 PORT=3000 npm run dev) & \
+		wait
 
 down: ## stop postgres and caddy, keep the data
 	docker compose down
