@@ -1,4 +1,7 @@
-//! The content repo: where it is, what shape it has, and how it is read.
+//! Ohara — the content repo: where it is, what shape it has, how it is read.
+//!
+//! Named after the repo it reads, `projectlighthouse-io/ohara`, which is
+//! private for the reason the next paragraph but one gives.
 //!
 //! ```text
 //!   <CONTENT_PATH>/
