@@ -282,7 +282,7 @@ mod tests {
 
         let source = PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../content-fixture"
+            "/../../fixture"
         ));
         copy_dir(&source, &root);
 

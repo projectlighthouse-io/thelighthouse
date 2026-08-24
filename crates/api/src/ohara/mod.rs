@@ -27,7 +27,7 @@
 //!
 //! **This repo knows the structure. It never contains the content.** The prose
 //! is the product, it lives in a private repo, and nothing here should tempt
-//! anyone to check a copy in. Tests run against `content-fixture/`, which is
+//! anyone to check a copy in. Tests run against `fixture/`, which is
 //! deliberately thin and deliberately fake.
 //!
 //! ```text
@@ -185,18 +185,18 @@ pub(crate) mod fixture {
     /// [`broken`] instead, because a catalogue walks the whole repo and one
     /// planted mistake would make every test about something else fail.
     pub(crate) fn content() -> Content {
-        Content::at(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../content-fixture"
-        ))
+        Content::at(concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixture"))
     }
 
     /// A repo where things are wrong on purpose, for the tests that check they
     /// are refused.
+    ///
+    /// Its own root, sitting *beside* `fixture/books/` rather than inside it,
+    /// which is what keeps it out of every walk that is not looking for it.
     pub(crate) fn broken() -> Content {
         Content::at(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../content-fixture-broken"
+            "/../../fixture/mislabelled"
         ))
     }
 }
