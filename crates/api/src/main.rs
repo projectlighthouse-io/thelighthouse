@@ -7,6 +7,7 @@
 
 mod api;
 mod auth;
+mod books;
 mod cache;
 mod config;
 mod cookie;
@@ -21,7 +22,10 @@ mod session;
 mod telemetry;
 mod users;
 
-use std::net::{Ipv4Addr, SocketAddr};
+use std::{
+    net::{Ipv4Addr, SocketAddr},
+    sync::Arc,
+};
 
 use loginwith::{GithubProvider, GoogleProvider, Providers, Registration};
 
@@ -50,6 +54,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("database connected");
 
+    // Before the listener, and for a third time the same reason: a site that
+    // boots with no content looks broken rather than down, and there is no
+    // previous snapshot to fall back on. A *reload* keeps what it has — see
+    // `Catalog::reload` — but the first read has to be right.
+    let catalog = Arc::new(ohara::catalog::Catalog::load(ohara::Content::at(
+        &config.content_path,
+    ))?);
+
+    tracing::info!(
+        books = catalog.current().books().count(),
+        path = %config.content_path,
+        "content loaded"
+    );
+
+    // SIGHUP rereads the content repo in place. No endpoint, so there is no
+    // authenticated write surface that reads the filesystem, and no restart, so
+    // in-flight requests finish against the snapshot they already hold:
+    //
+    //   docker kill -s HUP lighthouse
+    reload_on_hangup(Arc::clone(&catalog));
+
     tracing::info!(
         providers = ?socials.registered().map(loginwith::Provider::as_str).collect::<Vec<_>>(),
         "social sign-in ready"
@@ -64,12 +89,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!(%addr, "api listening");
 
-    axum::serve(listener, api::app(config, socials, db))
+    axum::serve(listener, api::app(config, socials, db, catalog))
         .with_graceful_shutdown(shutdown())
         .await?;
 
     Ok(())
 }
+
+/// Rereads the content repo whenever the process is sent SIGHUP.
+///
+/// A failed reload is logged and nothing else: the previous snapshot stays in
+/// place, so a typo in one lesson leaves the site serving what it already had
+/// rather than emptying it. Whoever sent the signal reads the log to find out.
+///
+/// Unix only, which is every environment this runs in. On anything else there
+/// is no SIGHUP to listen for and the catalogue is simply whatever booted.
+#[cfg(unix)]
+fn reload_on_hangup(catalog: Arc<ohara::catalog::Catalog>) {
+    use tokio::signal::unix::{SignalKind, signal};
+
+    let Ok(mut hangups) = signal(SignalKind::hangup()) else {
+        tracing::warn!("cannot listen for SIGHUP; content reload unavailable");
+        return;
+    };
+
+    tokio::spawn(async move {
+        while hangups.recv().await.is_some() {
+            match catalog.reload() {
+                Ok(()) => tracing::info!(
+                    books = catalog.current().books().count(),
+                    "content reloaded"
+                ),
+                Err(cause) => tracing::error!(
+                    %cause,
+                    "failed to reload content; keeping the previous one"
+                ),
+            }
+        }
+    });
+}
+
+#[cfg(not(unix))]
+fn reload_on_hangup(_catalog: Arc<ohara::catalog::Catalog>) {}
 
 /// Registers each provider that has credentials.
 ///

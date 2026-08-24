@@ -1,6 +1,6 @@
 //! What a book costs.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// A book's list price, before any discount.
 ///
@@ -12,7 +12,7 @@ use serde::Deserialize;
 /// are immutable in amount, so an id here would make every price change a
 /// Stripe login *and* a commit; the amount is sent inline at checkout instead,
 /// and changing it is a commit alone.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub(crate) struct Price {
     /// Minor units. Zero is free, and free is a real answer — not every book
     /// is sold.
@@ -32,7 +32,9 @@ impl Price {
 /// than a checkout session Stripe rejects. Charging happens in USD everywhere —
 /// purchasing power is handled by discounting the amount, not by switching
 /// currency, which would need a price per country per book.
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(
+    Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq,
+)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Currency {
     #[default]

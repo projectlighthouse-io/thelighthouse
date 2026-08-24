@@ -4,8 +4,8 @@
 //! top to bottom should be enough to say what any request can reach — which is
 //! why the layering lives here and not spread across the modules being mounted.
 //!
-//! The content, entitlement and payment endpoints from docs/rebuild.md replace
-//! the stub routes below.
+//! Content is `books`. The entitlement and payment endpoints from
+//! docs/rebuild.md replace the stub routes below.
 
 use std::sync::Arc;
 
@@ -21,13 +21,15 @@ use loginwith::Providers;
 use sqlx::postgres::PgPool;
 
 use crate::{
-    auth,
+    auth, books,
     cache::{self, CachePolicy},
     config::Config,
     db,
     limit::RateLimit,
     middleware::signature::require_signature,
-    notes, telemetry,
+    notes,
+    ohara::catalog::Catalog,
+    telemetry,
 };
 
 /// What every handler can reach. Cheap to clone — `PgPool` and `Providers` are
@@ -40,20 +42,29 @@ pub(crate) struct AppState {
     /// Shared, not cloned: an `Arc` so every clone of this state counts against
     /// the same buckets. A `RateLimit` per clone would be a limit per request.
     pub(crate) limits: Arc<RateLimit>,
+    /// Shared for the same reason, and more so: reloading swaps the snapshot
+    /// inside this one, and a per-clone catalogue would leave most requests
+    /// reading a copy nothing ever reloads.
+    pub(crate) catalog: Arc<Catalog>,
 }
 
-pub(crate) fn app(config: Config, socials: Providers, db: PgPool) -> Router {
+pub(crate) fn app(
+    config: Config,
+    socials: Providers,
+    db: PgPool,
+    catalog: Arc<Catalog>,
+) -> Router {
     let state = AppState {
         config,
         socials,
         db,
         limits: Arc::new(RateLimit::note_writes()),
+        catalog,
     };
 
     // luxctl's surface. Everything mounted here inherits the signature check.
     let signed = Router::new()
         .route("/ping", get(ping))
-        .route("/books", get(books))
         .route("/me", get(me))
         .route_layer(from_fn_with_state(
             state.config.clone(),
@@ -64,7 +75,9 @@ pub(crate) fn app(config: Config, socials: Providers, db: PgPool) -> Router {
         .route("/health", get(health))
         .nest("/api", signed)
         // Absolute paths, so these merge alongside `signed` rather than nesting
-        // under the same prefix. Notes carries its own gates — see its `routes`.
+        // under the same prefix. Both carry their own gates — see their
+        // `routes`.
+        .merge(books::routes(&state))
         .merge(notes::routes(&state))
         // Deliberately outside every gate: an OAuth callback is a browser
         // navigation and cannot carry an HMAC or a session. Those four routes
@@ -88,15 +101,6 @@ async fn health(State(state): State<AppState>) -> Response {
         (StatusCode::SERVICE_UNAVAILABLE, "database unreachable")
             .into_response()
     }
-}
-
-/// Stands in for the content the frontend reads over loopback.
-///
-/// Shared, because a book listing is the same for everyone — this is the only
-/// kind of response a CDN may hold. Anything that consults a session or an
-/// entitlement must not use this policy.
-async fn books(headers: HeaderMap) -> Response {
-    revalidating(&headers, CachePolicy::public_content(), ["placeholder"])
 }
 
 /// Stands in for the reader's own state — progress, bookmarks.

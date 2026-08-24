@@ -131,7 +131,17 @@ mod tests {
             sqlx::postgres::PgPool::connect_lazy("postgres://localhost/unused")
                 .unwrap();
 
-        crate::api::app(config, socials, db)
+        // The fixture repo, not `config.content_path`: these tests are about
+        // routing and cookies, and reading the real ohara would fail them on
+        // whatever happens to be mid-edit there.
+        let catalog = std::sync::Arc::new(
+            crate::ohara::catalog::Catalog::load(
+                crate::ohara::fixture::content(),
+            )
+            .unwrap(),
+        );
+
+        crate::api::app(config, socials, db, catalog)
     }
 
     async fn get(uri: &str, cookie_header: Option<&str>) -> Response {
@@ -318,7 +328,11 @@ mod tests {
     async fn the_signed_routes_are_still_signed() {
         // The other half of the mounting: adding the auth routes must not have
         // opened up everything else on /api/*.
-        for uri in ["/api/ping", "/api/books", "/api/me"] {
+        //
+        // `/api/books` is *not* here. It used to be a signed placeholder and is
+        // now the real, public book listing — the same bytes for everyone, and
+        // the only kind of response the edge may hold.
+        for uri in ["/api/ping", "/api/me"] {
             assert_eq!(
                 get(uri, None).await.status(),
                 StatusCode::NOT_FOUND,

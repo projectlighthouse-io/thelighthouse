@@ -73,6 +73,17 @@ pub(crate) enum Error {
     Malformed { path: PathBuf, cause: String },
 }
 
+/// So `main` can `?` on a boot-time load. Nothing else in the crate treats
+/// these as a `dyn Error`.
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Unreadable { cause, .. } => Some(cause),
+            Self::Malformed { .. } => None,
+        }
+    }
+}
+
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

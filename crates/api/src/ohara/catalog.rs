@@ -161,6 +161,29 @@ impl BookEntry {
     pub(crate) fn first_lesson(&self) -> Option<&LessonEntry> {
         self.lessons().next()
     }
+
+    /// The lessons either side of this one, in reading order.
+    ///
+    /// Both `None` for a lesson that is not in this book, which is the same
+    /// answer a one-lesson book gives — the caller has already established the
+    /// lesson exists before it wants to know what is next to it.
+    pub(crate) fn neighbours(
+        &self,
+        slug: &str,
+    ) -> (Option<&str>, Option<&str>) {
+        let Some(at) = self.reading_order.iter().position(|s| s == slug) else {
+            return (None, None);
+        };
+
+        let previous = at
+            .checked_sub(1)
+            .and_then(|before| self.reading_order.get(before));
+
+        (
+            previous.map(String::as_str),
+            self.reading_order.get(at + 1).map(String::as_str),
+        )
+    }
 }
 
 /// The catalogue in front of the content repo, and the ability to rebuild it.
