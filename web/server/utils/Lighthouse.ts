@@ -21,7 +21,11 @@ const base = (): string =>
  */
 export async function fromApi<T>(path: string): Promise<T> {
   try {
-    return await $fetch<T>(`${base()}${path}`)
+    // Cast because `$fetch<T>` returns `TypedInternalResponse<..., T>`, which
+    // resolves to T for a concrete type but not for a type parameter — the
+    // compiler cannot prove the two agree while T is still open. The runtime
+    // value is exactly what T describes; only the generic is unprovable.
+    return await $fetch<T>(`${base()}${path}`) as T
   }
   catch (error: unknown) {
     const status = (error as { status?: number, statusCode?: number })?.status
