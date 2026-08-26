@@ -7,6 +7,10 @@ useSeo({
   noindex: true,
 })
 
+// The route guard already resolved the session to let this page render, so
+// this reads the state rather than asking again.
+const { reader, initials, signOut } = useReader()
+
 const stats = [
   { label: 'lessons read', value: '—' },
   { label: 'projects shipped', value: '—' },
@@ -18,10 +22,25 @@ const stats = [
 <template>
   <div class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
     <div class="flex items-center gap-5">
-      <div class="size-16 shrink-0 rounded-full bg-paper-edge" />
+      <img
+        v-if="reader?.avatar"
+        :src="reader.avatar"
+        alt=""
+        class="size-16 shrink-0 rounded-full object-cover"
+      >
+      <div
+        v-else
+        class="flex size-16 shrink-0 items-center justify-center rounded-full bg-ink font-mono text-lg text-on-ink"
+      >
+        {{ initials }}
+      </div>
       <div>
-        <h1 class="font-serif text-3xl tracking-tight text-ink">Your profile</h1>
-        <p class="text-mono-body mt-1">signed in with google or github.</p>
+        <h1 class="font-serif text-3xl tracking-tight text-ink">
+          {{ reader?.name ?? 'Your profile' }}
+        </h1>
+        <p class="text-mono-body mt-1">
+          {{ reader ? `${reader.email} · signed in with ${reader.provider}` : 'loading…' }}
+        </p>
       </div>
     </div>
 
@@ -32,13 +51,21 @@ const stats = [
       </div>
     </dl>
 
-    <div class="mt-10">
+    <div class="mt-10 flex flex-wrap items-center gap-4">
       <NuxtLink
         to="/settings/profile"
         class="btn-chalk text-sm font-medium text-ink"
       >
         edit settings <span class="ml-1">———→</span>
       </NuxtLink>
+
+      <button
+        type="button"
+        class="cursor-pointer rounded-md border border-stroke bg-panel px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-paper-warm"
+        @click="signOut"
+      >
+        sign out
+      </button>
     </div>
   </div>
 </template>

@@ -26,7 +26,12 @@ const footerLinks: NavLink[] = [
   { to: '/blog', label: 'blog' },
 ]
 
-const { user, isSignedIn } = usePreviewAuth()
+const { reader, isSignedIn, initials, resolve } = useReader()
+
+// Client side, after hydration: the header is the only per-reader thing on an
+// otherwise identical page, and asking during SSR would make every page
+// uncacheable to render one avatar. See useReader.
+onMounted(resolve)
 
 // site-level identity, emitted once for every page that uses this layout
 useJsonLd('site', {
@@ -74,25 +79,45 @@ const year = new Date().getFullYear()
           <div class="flex items-center gap-1">
             <ChromeThemeToggle />
 
-            <NuxtLink
-              v-if="isSignedIn"
-              to="/profile"
-              class="flex items-center gap-2 rounded-md px-2 py-1.5 transition hover:bg-paper-warm"
-              :title="user?.email"
-            >
-              <span
-                class="flex size-7 items-center justify-center rounded-full bg-ink font-mono text-xs text-on-ink"
-              >{{ user?.initials }}</span>
-              <span class="hidden font-sans text-sm text-ink sm:inline">{{ user?.name }}</span>
-            </NuxtLink>
+            <!-- Who the reader is is client state, so the server has nothing
+                 correct to render. It renders the join button, which is also
+                 what an anonymous visitor keeps — one cached document for
+                 everyone, corrected in the browser for the signed in. -->
+            <ClientOnly>
+              <NuxtLink
+                v-if="isSignedIn"
+                to="/profile"
+                class="flex items-center gap-2 rounded-md px-2 py-1.5 transition hover:bg-paper-warm"
+                :title="reader?.email"
+              >
+                <img
+                  v-if="reader?.avatar"
+                  :src="reader.avatar"
+                  alt=""
+                  class="size-7 rounded-full object-cover"
+                >
+                <!-- Drawn empty while the hint cookie says signed in and the
+                     session endpoint has not answered yet: the right shape
+                     immediately beats the right letters a round trip later. -->
+                <span
+                  v-else
+                  class="flex size-7 items-center justify-center rounded-full bg-ink font-mono text-xs text-on-ink"
+                >{{ initials }}</span>
+                <span class="hidden font-sans text-sm text-ink sm:inline">{{ reader?.name }}</span>
+              </NuxtLink>
 
-            <NuxtLink
-              v-else
-              to="/login"
-              class="rounded-lg border border-stroke bg-ink px-4 py-2 text-sm font-semibold text-on-ink transition hover:bg-ink-hover sm:px-6"
-            >
-              join
-            </NuxtLink>
+              <ChromeJoinDropdown v-else />
+
+              <!-- The same component the anonymous branch renders, so the
+                   server emits the real button rather than a stand-in for it.
+                   The join button is identical for every visitor — only the
+                   signed-in variant is per-reader — so nothing about it needs
+                   to wait for hydration, and a page whose javascript has not
+                   run yet still shows the thing it will become. -->
+              <template #fallback>
+                <ChromeJoinDropdown />
+              </template>
+            </ClientOnly>
           </div>
         </div>
       </div>

@@ -112,7 +112,6 @@ export default defineNuxtConfig({
     '/notes': { ssr: false },
     '/profile': { ssr: false },
     '/settings/**': { ssr: false },
-    '/dev/**': { ssr: false },
 
     // Hashed filenames, so they can never go stale.
     '/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },

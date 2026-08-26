@@ -2,7 +2,7 @@
  * Served from Nitro rather than public/ so the disallow list and the sitemap
  * URL live next to the routes they describe.
  */
-const DISALLOW = ['/dev/', '/settings/', '/dashboard', '/notes', '/profile', '/login']
+const DISALLOW = ['/settings/', '/dashboard', '/notes', '/profile', '/login']
 
 export default defineEventHandler((event) => {
   setHeader(event, 'content-type', 'text/plain; charset=utf-8')
