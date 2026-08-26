@@ -86,9 +86,20 @@
 	# .env, .git and friends. .well-known stays reachable for ACME and
 	# security.txt. This must be a `handle` placed first — as a bare `respond`
 	# it never fires, because the catch-all handle swallows the request.
+	#
+	# /_nuxt/* is exempt, and it has to be: vite serves its pre-bundled
+	# dependencies from /_nuxt/node_modules/.vite/deps/* in development, and a
+	# rule that 403s every path containing a dot segment blocks all of them.
+	# The failure is not obvious — the entry module still loads 200, its
+	# imports do not, and the browser reports it as "Failed to fetch
+	# dynamically imported module: .../entry.js". Nothing hydrates, styles
+	# never get injected, and the site reads as static html that ignores
+	# clicks. In production /_nuxt/* is build output with nothing sensitive
+	# under it, and @fs does not exist outside the dev server.
 	@dotfiles {
 		path_regexp \/\.
 		not path /.well-known/*
+		not path /_nuxt/*
 	}
 	handle @dotfiles {
 		respond 403
