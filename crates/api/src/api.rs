@@ -12,7 +12,7 @@ use std::sync::Arc;
 use axum::{
     Json, Router,
     extract::State,
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode, header::RETRY_AFTER},
     middleware::from_fn_with_state,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -44,6 +44,9 @@ pub(crate) struct AppState {
     /// The limit every route inherits, keyed by reader or address. Shared for
     /// the same reason `limits` is: a per-clone counter is a per-request one.
     pub(crate) requests: Arc<RateLimit>,
+    /// What a reload costs, capped for the process rather than per caller.
+    /// The signature is the gate; this is what holds if the gate ever fails.
+    pub(crate) reloads: Arc<RateLimit>,
     /// Shared for the same reason, and more so: reloading swaps the snapshot
     /// inside this one, and a per-clone catalogue would leave most requests
     /// reading a copy nothing ever reloads.
@@ -62,6 +65,7 @@ pub(crate) fn app(
         db,
         limits: Arc::new(RateLimit::note_writes()),
         requests: Arc::new(RateLimit::requests()),
+        reloads: Arc::new(RateLimit::content_reloads()),
         catalog,
     };
 
@@ -128,6 +132,9 @@ async fn health(State(state): State<AppState>) -> Response {
     }
 }
 
+/// The one bucket every reload counts against, whoever asked for it.
+const RELOAD_BUDGET: &str = "content-reload";
+
 /// Rereads the content repo and swaps the catalogue over, in place.
 ///
 /// The whole point is that nothing restarts. [`Catalog::reload`] builds a new
@@ -157,6 +164,20 @@ async fn health(State(state): State<AppState>) -> Response {
 /// security boundary — it cannot verify an HMAC, so it must never be the only
 /// thing standing in front of something that does work.
 async fn reload(State(state): State<AppState>) -> Response {
+    // Before the work, not after: the point is to not do it. One bucket for
+    // the whole process — see `RateLimit::content_reloads` for why this is not
+    // per caller.
+    if let Some(retry_after) = state.reloads.check(RELOAD_BUDGET) {
+        tracing::warn!(retry_after, "content reload refused: too many");
+
+        let mut response = StatusCode::TOO_MANY_REQUESTS.into_response();
+        if let Ok(value) = HeaderValue::from_str(&retry_after.to_string()) {
+            response.headers_mut().insert(RETRY_AFTER, value);
+        }
+
+        return response;
+    }
+
     match state.catalog.reload() {
         Ok(()) => {
             let snapshot = state.catalog.current();

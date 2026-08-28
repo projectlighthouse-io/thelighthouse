@@ -249,6 +249,17 @@ fn signature_for_empty_body() -> String {
         })
 }
 
+/// A signed POST to `/reload`, built fresh each time so one router can serve
+/// several — the budget lives in the state, not the request.
+fn signed_reload() -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri("/reload")
+        .header("x-luxctl-signature", signature_for_empty_body())
+        .body(Body::empty())
+        .unwrap()
+}
+
 async fn post_signed(uri: &str) -> Response {
     router()
         .oneshot(
@@ -291,6 +302,24 @@ async fn reloading_swaps_the_catalogue_without_restarting() {
     // The fixture, reread from disk rather than remembered.
     assert_eq!(at(&counted, "/books"), 1);
     assert_eq!(at(&counted, "/lessons"), 2);
+}
+
+#[tokio::test]
+async fn reloading_runs_out_of_budget_before_it_runs_out_of_cpu() {
+    // Three a minute for the whole process. The signature is the gate; this is
+    // what holds if the gate ever fails, so it must not be per caller — the
+    // fourth call is refused however it arrived.
+    let app = router();
+
+    for attempt in 1..=3 {
+        let response = app.clone().oneshot(signed_reload()).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "reload {attempt}");
+    }
+
+    let refused = app.oneshot(signed_reload()).await.unwrap();
+
+    assert_eq!(refused.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(refused.headers().contains_key("retry-after"));
 }
 
 #[tokio::test]
