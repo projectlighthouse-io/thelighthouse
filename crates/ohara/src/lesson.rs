@@ -5,7 +5,11 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::{Content, Error, Locale, Status, body::Body, read};
+use super::{
+    Content, Error, Locale, Status,
+    body::{Access, Body},
+    read,
+};
 
 /// `books/<book>/lessons/<order>-<slug>/lesson.yaml`.
 ///
@@ -42,6 +46,17 @@ pub struct Lesson {
     pub description: Option<String>,
     #[serde(default)]
     pub status: Status,
+    /// How much of this lesson is free.
+    ///
+    /// Absent is [`Access::Partial`] — the marker decides — so every lesson
+    /// written before this field existed keeps the behaviour it had.
+    ///
+    /// This is about *this lesson*. Whether a reader clears it at all is the
+    /// book's price and their entitlement, and a lesson marked `paid` inside a
+    /// free book is still served in full, because a book given away has
+    /// nothing to buy.
+    #[serde(default)]
+    pub access: Access,
     /// Which file holds the prose, per language, relative to this lesson's own
     /// folder.
     ///
@@ -255,10 +270,11 @@ impl Content {
         book: &str,
         folder: &str,
         file: &str,
+        access: Access,
     ) -> Result<Body, Error> {
         let path = self.lesson_dir(book, folder).join(file);
 
-        Ok(Body::split(&read(&path)?))
+        Ok(Body::under(&read(&path)?, access))
     }
 }
 
@@ -289,7 +305,12 @@ mod tests {
     #[test]
     fn a_lesson_with_no_marker_is_wholly_free() {
         let body = fixture::content()
-            .body("fixture-book", "01-free-lesson", "lesson.md")
+            .body(
+                "fixture-book",
+                "01-free-lesson",
+                "lesson.md",
+                Access::Partial,
+            )
             .unwrap();
 
         assert!(!body.has_paid_part());
@@ -299,7 +320,12 @@ mod tests {
     #[test]
     fn a_lesson_with_a_marker_splits_and_keeps_the_paid_half_out_of_free() {
         let body = fixture::content()
-            .body("fixture-book", "02-split-lesson", "lesson.md")
+            .body(
+                "fixture-book",
+                "02-split-lesson",
+                "lesson.md",
+                Access::Partial,
+            )
             .unwrap();
 
         assert!(body.has_paid_part());
@@ -347,10 +373,20 @@ mod tests {
         // The whole point of the field: a different file, not a different
         // rendering of the same one.
         let english = fixture::content()
-            .body("fixture-book", "01-free-lesson", "lesson.md")
+            .body(
+                "fixture-book",
+                "01-free-lesson",
+                "lesson.md",
+                Access::Partial,
+            )
             .unwrap();
         let bengali = fixture::content()
-            .body("fixture-book", "01-free-lesson", "lesson.bn.md")
+            .body(
+                "fixture-book",
+                "01-free-lesson",
+                "lesson.bn.md",
+                Access::Partial,
+            )
             .unwrap();
 
         assert!(english.free.contains("wholly free"));

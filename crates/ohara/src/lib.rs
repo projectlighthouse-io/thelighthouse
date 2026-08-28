@@ -69,6 +69,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub use body::Access;
 pub use locale::Locale;
 pub use status::{Drafts, Status, Tier};
 

@@ -12,6 +12,29 @@ use comrak::{Options, markdown_to_html};
 /// does not silently stop it being a marker.
 pub const PAYWALL: &str = "<!-- paywall -->";
 
+/// How much of a lesson is free, stated in `lesson.yaml`.
+///
+/// The marker in the markdown can only express "free above, paid below". This
+/// says the two whole-lesson answers without touching prose, so pricing a
+/// lesson is a yaml edit rather than an edit to the writing.
+///
+/// Absent means [`Access::Partial`], which is what every lesson written before
+/// this field existed already meant: the marker decides, and a lesson with no
+/// marker is wholly free. So adding the field changed nothing that was already
+/// written.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Access {
+    /// The marker decides. No marker is a wholly free lesson.
+    #[default]
+    Partial,
+    /// Wholly free, whatever the markdown contains.
+    Free,
+    /// Wholly paid. The reader gets the metadata and none of the prose — the
+    /// same shape a marker on the first line produces, without needing one.
+    Paid,
+}
+
 /// A lesson split at the paywall.
 ///
 /// Three shapes, and the marker's position is what picks between them:
@@ -32,6 +55,30 @@ pub struct Body {
 }
 
 impl Body {
+    /// The body a reader may be served, under this lesson's access.
+    ///
+    /// `Free` and `Paid` ignore the marker rather than erroring on it: the
+    /// yaml is the more explicit statement of the two, so it wins, and a
+    /// leftover marker in a lesson someone priced cannot quietly re-open half
+    /// of it.
+    #[must_use]
+    pub fn under(markdown: &str, access: Access) -> Self {
+        match access {
+            Access::Partial => Self::split(markdown),
+            Access::Free => Self {
+                free: markdown.trim().to_owned(),
+                paid: None,
+            },
+            // Empty free half, exactly as a marker on the first line gives.
+            // The lesson still exists — title, description and neighbours all
+            // come from the yaml — but none of its prose is served.
+            Access::Paid => Self {
+                free: String::new(),
+                paid: Some(markdown.trim().to_owned()),
+            },
+        }
+    }
+
     /// Splits raw markdown at the marker. Nothing is rendered here.
     #[must_use]
     pub fn split(markdown: &str) -> Self {
@@ -160,6 +207,69 @@ pub fn read_minutes(markdown: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const MARKED: &str = "Free part.\n\n<!-- paywall -->\n\nPaid part.";
+
+    #[test]
+    fn partial_lets_the_marker_decide() {
+        let body = Body::under(MARKED, Access::Partial);
+
+        assert_eq!(body.free, "Free part.");
+        assert_eq!(body.paid.as_deref(), Some("Paid part."));
+    }
+
+    #[test]
+    fn free_gives_the_whole_lesson_away_marker_and_all() {
+        // The yaml is the more explicit statement, so a leftover marker in a
+        // lesson someone declared free does not cut it in half.
+        let body = Body::under(MARKED, Access::Free);
+
+        assert!(body.free.contains("Free part."));
+        assert!(body.free.contains("Paid part."));
+        assert_eq!(body.paid, None);
+    }
+
+    #[test]
+    fn paid_withholds_every_word_of_it() {
+        let body = Body::under(MARKED, Access::Paid);
+
+        assert!(body.free.is_empty());
+        assert_eq!(body.paid.as_deref(), Some(MARKED.trim()));
+        // And the free half really is empty, not "the bit above the marker".
+        assert!(!body.free.contains("Free part."));
+    }
+
+    #[test]
+    fn a_lesson_with_no_marker_is_free_under_partial() {
+        // Which is why absent can default to Partial: every lesson written
+        // before the field existed keeps exactly the behaviour it had.
+        let body = Body::under("Just prose.", Access::Partial);
+
+        assert_eq!(body.free, "Just prose.");
+        assert_eq!(body.paid, None);
+    }
+
+    #[test]
+    fn the_yaml_spells_the_states_in_lowercase() {
+        for (yaml, want) in [
+            ("free", Access::Free),
+            ("partial", Access::Partial),
+            ("paid", Access::Paid),
+        ] {
+            let got: Access = serde_norway::from_str(yaml).unwrap();
+            assert_eq!(got, want, "{yaml}");
+        }
+
+        // A typo is a parse error naming the file, not a lesson that quietly
+        // gives away prose somebody is meant to pay for.
+        assert!(serde_norway::from_str::<Access>("Paid").is_err());
+        assert!(serde_norway::from_str::<Access>("premium").is_err());
+    }
+
+    #[test]
+    fn absent_is_partial_so_nothing_already_written_changed() {
+        assert_eq!(Access::default(), Access::Partial);
+    }
 
     #[test]
     fn a_lesson_with_no_marker_is_wholly_free() {

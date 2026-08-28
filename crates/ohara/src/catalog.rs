@@ -335,18 +335,19 @@ impl Catalog {
         // The folder and the file are both taken while the snapshot is held,
         // so a reload between the two cannot pair one lesson's folder with
         // another's filename.
-        let Some((folder, file)) =
+        let Some((folder, file, access)) =
             self.current().lesson(book, lesson).map(|entry| {
                 (
                     entry.folder.clone(),
                     entry.lesson.body_file(locale).to_owned(),
+                    entry.lesson.access,
                 )
             })
         else {
             return Ok(None);
         };
 
-        self.content.body(book, &folder, &file).map(Some)
+        self.content.body(book, &folder, &file, access).map(Some)
     }
 }
 
