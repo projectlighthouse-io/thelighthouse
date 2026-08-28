@@ -101,7 +101,7 @@ watch(() => route.fullPath, () => close())
             Join projectlighthouse
           </h2>
 
-          <p class="text-mono-body mt-3">
+          <p class="mt-3 text-sm leading-relaxed text-mono-ink">
             Sign in to pick up where you left off — your labs, books, and progress.
           </p>
 
@@ -116,7 +116,7 @@ watch(() => route.fullPath, () => close())
           </div>
 
           <p class="text-sm leading-relaxed text-quiet">
-            No passwords to manage. We never post or read your repositories.
+            No passwords, no reset emails, no hassle.
           </p>
 
           <p class="mt-4 text-xs leading-relaxed text-quiet">

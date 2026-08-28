@@ -72,7 +72,7 @@ const error = computed<string | null>(() => (route.query.error as string) ?? nul
               stroke-linejoin="round"
             />
           </svg>
-          <span>No passwords to manage. We never post or read your repositories.</span>
+          <span>No passwords, no reset emails, no hassle.</span>
         </div>
 
         <p class="legal">
