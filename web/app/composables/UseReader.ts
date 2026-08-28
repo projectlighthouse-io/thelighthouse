@@ -109,7 +109,19 @@ export function useReader() {
    * which is the truthful outcome — the row is still there.
    */
   const signOut = async (): Promise<void> => {
-    await $fetch('/api/auth/logout', { method: 'POST' })
+    // Signing out deletes the session row, so it is a write and carries the
+    // token like every other write. Without it the api answers 403 and the
+    // reader stays signed in — which is the truthful outcome, but a confusing
+    // one, so the header is not optional here.
+    const token = reader.value?.csrf
+    if (!token) {
+      return
+    }
+
+    await $fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': token },
+    })
 
     reader.value = null
     settled.value = true
