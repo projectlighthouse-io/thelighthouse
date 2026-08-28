@@ -584,14 +584,28 @@
     margin: 0;
 }
 
-/* on narrow screens, soft-wrap code so long single-line snippets don't force
-   horizontal scroll. preserves formatting via pre-wrap (whitespace kept). */
+/* On a phone a long line would otherwise scroll the block sideways. Wrapping
+ * is the lesser evil for prose-like snippets — but not for everything: an
+ * ascii diagram or a `txt` table is a grid of characters, and wrapping it does
+ * not shorten it, it destroys it. Those keep scrolling.
+ */
 @media (max-width: 880px) {
     .reader-prose pre,
     .reader-prose pre code {
         white-space: pre-wrap;
         word-break: break-word;
         overflow-wrap: anywhere;
+    }
+
+    .reader-prose pre:has(code.language-txt),
+    .reader-prose pre:has(code.language-ascii),
+    .reader-prose pre:has(code.language-text),
+    .reader-prose pre:has(code.language-txt) code,
+    .reader-prose pre:has(code.language-ascii) code,
+    .reader-prose pre:has(code.language-text) code {
+        white-space: pre;
+        word-break: normal;
+        overflow-wrap: normal;
     }
 }
 
@@ -687,6 +701,46 @@
     font-style: normal;
     font-weight: 500;
     color: var(--reader-ink);
+}
+
+/* code blocks
+ *
+ * Nothing was styling these. `code.css` dresses `pre code.hljs`, which is what
+ * highlight.js emitted in the laravel app; the api renders markdown with comrak
+ * and emits `<pre><code class="language-c">` with no `hljs` class and no
+ * highlighter behind it. So every block — c, go, rust, sh, txt, ascii — came
+ * out as bare monospace text on the page with no panel around it.
+ *
+ * This is the panel. Highlighting is a separate question: these rules do not
+ * depend on it, and adding it later means colouring tokens inside a block that
+ * already sits where it should.
+ */
+.reader-prose pre {
+    background: var(--color-code-bg);
+    border: 1px solid var(--reader-line);
+    border-radius: 8px;
+    padding: 16px 18px;
+    font-size: 13px;
+    line-height: 1.65;
+    overflow-x: auto;
+}
+
+/* The `code` inside a block must not inherit the inline-code chrome below —
+ * a bordered pill per line is exactly what that rule would do here.
+ */
+.reader-prose pre code {
+    font-family: var(--reader-mono);
+    font-size: inherit;
+    line-height: inherit;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    color: var(--reader-ink);
+    /* Never wrap. Diagrams and tables drawn in `txt` or `ascii` blocks are
+     * columns of characters, and a soft wrap does not shorten them — it takes
+     * them apart. The block scrolls instead. */
+    white-space: pre;
 }
 
 /* inline code */
