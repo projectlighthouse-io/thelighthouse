@@ -60,6 +60,9 @@ export interface ApiLessonSummary {
   title: string
   description: string | null
   sort_order: number
+  /** Whether anything in this lesson sits behind the paywall. Says only that
+   *  something is withheld, never what. */
+  has_paid_part: boolean
 }
 
 export interface ApiChapter {
