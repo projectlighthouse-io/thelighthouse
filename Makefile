@@ -25,7 +25,7 @@ CONTAINER ?= thelighthouse
 .DEFAULT_GOAL := help
 .PHONY: help web up dev down db db-down db-reset psql migrate migrate-status fmt fmt-check \
         lint test build check audit image run login push clean \
-        content content-check content-sync
+        content content-check content-sync content-db-sync
 
 help: ## show this
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -147,15 +147,18 @@ clean: ## drop build artefacts
 
 # content
 #
-# Three steps that are deliberately separate, because they fail in different
+# Four steps that are deliberately separate, because they fail in different
 # places and only the first two are safe to run without thinking:
 #
-#   content        pull ohara       — touches the content repo, not this one
-#   content-check  does it parse?   — the gate; run it before a deploy
-#   content-sync   pull, check, hup — the whole thing, against a container
+#   content         pull ohara       — touches the content repo, not this one
+#   content-check   does it parse?   — the gate; run it before a deploy
+#   content-sync    pull, check, hup — the whole thing, against a container
+#   content-db-sync upsert the rows  — writes; run it deliberately
 #
-# There is no step that writes content into a database. Ohara is read from disk
-# and held in memory; `content-sync` is what makes a running process reread it.
+# What a reader reads never comes from the database. Ohara is read from disk and
+# held in memory, and `content-sync` is what makes a running process reread it.
+# `content-db-sync` writes the rows that other tables point at — notes,
+# bookmarks, entitlements — and nothing else; no prose goes into postgres.
 
 content: ## pull the latest ohara
 	@test -d "$(CONTENT_PATH)/.git" \
@@ -175,3 +178,10 @@ content-check: ## parse every book and lesson, and say what is wrong
 content-sync: content content-check ## pull, check, and make the container reread
 	docker kill -s HUP $(CONTAINER)
 	@echo "\nsignalled $(CONTAINER); check its logs for 'content reloaded'"
+
+# Its own binary, and its own step, for the reason `migrate` is both: this
+# writes. It reads DATABASE_URL from .env like everything else, so it hits
+# whichever database that points at — check before running it against
+# production.
+content-db-sync: ## upsert ohara's books and lessons into postgres
+	CONTENT_PATH="$(CONTENT_PATH)" cargo run -q -p lighthouse-content -- sync

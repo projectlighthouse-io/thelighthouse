@@ -1,0 +1,32 @@
+[package]
+name = "lighthouse-content"
+version = "0.1.0"
+edition = "2024"
+description = "Syncs ohara into postgres. Run deliberately, never by the server."
+
+[lints]
+workspace = true
+
+[dependencies]
+ohara = { path = "../ohara" }
+
+# `derive` but not `macros`, matching the api: `query!` checks SQL against a
+# live database while compiling, and the docker build has no postgres. Nothing
+# here maps a row to a struct yet — every statement is a write — but the feature
+# costs nothing and the next read should not have to add it.
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls-ring",
+    "postgres",
+    "derive",
+    "uuid",
+] }
+# Binding a book or lesson id. Minted in the content repo, never here.
+uuid = { version = "1", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+dotenvy = "0.15"
+
+[dev-dependencies]
+ohara = { path = "../ohara", features = ["testing"] }
