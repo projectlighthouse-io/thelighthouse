@@ -15,7 +15,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     middleware::from_fn_with_state,
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use loginwith::Providers;
 use ohara::catalog::Catalog;
@@ -28,7 +28,7 @@ use crate::{
     db,
     limit::RateLimit,
     middleware::signature::require_signature,
-    notes, telemetry,
+    notes, response, telemetry,
 };
 
 /// What every handler can reach. Cheap to clone — `PgPool` and `Providers` are
@@ -72,6 +72,9 @@ pub(crate) fn app(
 
     Router::new()
         .route("/health", get(health))
+        // Internal only, by the same rule as `/health`: it is not under
+        // `/api/*`, and caddy hands every other path to nuxt. See `reload`.
+        .route("/reload", post(reload))
         .nest("/api", signed)
         // Absolute paths, so these merge alongside `signed` rather than nesting
         // under the same prefix. Both carry their own gates — see their
@@ -99,6 +102,67 @@ async fn health(State(state): State<AppState>) -> Response {
     } else {
         (StatusCode::SERVICE_UNAVAILABLE, "database unreachable")
             .into_response()
+    }
+}
+
+/// Rereads the content repo and swaps the catalogue over, in place.
+///
+/// The whole point is that nothing restarts. [`Catalog::reload`] builds a new
+/// snapshot and swaps one `Arc` pointer, so requests already running finish
+/// against the snapshot they are holding and the next one picks up the new
+/// catalogue. There is no window where the site has no content.
+///
+/// **A failed reload changes nothing.** The rebuild happens first and the swap
+/// only follows if it parsed, so a typo in one lesson leaves the previous
+/// catalogue serving and reports what was wrong. That is why this can be safe
+/// to call from a deploy script: the bad case is "still serving the old
+/// content", not "serving none".
+///
+/// # Why this is reachable only from inside the container
+///
+/// It is not mounted under `/api/*`, and the Caddyfile hands every path it does
+/// not name to nuxt — so nothing outside can reach it, exactly as with
+/// `/health`. Caddy is not being trusted to *authorise* anything here; it is
+/// simply never told to route this path, and the api listens on loopback.
+///
+/// If it ever has to be reachable from outside, it must move under the
+/// signature boundary rather than gain a caddy rule. Rereading files is cheap
+/// but not free, and an unauthenticated trigger for it is a way to make the
+/// process do work on demand.
+async fn reload(State(state): State<AppState>) -> Response {
+    match state.catalog.reload() {
+        Ok(()) => {
+            let snapshot = state.catalog.current();
+            let books = snapshot.books().count();
+            let lessons: usize =
+                snapshot.books().map(|book| book.lessons().count()).sum();
+
+            tracing::info!(books, lessons, "content reloaded");
+
+            response::json(
+                StatusCode::OK,
+                serde_json::json!({ "books": books, "lessons": lessons }),
+                CachePolicy::NoStore,
+            )
+        }
+        Err(cause) => {
+            // Named, unlike a 500 from a reader-facing route: the only caller
+            // is a deploy script inside the container, and "which file" is the
+            // entire value of the response.
+            tracing::error!(
+                %cause,
+                "failed to reload content; keeping the previous catalogue"
+            );
+
+            response::json(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                serde_json::json!({
+                    "error": cause.to_string(),
+                    "serving": "the previous catalogue, unchanged",
+                }),
+                CachePolicy::NoStore,
+            )
+        }
     }
 }
 

@@ -33,6 +33,19 @@ fn router() -> axum::Router {
     crate::api::app(config, socials, db, catalog)
 }
 
+async fn post(uri: &str) -> Response {
+    router()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
 async fn get(uri: &str) -> Response {
     router()
         .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
@@ -216,4 +229,51 @@ async fn seo_falls_back_to_what_a_reader_sees() {
         at(&lesson, "/seo/meta_description"),
         "no paywall marker, so it is wholly free"
     );
+}
+
+#[tokio::test]
+async fn reloading_swaps_the_catalogue_without_restarting() {
+    let response = post("/reload").await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    // Nothing may hold this: it is a write, and its body is a count that is
+    // only true at the instant it was produced.
+    assert!(
+        cache_control(&response).contains("no-store"),
+        "{response:?}"
+    );
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let counted: Value = serde_json::from_slice(&body).unwrap();
+
+    // The fixture, reread from disk rather than remembered.
+    assert_eq!(at(&counted, "/books"), 1);
+    assert_eq!(at(&counted, "/lessons"), 2);
+}
+
+#[tokio::test]
+async fn reloading_is_a_post_because_it_changes_the_process() {
+    // A GET would be fetched by anything that crawls, prefetches or
+    // revalidates, and this one does work.
+    assert_eq!(
+        get("/reload").await.status(),
+        StatusCode::METHOD_NOT_ALLOWED
+    );
+}
+
+#[tokio::test]
+async fn a_contents_list_marks_which_lessons_withhold_something() {
+    let book = json("/api/books/fixture-book").await;
+
+    // The fixture's second lesson has a paid region; the first has none.
+    assert_eq!(at(&book, "/chapters/0/lessons/0/has_paid_part"), false);
+    assert_eq!(at(&book, "/chapters/0/lessons/1/has_paid_part"), true);
+
+    // It says *that* something is withheld, never what. No paid heading may
+    // reach a listing any more than it may reach a lesson response.
+    let whole = serde_json::to_string(&book).unwrap();
+    assert!(!whole.contains("A Paid Section"), "{whole}");
+    assert!(!whole.contains("below the marker"), "{whole}");
 }

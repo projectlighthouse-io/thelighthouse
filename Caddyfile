@@ -161,6 +161,20 @@
 		respond 404
 	}
 
+	# The api's two internal endpoints, named here only to say out loud that
+	# they are not routed. Both would otherwise fall through to nuxt and 404
+	# anyway; stating them means adding a rule for either is a deliberate act
+	# rather than something a future catch-all does by accident.
+	#
+	#   /health   the container's own probe
+	#   /reload   rereads the content repo and swaps the catalogue in place
+	#
+	# `/reload` does work on demand, so it must never become reachable from
+	# outside without moving behind the signature boundary first.
+	handle /reload* {
+		respond 404
+	}
+
 	# Nuxt owns everything else, including its own /_api/* endpoints.
 	handle {
 		reverse_proxy {$NUXT_UPSTREAM:127.0.0.1:3000}
