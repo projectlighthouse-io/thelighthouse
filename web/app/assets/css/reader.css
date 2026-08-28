@@ -716,8 +716,17 @@
  * already sits where it should.
  */
 .reader-prose pre {
-    background: var(--color-code-bg);
-    border: 1px solid var(--reader-line);
+    /* Dark in both themes, on purpose. `--color-term-*` are declared once and
+     * never redefined under the dark selector — the same decision
+     * `docs/rebuild.md` records for terminal mock-ups: a light-mode terminal is
+     * not what a terminal looks like, and code reads as the machine's voice
+     * rather than the page's.
+     *
+     * That also means these two must not be swapped for `--color-code-bg`,
+     * which *does* invert: a block that is dark in light mode and dark again in
+     * dark mode is deliberate; one that follows the theme is not this. */
+    background: var(--color-term-bg);
+    border: 1px solid var(--color-term-line);
     border-radius: 8px;
     padding: 16px 18px;
     font-size: 13px;
@@ -736,7 +745,9 @@
     border: 0;
     border-radius: 0;
     padding: 0;
-    color: var(--reader-ink);
+    /* Light on the dark panel above, and fixed with it — `--reader-ink` would
+     * be near-black here and invisible. */
+    color: var(--color-term-text);
     /* Never wrap. Diagrams and tables drawn in `txt` or `ascii` blocks are
      * columns of characters, and a soft wrap does not shorten them — it takes
      * them apart. The block scrolls instead. */
