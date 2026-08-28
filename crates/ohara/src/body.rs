@@ -1,16 +1,23 @@
-//! A lesson's markdown: where the paywall cuts it, and rendering both halves.
+//! A lesson's markdown: which parts of it are paid, and rendering both halves.
 
 use comrak::{Options, markdown_to_html};
 
-/// Where a lesson stops being free.
+/// Where a paid region opens and closes.
 ///
-/// An html comment, so it renders as nothing if anything ever passes the raw
-/// markdown through a renderer that does not know about it — a visible
-/// `[paywall]` in a published lesson is worse than a missed split.
+/// A pair, not a single cut. One marker could only ever mean "everything below
+/// this", which forces the paid part to be the tail of a lesson; a region can
+/// sit in the middle and let the prose resume after it — a worked example
+/// withheld while the paragraphs that follow stay free.
+///
+/// Tag-shaped so an editor that renders the markdown shows nothing: an unknown
+/// html tag disappears, whereas a bare `[paid]` would be visible in a published
+/// lesson, which is worse than a missed split. Both lines are stripped before
+/// anything is rendered, so neither reaches the page even when unbalanced.
 ///
 /// Matched on its own line and trimmed, so trailing whitespace in an editor
 /// does not silently stop it being a marker.
-pub const PAYWALL: &str = "<!-- paywall -->";
+pub const PAID_OPEN: &str = "<paid>";
+pub const PAID_CLOSE: &str = "</paid>";
 
 /// Whether a whole lesson is paid, stated in `lesson.yaml`.
 ///
@@ -37,15 +44,14 @@ pub enum Access {
     Paid,
 }
 
-/// A lesson split at the paywall.
+/// A lesson with its paid regions lifted out.
 ///
-/// Three shapes, and the marker's position is what picks between them:
-///
-/// | marker      | free            | paid          |
-/// |-------------|-----------------|---------------|
-/// | absent      | the whole thing | none          |
-/// | mid-lesson  | above it        | below it      |
-/// | first line  | none            | the whole thing |
+/// | markdown | free | paid |
+/// |---|---|---|
+/// | no markers | the whole thing | none |
+/// | a region in the middle | everything outside it | the region |
+/// | a region spanning the file | none | the whole thing |
+/// | several regions | everything outside them | all of them |
 ///
 /// The lesson endpoint returns `free` to everyone and `paid` only to a reader
 /// who is entitled, so `paid` must never reach a response that a cache may hold
@@ -77,19 +83,49 @@ impl Body {
         }
     }
 
-    /// Splits raw markdown at the marker. Nothing is rendered here.
+    /// Lifts every paid region out, leaving the rest as the free body.
+    ///
+    /// Regions may appear more than once and need not reach the end of the
+    /// file. Each half keeps its own line order, so a lesson withholding two
+    /// examples reads as one continuous free body with the examples gone,
+    /// rather than as everything-after-the-first-one.
+    ///
+    /// **An unclosed region runs to the end of the file.** That is the safe
+    /// direction: a missing `</paid>` withholds too much, which whoever wrote
+    /// it sees immediately, rather than serving prose that was meant to be
+    /// paid. A close with nothing open is dropped — there is no region for it
+    /// to end — and dropped rather than kept so a stray tag cannot reach the
+    /// rendered page.
     #[must_use]
     pub fn split(markdown: &str) -> Self {
-        let Some((free, paid)) = cut(markdown) else {
-            return Self {
-                free: markdown.trim().to_owned(),
-                paid: None,
-            };
-        };
+        let mut free = Vec::new();
+        let mut paid = Vec::new();
+        let mut inside = false;
+
+        for line in markdown.lines() {
+            match line.trim() {
+                PAID_OPEN => {
+                    inside = true;
+                    continue;
+                }
+                PAID_CLOSE => {
+                    inside = false;
+                    continue;
+                }
+                _ => {}
+            }
+
+            if inside {
+                paid.push(line);
+            } else {
+                free.push(line);
+            }
+        }
 
         Self {
-            free: free.trim().to_owned(),
-            paid: Some(paid.trim().to_owned()),
+            free: free.join("\n").trim().to_owned(),
+            paid: Some(paid.join("\n").trim().to_owned())
+                .filter(|body| !body.is_empty()),
         }
     }
 
@@ -102,25 +138,6 @@ impl Body {
     pub fn has_paid_part(&self) -> bool {
         self.paid.as_ref().is_some_and(|paid| !paid.is_empty())
     }
-}
-
-/// The marker's own line, split away from both halves.
-fn cut(markdown: &str) -> Option<(&str, &str)> {
-    let at = markdown
-        .lines()
-        .scan(0_usize, |offset, line| {
-            let start = *offset;
-            *offset += line.len() + 1;
-            Some((start, line))
-        })
-        .find(|(_, line)| line.trim() == PAYWALL)?;
-
-    let (start, line) = at;
-
-    Some((
-        &markdown[..start],
-        &markdown[(start + line.len()).min(markdown.len())..],
-    ))
 }
 
 /// Markdown to html, GitHub flavoured.
@@ -206,43 +223,83 @@ pub fn read_minutes(markdown: &str) -> usize {
 mod tests {
     use super::*;
 
-    const MARKED: &str = "Free part.\n\n<!-- paywall -->\n\nPaid part.";
+    const MARKED: &str =
+        "Free part.\n\n<paid>\nPaid part.\n</paid>\n\nFree again.";
 
     #[test]
-    fn free_lets_the_marker_decide_what_is_withheld() {
-        let body = Body::under(MARKED, Access::Free);
+    fn a_region_is_lifted_out_and_the_prose_resumes_after_it() {
+        // The reason for a pair rather than one cut: what follows the region
+        // is free again, so a withheld example need not be the tail.
+        let body = Body::split(MARKED);
 
-        assert_eq!(body.free, "Free part.");
+        assert_eq!(body.free, "Free part.\n\n\nFree again.");
         assert_eq!(body.paid.as_deref(), Some("Paid part."));
     }
 
     #[test]
-    fn free_with_no_marker_withholds_nothing() {
-        let body = Body::under("Just prose.", Access::Free);
+    fn several_regions_all_come_out() {
+        let body =
+            Body::split("A\n<paid>\none\n</paid>\nB\n<paid>\ntwo\n</paid>\nC");
+
+        assert_eq!(body.free, "A\nB\nC");
+        assert_eq!(body.paid.as_deref(), Some("one\ntwo"));
+    }
+
+    #[test]
+    fn no_markers_means_nothing_is_withheld() {
+        let body = Body::split("Just prose.");
 
         assert_eq!(body.free, "Just prose.");
         assert_eq!(body.paid, None);
+        assert!(!body.has_paid_part());
     }
 
     #[test]
-    fn a_marker_on_the_first_line_is_the_same_as_declaring_it_paid() {
-        // Why there is no third state: the markdown can already say this.
-        let by_marker =
-            Body::under(&format!("{PAYWALL}\nAll of it."), Access::Free);
-        let by_yaml = Body::under("All of it.", Access::Paid);
-
-        assert!(by_marker.free.is_empty());
-        assert_eq!(by_marker.paid.as_deref(), Some("All of it."));
-        assert_eq!(by_marker, by_yaml);
-    }
-
-    #[test]
-    fn paid_withholds_every_word_of_it() {
-        let body = Body::under(MARKED, Access::Paid);
+    fn a_region_spanning_the_file_withholds_all_of_it() {
+        let body = Body::split("<paid>\nAll of it.\n</paid>");
 
         assert!(body.free.is_empty());
-        assert_eq!(body.paid.as_deref(), Some(MARKED.trim()));
-        assert!(!body.free.contains("Free part."));
+        assert_eq!(body.paid.as_deref(), Some("All of it."));
+    }
+
+    #[test]
+    fn an_unclosed_region_withholds_the_rest_rather_than_serving_it() {
+        // Fails closed. Too much withheld is seen by whoever wrote it; too
+        // little is prose given away that somebody was meant to pay for.
+        let body = Body::split("Free.\n<paid>\nMeant to be paid.");
+
+        assert_eq!(body.free, "Free.");
+        assert_eq!(body.paid.as_deref(), Some("Meant to be paid."));
+    }
+
+    #[test]
+    fn a_stray_close_is_dropped_rather_than_rendered() {
+        let body = Body::split("Free.\n</paid>\nStill free.");
+
+        assert_eq!(body.free, "Free.\nStill free.");
+        assert_eq!(body.paid, None);
+        // It must not survive into the page as a raw tag.
+        assert!(!body.free.contains("paid"));
+    }
+
+    #[test]
+    fn the_markers_are_matched_trimmed_and_alone_on_their_line() {
+        // Indented by an editor: still a marker.
+        assert_eq!(Body::split("a\n  <paid>  \nb").paid.as_deref(), Some("b"));
+
+        // Mentioned inside a sentence: not a marker, and the prose survives.
+        let prose = Body::split("Write <paid> to open a region.");
+        assert_eq!(prose.free, "Write <paid> to open a region.");
+        assert_eq!(prose.paid, None);
+    }
+
+    #[test]
+    fn free_lets_the_markers_decide_and_paid_overrides_them() {
+        assert_eq!(Body::under(MARKED, Access::Free), Body::split(MARKED));
+
+        let paid = Body::under(MARKED, Access::Paid);
+        assert!(paid.free.is_empty());
+        assert_eq!(paid.paid.as_deref(), Some(MARKED.trim()));
     }
 
     #[test]
@@ -256,8 +313,6 @@ mod tests {
             Access::Paid
         );
 
-        // A typo is a parse error naming the file, not a lesson that quietly
-        // gives away prose somebody is meant to pay for.
         assert!(serde_norway::from_str::<Access>("Paid").is_err());
         assert!(serde_norway::from_str::<Access>("partial").is_err());
     }
@@ -268,68 +323,23 @@ mod tests {
     }
 
     #[test]
-    fn a_lesson_with_no_marker_is_wholly_free() {
-        let body = Body::split("# Title\n\nAll of it.\n");
-
-        assert_eq!(body.free, "# Title\n\nAll of it.");
-        assert_eq!(body.paid, None);
-        assert!(!body.has_paid_part());
-    }
-
-    #[test]
-    fn a_marker_mid_lesson_splits_there() {
-        let body =
-            Body::split("Free part.\n\n<!-- paywall -->\n\nPaid part.\n");
-
-        assert_eq!(body.free, "Free part.");
-        assert_eq!(body.paid.as_deref(), Some("Paid part."));
-        assert!(body.has_paid_part());
-    }
-
-    #[test]
-    fn a_marker_on_the_first_line_leaves_nothing_free() {
-        let body = Body::split("<!-- paywall -->\n\nAll of it is paid.\n");
-
-        assert!(body.free.is_empty());
-        assert_eq!(body.paid.as_deref(), Some("All of it is paid."));
-        assert!(body.has_paid_part());
-    }
-
-    #[test]
-    fn a_marker_with_nothing_after_it_is_not_a_paywall() {
-        // An editor left it at the end of a draft. Showing a "read the rest"
-        // call to action here would lead to no rest.
-        let body = Body::split("Everything.\n\n<!-- paywall -->\n");
+    fn an_open_region_with_nothing_in_it_is_not_a_paywall() {
+        // An editor left the tags at the end of a draft. Showing a "read the
+        // rest" call to action here would lead to no rest.
+        let body = Body::split("Everything.\n\n<paid>\n</paid>\n");
 
         assert_eq!(body.free, "Everything.");
         assert!(!body.has_paid_part());
     }
 
     #[test]
-    fn indentation_around_the_marker_does_not_hide_it() {
-        let body = Body::split("Free.\n\n   <!-- paywall -->   \n\nPaid.\n");
+    fn neither_marker_survives_into_either_half() {
+        let body = Body::split("Free.\n\n<paid>\nPaid.\n</paid>\n");
 
-        assert_eq!(body.free, "Free.");
-        assert_eq!(body.paid.as_deref(), Some("Paid."));
-    }
-
-    #[test]
-    fn only_the_first_marker_cuts() {
-        let body = Body::split("A\n<!-- paywall -->\nB\n<!-- paywall -->\nC\n");
-
-        assert_eq!(body.free, "A");
-        // The second marker stays in the paid half rather than splitting again:
-        // a lesson has one paywall, and silently dropping prose between two
-        // markers would lose it.
-        assert!(body.paid.as_deref().unwrap().contains("<!-- paywall -->"));
-    }
-
-    #[test]
-    fn the_marker_itself_never_survives_into_either_half() {
-        let body = Body::split("Free.\n\n<!-- paywall -->\n\nPaid.\n");
-
-        assert!(!body.free.contains(PAYWALL));
-        assert!(!body.paid.as_deref().unwrap().contains(PAYWALL));
+        for half in [&body.free, body.paid.as_ref().unwrap()] {
+            assert!(!half.contains(PAID_OPEN), "{half}");
+            assert!(!half.contains(PAID_CLOSE), "{half}");
+        }
     }
 
     #[test]
