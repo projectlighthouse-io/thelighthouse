@@ -54,6 +54,17 @@ pub struct LessonEntry {
     pub folder: String,
     pub sort_order: i32,
     pub chapter_id: i32,
+    /// Whether an unentitled reader is missing anything here.
+    ///
+    /// Computed once, while the snapshot is built, so a table of contents can
+    /// mark its paid lessons without opening a single file. The body itself is
+    /// still not held — this is one bool per lesson, not the prose.
+    ///
+    /// False when the markdown cannot be read. A lesson whose file is missing
+    /// 404s when someone asks for it, which is the honest answer; refusing the
+    /// whole catalogue over it would turn one broken lesson into a site with
+    /// no content.
+    pub has_paid_part: bool,
 }
 
 impl Snapshot {
@@ -187,6 +198,17 @@ impl BookEntry {
                     }
                 })?;
 
+                // Read once here rather than per request: the alternative is
+                // a book page opening every lesson file to render one list.
+                let has_paid_part = content
+                    .body(
+                        slug,
+                        folder,
+                        lesson.body_file(Locale::En),
+                        lesson.access,
+                    )
+                    .is_ok_and(|body| body.has_paid_part());
+
                 reading_order.push(named.slug.clone());
                 lessons.insert(
                     named.slug,
@@ -195,6 +217,7 @@ impl BookEntry {
                         folder: folder.clone(),
                         sort_order: named.sort_order,
                         chapter_id: chapter.id,
+                        has_paid_part,
                     },
                 );
             }

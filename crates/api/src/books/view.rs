@@ -100,14 +100,18 @@ pub(crate) struct ChapterView<'b> {
 
 /// A lesson in a table of contents.
 ///
-/// No `has_paid_part`: knowing it means reading the markdown, and a book page
-/// would then open every lesson file to render one list.
+/// `has_paid_part` comes from the catalogue, which worked it out when the
+/// snapshot was built. Rendering this list opens no files.
 #[derive(Debug, Serialize)]
 pub(crate) struct LessonSummary<'b> {
     slug: &'b str,
     title: &'b str,
     description: Option<&'b str>,
     sort_order: i32,
+    /// So a contents list can mark what a reader has not paid for. Says only
+    /// *that* something is withheld, never what — the titles of paid sections
+    /// are a spoiler and the prose is the product.
+    has_paid_part: bool,
 }
 
 impl<'b> LessonSummary<'b> {
@@ -117,6 +121,7 @@ impl<'b> LessonSummary<'b> {
             title: &entry.lesson.title,
             description: entry.lesson.description.as_deref(),
             sort_order: entry.sort_order,
+            has_paid_part: entry.has_paid_part,
         }
     }
 }
