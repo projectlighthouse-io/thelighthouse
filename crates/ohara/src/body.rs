@@ -1,6 +1,11 @@
 //! A lesson's markdown: which parts of it are paid, and rendering both halves.
 
-use comrak::{Options, markdown_to_html};
+use std::sync::OnceLock;
+
+use comrak::{
+    Options, markdown_to_html_with_plugins, options::Plugins,
+    plugins::syntect::SyntectAdapter,
+};
 
 /// Where a paid region opens and closes.
 ///
@@ -140,13 +145,37 @@ impl Body {
     }
 }
 
-/// Markdown to html, GitHub flavoured.
+/// The syntax and theme sets, loaded once.
+///
+/// Building a `SyntectAdapter` parses every bundled syntax definition, which is
+/// tens of milliseconds — fine once, absurd per lesson. Held in a `OnceLock` so
+/// the first rendered lesson pays for it and the rest do not.
+static HIGHLIGHTER: OnceLock<SyntectAdapter> = OnceLock::new();
+
+/// The theme the code is coloured with.
+///
+/// A dark one, because the block it sits in is dark in both site themes — see
+/// `.reader-prose pre` in `reader.css`. A light theme's tokens on that panel
+/// would be unreadable, and the panel is the part that is not negotiable: code
+/// reads as the machine's voice rather than the page's.
+const THEME: &str = "base16-ocean.dark";
+
+/// Markdown to html, GitHub flavoured, with code coloured.
 ///
 /// The options match the laravel app's `GithubFlavoredMarkdownExtension`, so a
 /// lesson written for that renderer produces the same html here. Raw html in
 /// the source is *not* enabled: the content repo is trusted, but a renderer
 /// that passes html through is one script tag away from being the reason a
 /// paywalled page leaks.
+///
+/// **Highlighting happens here, not in the browser.** The free half of a lesson
+/// is edge-cached and identical for everyone, so colouring it once at render
+/// time is work the cache keeps; shipping a highlighter to every reader would
+/// be the same work repeated per visit, on the slowest machine in the chain,
+/// and after the text had already been painted once uncoloured.
+///
+/// A fence with no language, or one syntect does not know, is left alone rather
+/// than guessed at — it comes back as plain text in the same panel.
 #[must_use]
 pub fn render(markdown: &str) -> String {
     let mut options = Options::default();
@@ -157,7 +186,13 @@ pub fn render(markdown: &str) -> String {
     options.extension.autolink = true;
     options.extension.footnotes = true;
 
-    markdown_to_html(markdown, &options)
+    let highlighter =
+        HIGHLIGHTER.get_or_init(|| SyntectAdapter::new(Some(THEME)));
+
+    let mut plugins = Plugins::default();
+    plugins.render.codefence_syntax_highlighter = Some(highlighter);
+
+    markdown_to_html_with_plugins(markdown, &options, &plugins)
 }
 
 /// A heading in the table of contents, and the anchor it scrolls to.
@@ -340,6 +375,48 @@ mod tests {
             assert!(!half.contains(PAID_OPEN), "{half}");
             assert!(!half.contains(PAID_CLOSE), "{half}");
         }
+    }
+
+    #[test]
+    fn a_fenced_language_comes_back_coloured() {
+        let html = render("```rust\nfn main() {}\n```\n");
+
+        // More than one colour is the whole point: a keyword, a name and the
+        // punctuation around them are not the same token. Without the plugin
+        // this would be a bare <code class="language-rust"> and no colour.
+        assert!(colours(&html).len() > 1, "{html}");
+        assert!(html.contains("main"), "{html}");
+    }
+
+    /// Every distinct token colour syntect used.
+    ///
+    /// Matched with the opening quote, so the `background-color` syntect puts
+    /// on the `<pre>` is not counted as a token colour — it is one either way,
+    /// and counting it would make every block look highlighted.
+    fn colours(html: &str) -> std::collections::BTreeSet<String> {
+        html.split("\"color:#")
+            .skip(1)
+            .filter_map(|rest| rest.get(..6).map(str::to_owned))
+            .collect()
+    }
+
+    #[test]
+    fn an_unlabelled_fence_is_not_coloured_as_if_it_were_source() {
+        // Most fences in the corpus carry no language, and they are output and
+        // ascii diagrams as often as code. Syntect still wraps them, but in one
+        // flat foreground colour — nothing is picked out as a keyword or a
+        // string, which is the part that would be a lie.
+        let html = render("```\n+---+\n| a |\n+---+\n```\n");
+
+        assert!(html.contains("+---+"), "{html}");
+        assert_eq!(colours(&html).len(), 1, "{html}");
+    }
+
+    #[test]
+    fn a_language_it_does_not_know_is_not_guessed_at() {
+        let html = render("```notalanguage\nfn main() {}\n```\n");
+
+        assert_eq!(colours(&html).len(), 1, "{html}");
     }
 
     #[test]
