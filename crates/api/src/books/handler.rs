@@ -7,7 +7,7 @@ use axum::{
 };
 
 use super::{
-    entitlement::may_read_paid,
+    entitlement::{Access, access},
     view::{BookDetail, BookSummary, LessonView, PaidView},
 };
 use crate::{
@@ -96,7 +96,7 @@ pub(crate) async fn paid(
         return not_found();
     };
 
-    if !may_read_paid(book_entry) {
+    if access(book_entry) == Access::FreeOnly {
         return not_found();
     }
 
