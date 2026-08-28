@@ -104,6 +104,25 @@ Only Postgres is in compose. The api, Nuxt and Caddy ship as one image built by
 the `Dockerfile` — running them a second way here would mean two definitions of
 the same thing drifting apart. `make image && make run` runs the site.
 
+## Content
+
+```bash
+make content-check    # does ohara parse? the gate, before a deploy
+make content-sync     # pull, check, and make a running container reread it
+make content-db-sync  # upsert ohara's books and lessons into postgres
+```
+
+The first two never touch the database. What a reader reads is served from
+disk — ohara is walked at boot and rereadable on SIGHUP — so publishing is a
+signal, not a write.
+
+`content-db-sync` is the one that writes, and it writes metadata only: a row per
+book and per lesson so that notes, bookmarks, completions and entitlements have
+something to point at. No prose goes into postgres, and nothing is written back
+into the content repo. It upserts on the uuid each `book.yaml` and `lesson.yaml`
+carries, so it is safe to re-run; it deletes nothing, so a lesson that leaves
+ohara keeps its row and the notes written against it.
+
 ## Migrations
 
 ```bash
