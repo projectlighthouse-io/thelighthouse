@@ -725,7 +725,12 @@
      * That also means these two must not be swapped for `--color-code-bg`,
      * which *does* invert: a block that is dark in light mode and dark again in
      * dark mode is deliberate; one that follows the theme is not this. */
-    background: var(--color-term-bg);
+    /* `!important` because syntect writes `style="background-color:#2b303b"`
+     * onto the <pre> itself, and an inline style beats any selector. Its theme
+     * background is the one thing here we do not want — the panel should match
+     * the terminal chrome the rest of the site uses, not whichever theme the
+     * highlighter was built with. The token colours inside are syntect's. */
+    background: var(--color-term-bg) !important;
     border: 1px solid var(--color-term-line);
     border-radius: 8px;
     padding: 16px 18px;
