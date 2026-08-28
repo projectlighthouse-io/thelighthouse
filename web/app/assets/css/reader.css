@@ -112,7 +112,8 @@
 /* ---------- reader grid ---------- */
 .reader-layout {
     display: grid;
-    grid-template-columns: 232px minmax(0, 700px) 184px;
+    /* 796 = the 700px measure plus `.reader-article`'s 48px sides. */
+    grid-template-columns: 232px minmax(0, 796px) 184px;
     gap: 72px;
     justify-content: center;
     max-width: 1280px;
@@ -123,7 +124,7 @@
 
 @media (max-width: 1120px) {
     .reader-layout {
-        grid-template-columns: 200px minmax(0, 680px);
+        grid-template-columns: 200px minmax(0, 776px);
         gap: 56px;
     }
 
@@ -141,6 +142,10 @@
 
     .reader-layout .reader-toc {
         display: none;
+    }
+
+    .reader-article {
+        padding: 32px 24px 40px;
     }
 
     .reader-article h1 {
@@ -234,8 +239,23 @@
 }
 
 /* ---------- center: article ---------- */
+/* The prose sits on its own white page.
+ *
+ * `body` paints a dotted notebook pattern behind the whole site, and the rule
+ * there is that anything carrying content lays its own background over it —
+ * dots running behind body text is the one place that texture stops being
+ * charming. The token rather than `#fff`, so this inverts with the theme
+ * instead of staying a white slab in a dark room.
+ *
+ * The column is widened by exactly this padding in `.reader-layout`, so the
+ * measure the text is set to is unchanged — the white extends past the line
+ * length rather than shortening it.
+ */
 .reader-article {
     min-width: 0;
+    background: var(--reader-bg);
+    padding: 56px 48px 64px;
+    border-radius: 12px;
 }
 
 .reader-article .reader-eyebrow {
