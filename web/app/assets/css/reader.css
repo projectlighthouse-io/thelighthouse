@@ -51,14 +51,20 @@
 }
 
 /* ---------- sticky sub-bar ---------- */
+/* The breadcrumb sits on the page, not on a bar of its own.
+ *
+ * It used to be a sticky strip: translucent white, blurred, with a rule under
+ * it. All three went together — the background and blur existed *because* it
+ * was sticky and prose scrolled beneath it, and the rule was what separated
+ * that strip from the page. Take the background away and keep the sticking and
+ * you get breadcrumb text sitting over moving paragraphs, which is not a
+ * lighter version of the design but a broken one.
+ *
+ * So it scrolls with the page now. Nothing is lost: the table of contents is
+ * still sticky, and the article carries its own previous/next links.
+ */
 .reader-subbar {
-    position: sticky;
-    top: 0;
     z-index: 30;
-    background: rgba(255, 255, 255, 0.86);
-    backdrop-filter: saturate(1.2) blur(8px);
-    -webkit-backdrop-filter: saturate(1.2) blur(8px);
-    border-bottom: 1px solid var(--reader-line-2);
 }
 
 .reader-subbar__inner {
