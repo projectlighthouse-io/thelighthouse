@@ -128,6 +128,20 @@
     align-items: start;
 }
 
+/* A reader with no third column.
+ *
+ * The grid above is shared with the syntax pages, which still fill their aside,
+ * so the column count is a modifier rather than a change to `.reader-layout` —
+ * dropping the 184px track there would leave those pages with their aside
+ * stacked underneath.
+ *
+ * Only the base width needs saying: below 1120px the layout is already two
+ * columns and the aside is already hidden.
+ */
+.reader-layout--no-aside {
+    grid-template-columns: 232px minmax(0, 796px);
+}
+
 @media (max-width: 1120px) {
     .reader-layout {
         grid-template-columns: 200px minmax(0, 776px);

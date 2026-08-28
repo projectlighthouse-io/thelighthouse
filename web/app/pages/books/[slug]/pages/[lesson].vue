@@ -80,7 +80,8 @@ useJsonLd('crumbs', () => ({
       </div>
     </div>
 
-    <div class="reader-layout">
+    <!-- No aside: this lesson has nothing to put in the third column. -->
+    <div class="reader-layout reader-layout--no-aside">
       <aside class="reader-toc">
         <div class="reader-toc__label">On this page</div>
         <nav class="reader-toc__list">
@@ -151,12 +152,6 @@ useJsonLd('crumbs', () => ({
         </div>
       </article>
 
-      <aside class="reader-aside">
-        <div class="font-mono text-xs text-read-mute">{{ data.percent }}% through the book</div>
-        <div class="mt-4 font-mono text-xs text-read-faint">
-          lesson {{ data.position }} of {{ data.total }}
-        </div>
-      </aside>
     </div>
   </div>
 </template>
