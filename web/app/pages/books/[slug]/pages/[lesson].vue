@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Note } from '@/composables/UseNotes'
 import type { LessonResponse } from '@/types/Content'
 // only this route needs the reader system
 import '@/assets/css/reader.css'
@@ -67,6 +68,226 @@ watch(() => data.value?.toc, () => {
   activeId.value = data.value?.toc?.[0]?.id ?? ''
 })
 
+/* ---------- annotations: highlights, notes, the bookmark ----------
+ *
+ * All of it after mount, none of it in the render. `/books/**` is edge-cached
+ * and its html has to be identical for every visitor, so a reader's own marks
+ * cannot be part of what the server sends — see `useReader`, which resolves the
+ * session the same way and for the same reason.
+ *
+ * The marks are painted into the `v-html` body rather than rendered by vue.
+ * Vue does not own that subtree, so there is nothing to render *into*: the
+ * prose arrives as a string of markup and the highlights are put on top of it
+ * by `utils/Anchor`. Everything below is the bookkeeping that makes that
+ * repeatable — what is painted, and what to take off before painting again. */
+const { isSignedIn, resolve: resolveReader } = useReader()
+
+const scope = computed(() => ({
+  book: bookSlug.value,
+  lesson: lessonSlug.value,
+}))
+
+const {
+  notes,
+  load: loadNotes,
+  create: createNote,
+  remove: removeNote,
+} = useNotes(scope)
+
+// Destructured rather than kept as objects: refs reached through a plain
+// object are not unwrapped in a template, and `bookmark.current.value` in
+// markup is a `.value` that only exists because of how this was called.
+const {
+  current: currentBookmark,
+  load: loadBookmark,
+  place: saveBookmark,
+  clear: clearBookmark,
+} = useBookmark(bookSlug, lessonSlug)
+
+const {
+  anchor: selected,
+  spot: menuAt,
+  open: menuOpen,
+  clear: clearSelection,
+} = useSelection()
+
+const noteDialogOpen = ref<boolean>(false)
+const savingNote = ref<boolean>(false)
+const noteError = ref<string | null>(null)
+
+/** The note whose popover is open, and where to put it. */
+const openNote = ref<Note | null>(null)
+const openNoteAt = ref<{ x: number, y: number }>({ x: 0, y: 0 })
+const removingNote = ref<boolean>(false)
+
+/**
+ * Every mark currently on the page, by the note it belongs to.
+ *
+ * Held rather than found again with a query selector, because a passage can be
+ * several `<mark>`s and "which of these belong to note 12" is not a question
+ * the DOM can answer without an attribute nobody else needs.
+ */
+const painted = new Map<number, HTMLElement[]>()
+let bookmarkMarks: HTMLElement[] = []
+
+const body = (): Element | null =>
+  document.querySelector('[data-lesson-content]')
+
+/** Takes every mark off, so the next pass starts from the prose as rendered. */
+const unpaintAll = (): void => {
+  for (const marks of painted.values()) unpaint(marks)
+  painted.clear()
+
+  unpaint(bookmarkMarks)
+  bookmarkMarks = []
+}
+
+/**
+ * Draws what the api sent, from scratch.
+ *
+ * Cheap enough to do wholesale — a lesson has tens of notes, not thousands —
+ * and a full repaint cannot leave a mark behind for a note that was deleted,
+ * which an incremental one eventually does.
+ */
+const repaint = (): void => {
+  const container = body()
+  if (!container) return
+
+  unpaintAll()
+
+  for (const note of notes.value) {
+    // A note written with nothing selected — the api allows it — has no place
+    // on the page to draw it.
+    if (note.startOffset === null || note.endOffset === null) continue
+
+    const marks = paint(
+      container,
+      { start: note.startOffset, end: note.endOffset },
+      'reader-mark-note',
+    )
+    if (!marks.length) continue
+
+    for (const mark of marks) {
+      mark.addEventListener('click', (event) => {
+        event.stopPropagation()
+        openNote.value = note
+        openNoteAt.value = { x: event.clientX, y: event.clientY + 12 }
+      })
+    }
+
+    painted.set(note.id, marks)
+  }
+
+  if (currentBookmark.value) {
+    bookmarkMarks = paint(
+      container,
+      {
+        start: currentBookmark.value.startOffset,
+        end: currentBookmark.value.endOffset,
+      },
+      'reader-mark-bookmark',
+    )
+  }
+}
+
+const saveNote = async (content: string, isPublic: boolean): Promise<void> => {
+  if (!selected.value) return
+
+  savingNote.value = true
+  noteError.value = await createNote(content, selected.value, isPublic)
+  savingNote.value = false
+
+  if (noteError.value) return
+
+  noteDialogOpen.value = false
+  clearSelection()
+  repaint()
+}
+
+const deleteOpenNote = async (): Promise<void> => {
+  if (!openNote.value) return
+
+  removingNote.value = true
+  const failed = await removeNote(openNote.value.id)
+  removingNote.value = false
+
+  if (failed) return
+
+  openNote.value = null
+  repaint()
+}
+
+/** Places the bookmark where the selection is, moving it if there was one. */
+const placeBookmark = async (): Promise<void> => {
+  if (!selected.value) return
+
+  await saveBookmark(selected.value)
+  clearSelection()
+  repaint()
+}
+
+const removeBookmark = async (): Promise<void> => {
+  await clearBookmark()
+  repaint()
+}
+
+const signIn = (): void => {
+  navigateTo({ path: '/login', query: { redirect: route.fullPath } })
+}
+
+/** Back to the passage the reader marked. */
+const goToBookmark = (): void => {
+  bookmarkMarks[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+// The popover stops propagation, so anything that reaches the document is a
+// click somewhere else, and somewhere else means close it.
+const closePopover = (): void => {
+  openNote.value = null
+}
+
+onMounted(() => document.addEventListener('mousedown', closePopover))
+onBeforeUnmount(() => document.removeEventListener('mousedown', closePopover))
+
+/**
+ * Loads a lesson's annotations and draws them.
+ *
+ * `resolve()` first so `csrfHeader` has a token by the time anything is
+ * written; the two loads then run together because neither needs the other.
+ */
+const loadAnnotations = async (): Promise<void> => {
+  await resolveReader()
+  if (!isSignedIn.value) return
+
+  await Promise.all([loadNotes(), loadBookmark()])
+  // The body is `v-html` from data that is already here, so it is in the DOM
+  // by now — but a repaint before it is would silently draw nothing, and
+  // waiting a tick costs nothing.
+  await nextTick()
+  repaint()
+}
+
+onMounted(loadAnnotations)
+
+/**
+ * Prev and next stay on this route, so the component is reused and none of the
+ * above runs again on its own. The marks belong to the lesson that is gone.
+ *
+ * Keyed on the body rather than on `lessonSlug`, which is what the reader
+ * changed: the slug moves the moment the link is clicked, while the prose it
+ * names arrives one fetch later. Painting offsets from the new lesson onto the
+ * old lesson's text puts every highlight in the wrong place — and it is not a
+ * crash, so it would only ever be noticed by looking.
+ */
+watch(() => data.value?.html, async () => {
+  unpaintAll()
+  openNote.value = null
+  await loadAnnotations()
+})
+
+// A mark holds a reference to a listener that closes over this page's state.
+onBeforeUnmount(unpaintAll)
+
 useSeo(() => ({
   title: `${lesson.value?.title} — ${book.value?.title}`,
   description: lesson.value?.description ?? '',
@@ -119,6 +340,29 @@ useJsonLd('crumbs', () => ({
         <span class="reader-subbar__sep">›</span>
         <span class="reader-subbar__cur">{{ lesson.title }}</span>
         <span class="reader-subbar__spacer" />
+
+        <!-- Only once there is one. A control that is present and inert most of
+             the time reads as broken rather than as empty. -->
+        <button
+          v-if="currentBookmark"
+          type="button"
+          class="reader-iconbtn is-active"
+          @click="goToBookmark"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <path d="M6 3h12v18l-6-4.5L6 21z" />
+          </svg>
+          your bookmark
+        </button>
+        <button
+          v-if="currentBookmark"
+          type="button"
+          class="reader-iconbtn"
+          @click="removeBookmark"
+        >
+          remove
+        </button>
+
         <span class="reader-subbar__rt">{{ data.readMinutes }} min read</span>
       </div>
     </div>
@@ -199,5 +443,38 @@ useJsonLd('crumbs', () => ({
       </article>
 
     </div>
+
+    <!-- The three floating pieces. Outside `.reader-layout` because all three
+         are `position: fixed` and belong to the viewport, not to the column. -->
+    <ReaderSelectionMenu
+      v-if="menuOpen && selected"
+      :x="menuAt.x"
+      :y="menuAt.y"
+      :length="selected.text.length"
+      :signed-in="isSignedIn"
+      :bookmarked="!!currentBookmark"
+      @note="noteDialogOpen = true"
+      @bookmark="placeBookmark"
+      @sign-in="signIn"
+    />
+
+    <ReaderNoteDialog
+      v-if="noteDialogOpen && selected"
+      :passage="selected.text"
+      :saving="savingNote"
+      :error="noteError"
+      @save="saveNote"
+      @cancel="noteDialogOpen = false; noteError = null; clearSelection()"
+    />
+
+    <ReaderNotePopover
+      v-if="openNote"
+      :note="openNote"
+      :x="openNoteAt.x"
+      :y="openNoteAt.y"
+      :removing="removingNote"
+      @remove="deleteOpenNote"
+      @close="openNote = null"
+    />
   </div>
 </template>
