@@ -23,6 +23,20 @@ export interface Reader {
 const HINT_COOKIE = 'lh_reader'
 
 /**
+ * The header every write carries — see the api's `middleware::csrf`.
+ *
+ * Absent when the session has not answered yet, and the api refuses the write
+ * with a 403. That is the honest outcome rather than a bug to route around: a
+ * write sent before we know who is writing is one that should not have been
+ * sent. Callers wait for `resolve()`.
+ */
+export function csrfHeader(): Record<string, string> {
+  const { reader } = useReader()
+
+  return reader.value?.csrf ? { 'X-CSRF-Token': reader.value.csrf } : {}
+}
+
+/**
  * Memoised so one page load asks once however many components ask it.
  *
  * Module scope is safe only because `resolve` refuses to run on the server —
