@@ -20,7 +20,7 @@ use std::{
 };
 
 use super::{
-    Content, Error, Locale, Status, body::Body, book::Book, lesson::Folder,
+    Content, Drafts, Error, Locale, body::Body, book::Book, lesson::Folder,
     lesson::Lesson,
 };
 
@@ -66,18 +66,21 @@ impl Snapshot {
     /// lists is *not* an error — that is an unpublished draft. Two books or
     /// two lessons claiming the same id is also an error, for the reason
     /// [`unique_ids`] gives.
-    pub fn load(content: &Content) -> Result<Self, Error> {
+    pub fn load(content: &Content, drafts: Drafts) -> Result<Self, Error> {
         let mut books = HashMap::new();
         let mut order = Vec::new();
 
         for slug in content.book_slugs()? {
             let book = content.book(&slug)?;
 
-            if book.status != Status::Published {
+            if !drafts.admits(book.status) {
                 continue;
             }
 
-            books.insert(slug.clone(), BookEntry::load(content, book, &slug)?);
+            books.insert(
+                slug.clone(),
+                BookEntry::load(content, book, &slug, drafts)?,
+            );
             order.push(slug);
         }
 
@@ -153,7 +156,12 @@ impl Snapshot {
 }
 
 impl BookEntry {
-    fn load(content: &Content, book: Book, slug: &str) -> Result<Self, Error> {
+    fn load(
+        content: &Content,
+        book: Book,
+        slug: &str,
+        drafts: Drafts,
+    ) -> Result<Self, Error> {
         let mut lessons = HashMap::new();
         let mut reading_order = Vec::new();
 
@@ -168,7 +176,7 @@ impl BookEntry {
             for folder in &chapter.lessons {
                 let lesson = content.lesson(slug, folder)?;
 
-                if lesson.status != Status::Published {
+                if !drafts.admits(lesson.status) {
                     continue;
                 }
 
@@ -246,6 +254,10 @@ impl BookEntry {
 #[derive(Debug)]
 pub struct Catalog {
     content: Content,
+    /// Held so a reload applies the same policy the first load did. Reading it
+    /// again from the environment would let a SIGHUP quietly change what the
+    /// site serves.
+    drafts: Drafts,
     current: RwLock<Arc<Snapshot>>,
 }
 
@@ -257,11 +269,12 @@ impl Catalog {
     /// As [`Snapshot::load`]. Failing here should stop the process: there is no
     /// previous snapshot to fall back on, and a site that boots with no content
     /// looks broken rather than down.
-    pub fn load(content: Content) -> Result<Self, Error> {
-        let snapshot = Snapshot::load(&content)?;
+    pub fn load(content: Content, drafts: Drafts) -> Result<Self, Error> {
+        let snapshot = Snapshot::load(&content, drafts)?;
 
         Ok(Self {
             content,
+            drafts,
             current: RwLock::new(Arc::new(snapshot)),
         })
     }
@@ -288,7 +301,7 @@ impl Catalog {
     /// As [`Snapshot::load`] — and on error the previous snapshot stays in
     /// place, so a typo in one lesson does not empty the site.
     pub fn reload(&self) -> Result<(), Error> {
-        let rebuilt = Arc::new(Snapshot::load(&self.content)?);
+        let rebuilt = Arc::new(Snapshot::load(&self.content, self.drafts)?);
 
         match self.current.write() {
             Ok(mut current) => *current = rebuilt,
@@ -345,7 +358,8 @@ mod tests {
         // The mistake this exists for: a lesson folder copied to start the
         // next one, with the id left as it was. Neither file is wrong on its
         // own, so nothing but a whole-repo pass can see it.
-        let error = Snapshot::load(&fixture::duplicate_ids()).unwrap_err();
+        let error = Snapshot::load(&fixture::duplicate_ids(), Drafts::Hidden)
+            .unwrap_err();
         let message = error.to_string();
 
         assert!(message.contains("lesson.yaml"), "{message}");
@@ -357,7 +371,7 @@ mod tests {
     use super::*;
 
     fn snapshot() -> Snapshot {
-        Snapshot::load(&fixture::content()).unwrap()
+        Snapshot::load(&fixture::content(), Drafts::Hidden).unwrap()
     }
 
     /// A throwaway copy of the fixture that a test may break on purpose.
@@ -402,7 +416,8 @@ mod tests {
         // All or nothing, deliberately. Loading the rest would leave a book
         // silently missing from the site, which nobody notices until a reader
         // does; refusing is loud, and the deploy is where it gets caught.
-        let error = Snapshot::load(&fixture::broken()).unwrap_err();
+        let error =
+            Snapshot::load(&fixture::broken(), Drafts::Hidden).unwrap_err();
 
         assert!(error.to_string().contains("mislabelled"), "{error}");
     }
@@ -429,7 +444,8 @@ mod tests {
 
     #[test]
     fn a_body_is_read_from_disk_rather_than_held() {
-        let catalog = Catalog::load(fixture::content()).unwrap();
+        let catalog =
+            Catalog::load(fixture::content(), Drafts::Hidden).unwrap();
         let body = catalog
             .body("fixture-book", "split-lesson", Locale::En)
             .unwrap();
@@ -439,7 +455,8 @@ mod tests {
 
     #[test]
     fn an_unknown_lesson_is_none_rather_than_an_error() {
-        let catalog = Catalog::load(fixture::content()).unwrap();
+        let catalog =
+            Catalog::load(fixture::content(), Drafts::Hidden).unwrap();
 
         assert!(
             catalog
@@ -458,7 +475,8 @@ mod tests {
     #[test]
     fn a_reload_picks_up_a_new_lesson() {
         let root = scratch_copy("reload-adds");
-        let catalog = Catalog::load(Content::at(&root)).unwrap();
+        let catalog =
+            Catalog::load(Content::at(&root), Drafts::Hidden).unwrap();
 
         assert!(catalog.current().lesson("fixture-book", "late").is_none());
 
@@ -488,7 +506,8 @@ mod tests {
     #[test]
     fn a_failed_reload_keeps_the_previous_snapshot() {
         let root = scratch_copy("reload-keeps");
-        let catalog = Catalog::load(Content::at(&root)).unwrap();
+        let catalog =
+            Catalog::load(Content::at(&root), Drafts::Hidden).unwrap();
 
         fs::write(root.join("books/fixture-book/book.yaml"), "slug: [\n")
             .unwrap();

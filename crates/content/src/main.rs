@@ -28,7 +28,7 @@ mod sync;
 
 use std::process::ExitCode;
 
-use ohara::{Content, catalog::Catalog};
+use ohara::{Content, Drafts, catalog::Catalog};
 
 const USAGE: &str = "usage: lighthouse-content <sync>";
 
@@ -68,7 +68,13 @@ async fn run() -> Result<(), String> {
     // Parsed before connected, deliberately. A content repo with a typo in it
     // should fail naming the file, without a transaction having been opened and
     // without the database having been touched at all.
-    let catalog = Catalog::load(Content::at(&path))
+    // The same policy the api boots with, read the same way. A draft row in
+    // production is the thing this is meant to prevent, and the sync is what
+    // would create it — so `SHOW_DRAFTS` has to reach here too, not just the
+    // server.
+    let drafts = Drafts::from_env(std::env::var("SHOW_DRAFTS").ok().as_deref());
+
+    let catalog = Catalog::load(Content::at(&path), drafts)
         .map_err(|error| format!("{error}"))?;
 
     // A single connection's worth of work, but sqlx's transaction API takes a
@@ -90,7 +96,7 @@ async fn run() -> Result<(), String> {
     // `lighthouse-migrate` names the migrations it applied: a write command
     // that is silent about what it wrote is one you have to go and check.
     println!(
-        "synced {} books and {} lessons from {path}",
+        "synced {} books and {} lessons from {path} ({drafts:?} drafts)",
         synced.books, synced.lessons
     );
 

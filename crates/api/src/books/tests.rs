@@ -23,7 +23,11 @@ fn router() -> axum::Router {
             .unwrap();
 
     let catalog = std::sync::Arc::new(
-        ohara::catalog::Catalog::load(ohara::fixture::content()).unwrap(),
+        ohara::catalog::Catalog::load(
+            ohara::fixture::content(),
+            ohara::Drafts::Hidden,
+        )
+        .unwrap(),
     );
 
     crate::api::app(config, socials, db, catalog)

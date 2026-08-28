@@ -64,13 +64,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // boots with no content looks broken rather than down, and there is no
     // previous snapshot to fall back on. A *reload* keeps what it has — see
     // `Catalog::reload` — but the first read has to be right.
-    let catalog = Arc::new(ohara::catalog::Catalog::load(ohara::Content::at(
-        &config.content_path,
-    ))?);
+    let catalog = Arc::new(ohara::catalog::Catalog::load(
+        ohara::Content::at(&config.content_path),
+        config.drafts,
+    )?);
 
     tracing::info!(
         books = catalog.current().books().count(),
         path = %config.content_path,
+        drafts = ?config.drafts,
         "content loaded"
     );
 
@@ -116,7 +118,10 @@ fn check_content() -> Result<(), Box<dyn std::error::Error>> {
         std::env::var("CONTENT_PATH").map_err(|_| "CONTENT_PATH is not set")?;
 
     let content = ohara::Content::at(&path);
-    let catalog = ohara::catalog::Catalog::load(content.clone())?;
+    // Hidden: this gate answers the question production will ask, so a
+    // draft must not pad the counts it reports.
+    let catalog =
+        ohara::catalog::Catalog::load(content.clone(), ohara::Drafts::Hidden)?;
     let snapshot = catalog.current();
 
     let mut lessons = 0;

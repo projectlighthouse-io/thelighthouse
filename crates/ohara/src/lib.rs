@@ -41,7 +41,7 @@
 //!
 //! ```text
 //!   mod.rs     the layout above, and walking it
-//!   status.rs  the smallints `status` and `tier` store
+//!   status.rs  the smallints `status` and `tier` store, and the draft policy
 //!   book.rs    a book's yaml
 //!   lesson.rs  a lesson's yaml, and its folder name
 //!   locale.rs  the languages a lesson can be read in
@@ -70,7 +70,7 @@ use std::{
 };
 
 pub use locale::Locale;
-pub use status::{Status, Tier};
+pub use status::{Drafts, Status, Tier};
 
 /// What went wrong reading the content repo.
 ///

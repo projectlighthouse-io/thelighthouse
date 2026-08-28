@@ -117,6 +117,48 @@ impl Tier {
     }
 }
 
+/// Whether unfinished content is part of the catalogue.
+///
+/// [`Status::Draft`] says a lesson is written but not for readers. This says
+/// who "readers" means: locally you are one, so drafts load and can be read
+/// while being written; in production they must not exist at all — not hidden
+/// behind a flag in a response, not present as a row, simply not loaded.
+///
+/// **Hidden is the default and the only thing an unset variable can mean.**
+/// The two failure directions are not equal: drafts missing from a local run
+/// is noticed within seconds by whoever is writing them, while drafts served
+/// in production is unfinished work published under your name. So this is not
+/// a `required` config key — a production deployment that never sets it gets
+/// the safe answer rather than a boot failure.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Drafts {
+    #[default]
+    Hidden,
+    Shown,
+}
+
+impl Drafts {
+    /// Reads the policy from `SHOW_DRAFTS`.
+    ///
+    /// Exactly `true` opts in. Every other value — `1`, `yes`, `TRUE`, empty,
+    /// unset — is [`Drafts::Hidden`]. Deliberately not permissive: a fuzzy
+    /// parser is how `SHOW_DRAFTS=false` ends up truthy somewhere, and the
+    /// thing it would leak is unpublished work.
+    #[must_use]
+    pub fn from_env(value: Option<&str>) -> Self {
+        match value {
+            Some("true") => Self::Shown,
+            _ => Self::Hidden,
+        }
+    }
+
+    /// Whether a piece of content at `status` belongs in the catalogue.
+    #[must_use]
+    pub const fn admits(self, status: Status) -> bool {
+        matches!(status, Status::Published) || matches!(self, Self::Shown)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,5 +218,35 @@ mod tests {
             serde_json::to_string(&Tier::Foundation).unwrap(),
             "\"foundation\""
         );
+    }
+
+    #[test]
+    fn production_hides_drafts_and_local_shows_them() {
+        assert!(Drafts::Hidden.admits(Status::Published));
+        assert!(!Drafts::Hidden.admits(Status::Draft));
+
+        assert!(Drafts::Shown.admits(Status::Published));
+        assert!(Drafts::Shown.admits(Status::Draft));
+    }
+
+    #[test]
+    fn only_the_exact_word_true_shows_drafts() {
+        assert_eq!(Drafts::from_env(Some("true")), Drafts::Shown);
+
+        // Everything else, and unset above all, is the safe answer.
+        for value in ["false", "TRUE", "1", "yes", "", "  true  "] {
+            assert_eq!(
+                Drafts::from_env(Some(value)),
+                Drafts::Hidden,
+                "{value:?}"
+            );
+        }
+        assert_eq!(Drafts::from_env(None), Drafts::Hidden);
+    }
+
+    #[test]
+    fn an_unset_variable_never_publishes_unfinished_work() {
+        // The whole point: forgetting the key in production is safe.
+        assert_eq!(Drafts::default(), Drafts::Hidden);
     }
 }

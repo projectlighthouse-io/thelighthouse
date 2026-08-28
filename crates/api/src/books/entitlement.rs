@@ -87,7 +87,7 @@ mod tests {
     use ohara::{catalog::Snapshot, fixture};
 
     fn fixture_book() -> Snapshot {
-        Snapshot::load(&fixture::content()).unwrap()
+        Snapshot::load(&fixture::content(), ohara::Drafts::Hidden).unwrap()
     }
 
     // These reach no database: every one of them is a case `access` answers

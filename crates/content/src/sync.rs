@@ -280,7 +280,7 @@ mod tests {
     use super::*;
 
     fn snapshot() -> Snapshot {
-        Snapshot::load(&fixture::content()).unwrap()
+        Snapshot::load(&fixture::content(), ohara::Drafts::Hidden).unwrap()
     }
 
     #[test]

@@ -28,6 +28,10 @@ pub(crate) struct Config {
     /// Where the content repo is checked out. The prose is private and lives
     /// outside this repo entirely — see `content`.
     pub(crate) content_path: String,
+    /// Whether unfinished lessons load at all. Hidden unless `SHOW_DRAFTS` is
+    /// exactly `true` — see [`ohara::Drafts`] for why this one key is allowed
+    /// to be absent when every other is required.
+    pub(crate) drafts: ohara::Drafts,
     pub(crate) github_id: String,
     pub(crate) github_secret: String,
     pub(crate) google_id: String,
@@ -45,6 +49,7 @@ impl fmt::Debug for Config {
             .field("database_url", &"<redacted>")
             .field("app_url", &self.app_url)
             .field("content_path", &self.content_path)
+            .field("drafts", &self.drafts)
             .field("github_id", &self.github_id)
             .field("github_secret", &"<redacted>")
             .field("google_id", &self.google_id)
@@ -105,6 +110,8 @@ impl Config {
             // compares byte for byte against its registered callback and refuses.
             app_url: required("APP_URL")?.trim_end_matches('/').to_owned(),
             content_path: required("CONTENT_PATH")?,
+            // Not `required`: unset means hidden, which is the safe answer.
+            drafts: ohara::Drafts::from_env(get("SHOW_DRAFTS").as_deref()),
             github_id: required("GITHUB_CLIENT_ID")?,
             github_secret: required("GITHUB_CLIENT_SECRET")?,
             google_id: required("GOOGLE_CLIENT_ID")?,
@@ -141,6 +148,7 @@ impl Config {
             database_url: "postgres://localhost/lighthouse".to_owned(),
             app_url: "https://lighthouse.test".to_owned(),
             content_path: "../ohara".to_owned(),
+            drafts: ohara::Drafts::Hidden,
             github_id: "gh-id".to_owned(),
             github_secret: "gh-secret".to_owned(),
             google_id: "goo-id".to_owned(),
