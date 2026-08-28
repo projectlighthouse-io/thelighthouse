@@ -23,13 +23,17 @@ pub(crate) enum Access {
 
 /// What this reader gets of this book.
 ///
-/// **A free book is [`Access::Full`] for everybody**, signed in or not, without
-/// touching the database. A book priced at zero is given away, and there is
-/// nothing to buy that would grant more than that.
+/// **Price is not consulted, deliberately.** What a book costs decides what
+/// happens at checkout; it does not decide what is readable. Whether a lesson
+/// withholds anything is stated in the content — the `<paid>` regions and
+/// `access: paid` — and who may see what is withheld is this: an entitlement
+/// to the book. A book priced at zero can still be one you have to be
+/// subscribed to read, and that is a pricing decision that must not silently
+/// unlock prose.
 ///
-/// **A book with no id is [`Access::FreeOnly`] once priced.** The id is what an
-/// entitlement points at, so a book that has never been given one cannot be
-/// owned by anybody — there is no row that could name it.
+/// **A book with no id is [`Access::FreeOnly`].** The id is what an entitlement
+/// points at, so a book that has never been given one cannot be owned by
+/// anybody — there is no row that could name it.
 ///
 /// # Errors
 ///
@@ -42,10 +46,6 @@ pub(crate) async fn access(
     reader: Option<i64>,
     book: &BookEntry,
 ) -> Result<Access, sqlx::Error> {
-    if book.book.price.is_free() {
-        return Ok(Access::Full);
-    }
-
     let (Some(user_id), Some(book_id)) = (reader, book.book.id) else {
         return Ok(Access::FreeOnly);
     };
@@ -94,7 +94,7 @@ mod tests {
     // before it would query, which is the point being made about each.
 
     #[tokio::test]
-    async fn a_priced_book_shows_only_its_free_half_to_a_stranger() {
+    async fn a_stranger_gets_only_the_free_half() {
         let snapshot = fixture_book();
         let book = snapshot.book("fixture-book").unwrap();
         // Lazy, and never connected: a stranger is answered before the query
@@ -104,7 +104,23 @@ mod tests {
             sqlx::postgres::PgPool::connect_lazy("postgres://localhost/unused")
                 .unwrap();
 
-        // The fixture book is priced at 2900.
+        assert_eq!(access(&db, None, book).await.unwrap(), Access::FreeOnly);
+    }
+
+    #[tokio::test]
+    async fn a_free_book_is_not_a_reason_to_hand_over_the_paid_half() {
+        // The rule this replaced: a book priced at zero used to short-circuit
+        // to Full for everybody. Price decides checkout, not access — a book
+        // given away can still be one you must be subscribed to read.
+        // `unfinished-book` carries no price block at all, so it is free.
+        let snapshot =
+            Snapshot::load(&fixture::drafts(), ohara::Drafts::Shown).unwrap();
+        let book = snapshot.book("unfinished-book").unwrap();
+        let db =
+            sqlx::postgres::PgPool::connect_lazy("postgres://localhost/unused")
+                .unwrap();
+
+        assert!(book.book.price.is_free(), "the fixture must be free");
         assert_eq!(access(&db, None, book).await.unwrap(), Access::FreeOnly);
     }
 }
