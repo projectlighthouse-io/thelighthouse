@@ -179,6 +179,66 @@
     .reader-prose {
         font-size: 17px !important;
     }
+
+    /* The breadcrumb kept the desktop 40px inset at every width, which on a
+     * phone spends a fifth of the screen on margin. Match the page padding. */
+    .reader-subbar__inner {
+        padding: 12px 20px;
+        gap: 8px;
+    }
+
+    /* A lesson title is a sentence, and there is no room for it beside the
+     * book's. Truncate rather than wrap: a breadcrumb that grows to three
+     * lines stops being a breadcrumb. `min-width: 0` is what lets a flex item
+     * shrink below its content — without it `text-overflow` never fires. */
+    .reader-subbar__cur {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .reader-subbar__book {
+        flex: none;
+    }
+}
+
+/* Phones — tailwind's `sm`, so this lines up with the `sm:` utilities the
+ * templates use rather than being a width only this file knows about.
+ *
+ * The lesson title goes entirely: at this size the book's name and the reading
+ * time are the two things worth the row, and the lesson's own title is the h1
+ * immediately below it.
+ */
+@media (max-width: 639px) {
+    .reader-subbar__cur,
+    .reader-subbar__sep {
+        display: none;
+    }
+
+    .reader-layout {
+        padding: 28px 14px 80px;
+    }
+
+    .reader-article {
+        padding: 28px 18px 36px;
+        border-radius: 10px;
+    }
+
+    .reader-article h1 {
+        font-size: 32px !important;
+    }
+
+    .reader-article .reader-dek {
+        font-size: 17px !important;
+    }
+
+    /* The panel keeps its inset; the code inside gives up a little size so a
+     * typical line still fits before the block starts scrolling. */
+    .reader-prose pre {
+        padding: 14px;
+        font-size: 12.5px;
+    }
 }
 
 /* ---------- left: table of contents ---------- */

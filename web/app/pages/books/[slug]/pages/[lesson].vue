@@ -133,7 +133,10 @@ useJsonLd('crumbs', () => ({
           </div>
         </div>
 
-        <div class="mt-12 flex items-center justify-between gap-4">
+        <!-- Stacked on a phone: two lesson titles do not fit side by side. -->
+        <div
+          class="mt-12 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center sm:gap-4"
+        >
           <NuxtLink
             v-if="data.previous"
             :to="`/books/${book.slug}/pages/${data.previous.slug}`"
