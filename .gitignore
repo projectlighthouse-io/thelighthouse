@@ -10,5 +10,12 @@ CLAUDE.local.md
 # clones it alongside the source is the likely way that happens. This repo is
 # public and the prose is the product, so the guard is cheap and the mistake is
 # not undoable. `fixture/` is the fake content, and stays tracked.
-ohara/
-content/
+#
+# Anchored to the root, and that leading slash is load-bearing. Unanchored,
+# `ohara/` matches a directory of that name at any depth — including
+# `crates/api/src/ohara/`, the module that reads the content repo, whose files
+# then cannot be staged without `git add -f`. A guard that has to be overridden
+# during ordinary work is a guard that gets overridden the once it mattered.
+# A stray clone lands at the root, which is where this still catches it.
+/ohara/
+/content/
