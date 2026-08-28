@@ -1,0 +1,33 @@
+-- project_translations and task_translations — the last two, and with them the
+-- idea of a translation table at all.
+--
+-- The rebuild has one place prose lives, and it is not postgres. A lesson
+-- already works this way: `lesson.yaml` carries a `content_path` mapping a
+-- locale to a markdown file beside it, so a translation ships in the same
+-- commit as the thing it translates and cannot drift from it. Projects and
+-- tasks get the same treatment, so a table per translated entity is machinery
+-- for a problem the content repo already solves.
+--
+--   project_translations   name, short_description
+--   task_translations      title, description
+--
+-- Neither is read by anything here — the luxctl endpoints that will serve
+-- projects are not written yet, which makes this the cheapest moment to drop
+-- them rather than the most expensive.
+--
+-- **`tasks` and `projects` keep no name of their own.** As with `books`, those
+-- columns only ever existed in the translation table, so after this a task row
+-- is ordering, points and scoring, and a project row is its slug and its
+-- runner. Identity and behaviour stay in the database; words come from the
+-- content repo.
+--
+-- **Do not run this against production until the content repo carries the
+-- projects**, for the reason the two migrations before it give. `content/
+-- projects/` in the laravel repo holds 16 of them and is what generated these
+-- rows, so nothing is lost — but the yaml has to reach ohara, with a
+-- `content_path` of its own, before the database's copy goes.
+--
+-- Both foreign keys go with their tables. Nothing references either.
+
+DROP TABLE project_translations;
+DROP TABLE task_translations;
