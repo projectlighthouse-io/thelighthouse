@@ -3,7 +3,7 @@
 use std::sync::OnceLock;
 
 use comrak::{
-    Options, markdown_to_html_with_plugins, options::Plugins,
+    Anchorizer, Options, markdown_to_html_with_plugins, options::Plugins,
     plugins::syntect::SyntectAdapter,
 };
 
@@ -185,6 +185,12 @@ pub fn render(markdown: &str) -> String {
     options.extension.tasklist = true;
     options.extension.autolink = true;
     options.extension.footnotes = true;
+    // Without this every heading renders as a bare `<h2>`, and the contents
+    // list — which links to `#some-heading` — points at nothing. The empty
+    // prefix means the id is the anchor itself; comrak also drops a deep-link
+    // <a class="anchor"> inside each heading, which `prose.css` can style or
+    // leave invisible.
+    options.extension.header_id_prefix = Some(String::new());
 
     let highlighter =
         HIGHLIGHTER.get_or_init(|| SyntectAdapter::new(Some(THEME)));
@@ -211,6 +217,12 @@ pub struct Heading {
 /// heading and a contents list full of them is worse than none.
 #[must_use]
 pub fn headings(markdown: &str) -> Vec<Heading> {
+    // Comrak's own, so these ids are the ids it writes into the html. A second
+    // implementation here would agree until the first heading with a character
+    // the two treat differently — and the symptom of that is a contents entry
+    // that silently scrolls nowhere. One anchorizer for the whole document,
+    // because it is what makes a repeated heading `-1` rather than a duplicate.
+    let mut anchorizer = Anchorizer::new();
     let mut fenced = false;
 
     markdown
@@ -223,24 +235,10 @@ pub fn headings(markdown: &str) -> Vec<Heading> {
         })
         .filter_map(|line| line.strip_prefix("## "))
         .map(|text| Heading {
-            id: anchor(text),
+            id: anchorizer.anchorize(text.trim()),
             text: text.trim().to_owned(),
         })
         .collect()
-}
-
-/// A heading's anchor, matching what the frontend generated before rust took
-/// this over — lowercase, punctuation dropped, spaces to hyphens.
-fn anchor(heading: &str) -> String {
-    heading
-        .trim()
-        .to_lowercase()
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || c.is_whitespace() || *c == '-')
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join("-")
 }
 
 /// Minutes to read, at 220 words a minute, and never zero.
@@ -375,6 +373,36 @@ mod tests {
             assert!(!half.contains(PAID_OPEN), "{half}");
             assert!(!half.contains(PAID_CLOSE), "{half}");
         }
+    }
+
+    #[test]
+    fn every_contents_entry_points_at_a_heading_that_exists() {
+        // The bug this exists for: the contents list linked to `#some-heading`
+        // while `render` emitted bare `<h2>` with no id, so every click did
+        // nothing. Both sides derive the id from comrak's anchorizer now, and
+        // this is what proves they still agree — including the `-1` suffix a
+        // repeated heading gets, which is where two implementations drift
+        // first.
+        let markdown = "## Ticks aren\'t in\n\ntext\n\n## C & Assembly\n\n                        text\n\n## Ticks aren\'t in\n\ntext\n";
+
+        let html = render(markdown);
+
+        for heading in headings(markdown) {
+            assert!(
+                html.contains(&format!("id=\"{}\"", heading.id)),
+                "no heading in the html has id {:?}\n{html}",
+                heading.id
+            );
+        }
+    }
+
+    #[test]
+    fn a_repeated_heading_gets_its_own_anchor() {
+        let markdown = "## Setup\n\na\n\n## Setup\n\nb\n";
+        let ids: Vec<String> =
+            headings(markdown).into_iter().map(|h| h.id).collect();
+
+        assert_eq!(ids, ["setup", "setup-1"]);
     }
 
     #[test]
