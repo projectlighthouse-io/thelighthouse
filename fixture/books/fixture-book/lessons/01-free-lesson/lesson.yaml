@@ -3,3 +3,6 @@ slug: free-lesson
 title: A Free Lesson
 description: no paywall marker, so it is wholly free
 status: published
+content_path:
+  en: lesson.md
+  bn: lesson.bn.md

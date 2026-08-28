@@ -11,7 +11,7 @@ use super::{
     entitlement::{Access, access},
     view::{BookDetail, BookSummary, LessonView, PaidView},
 };
-use ohara::body;
+use ohara::{Locale, body};
 
 use crate::{
     api::AppState,
@@ -67,7 +67,7 @@ pub(crate) async fn lesson(
         return not_found();
     };
 
-    let prose = match state.catalog.body(&book, &lesson) {
+    let prose = match state.catalog.body(&book, &lesson, Locale::default()) {
         Ok(Some(prose)) => prose,
         Ok(None) => return not_found(),
         Err(cause) => {
@@ -110,7 +110,7 @@ pub(crate) async fn paid(
         }
     }
 
-    let prose = match state.catalog.body(&book, &lesson) {
+    let prose = match state.catalog.body(&book, &lesson, Locale::default()) {
         Ok(Some(prose)) => prose,
         Ok(None) => return not_found(),
         Err(cause) => {

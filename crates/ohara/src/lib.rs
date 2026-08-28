@@ -12,14 +12,23 @@
 //!           03-there-is-no-such-thing/
 //!             lesson.yaml
 //!             lesson.md
+//!             lesson.bn.md
 //!     pricing/
 //!       ppp.yaml
 //! ```
 //!
 //! **The directory names the instance, the file names the type.** Every lesson
-//! is `lesson.yaml` and `lesson.md`; which lesson it is comes from the folder.
-//! Renumbering a book is then one rename per lesson rather than three, and a
-//! folder whose name drifts from its files is not expressible.
+//! is a `lesson.yaml` and the prose beside it; which lesson it is comes from
+//! the folder. Renumbering a book is then one rename per lesson rather than
+//! three, and a folder whose name drifts from its files is not expressible.
+//!
+//! **A lesson names its own prose, per language.** `content_path` maps a
+//! locale to a file relative to the lesson's folder, and it is required —
+//! there is no "it is always `lesson.md`" convention to fall back on. A
+//! convention is a rule the files can break silently: a `lesson.bn.md` nobody
+//! listed is a translation nobody is served, and a missing `lesson.md` is a
+//! 404 rather than a load error. Stated, both are caught at `make
+//! content-check`.
 //!
 //! **A lesson folder is `<sort_order>-<slug>`.** Both halves are load-bearing:
 //! the number orders the book, the rest is checked against the yaml's `slug`.
@@ -35,6 +44,7 @@
 //!   status.rs  the smallints `status` and `tier` store
 //!   book.rs    a book's yaml
 //!   lesson.rs  a lesson's yaml, and its folder name
+//!   locale.rs  the languages a lesson can be read in
 //!   body.rs    markdown: the paywall split, and rendering both halves
 //!   price.rs   what a book costs
 //!   ppp.rs     what it costs somewhere poorer
@@ -49,6 +59,7 @@ pub mod body;
 pub mod book;
 pub mod catalog;
 pub mod lesson;
+pub mod locale;
 pub mod ppp;
 pub mod price;
 pub mod status;
@@ -58,6 +69,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub use locale::Locale;
 pub use status::{Status, Tier};
 
 /// What went wrong reading the content repo.

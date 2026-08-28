@@ -1,9 +1,11 @@
 //! A lesson's yaml, and the markdown beside it.
 
+use std::collections::HashMap;
+
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::{Content, Error, Status, body::Body, read};
+use super::{Content, Error, Locale, Status, body::Body, read};
 
 /// `books/<book>/lessons/<order>-<slug>/lesson.yaml`.
 ///
@@ -40,8 +42,108 @@ pub struct Lesson {
     pub description: Option<String>,
     #[serde(default)]
     pub status: Status,
+    /// Which file holds the prose, per language, relative to this lesson's own
+    /// folder.
+    ///
+    /// **Required, and required to carry `en`.** A lesson with no body is not a
+    /// lesson, and English is the fallback every other language resolves
+    /// through — see [`Self::body_file`]. Both are checked in
+    /// [`Self::validate`], so neither can be discovered at read time.
+    ///
+    /// A map rather than a list of pairs: two entries for one language are then
+    /// impossible to write down, instead of being a duplicate that some
+    /// validation has to go looking for.
+    ///
+    /// Stated per lesson rather than derived from a naming convention, because
+    /// a convention is a rule the files can break silently. `lesson.bn.md`
+    /// sitting beside a lesson that never names it is a translation nobody is
+    /// served; here it is either listed or it does not exist.
+    pub content_path: HashMap<Locale, String>,
     #[serde(default)]
     pub seo: LessonSeo,
+}
+
+impl Lesson {
+    /// The file to read for `locale`, falling back to English.
+    ///
+    /// Infallible because [`Self::validate`] has already refused a lesson with
+    /// no `en` entry. A reader whose language is not translated yet gets the
+    /// English prose, which is what `docs/rebuild.md` specifies — never a 404.
+    #[must_use]
+    pub fn body_file(&self, locale: Locale) -> &str {
+        self.content_path
+            .get(&locale)
+            .or_else(|| self.content_path.get(&Locale::En))
+            .map_or("lesson.md", String::as_str)
+    }
+
+    /// Every language this lesson is actually written in.
+    #[must_use]
+    pub fn locales(&self) -> Vec<Locale> {
+        let mut locales: Vec<Locale> =
+            self.content_path.keys().copied().collect();
+        locales.sort_unstable();
+        locales
+    }
+
+    /// Rejects a lesson whose body could not be read, or could be read from
+    /// somewhere it has no business reaching.
+    fn validate(&self) -> Result<(), String> {
+        if !self.content_path.contains_key(&Locale::En) {
+            return Err(
+                "content_path has no `en`, which is the fallback every \
+                 other language resolves through"
+                    .to_owned(),
+            );
+        }
+
+        for (locale, path) in &self.content_path {
+            within_the_lesson(path)
+                .map_err(|cause| format!("content_path.{locale}: {cause}"))?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Refuses a path that would read outside the lesson's own folder.
+///
+/// The content repo is not hostile, but it is the one input to this process
+/// that is edited by hand in bulk, and `../` is one slip away from a path that
+/// resolves anywhere on the box. A joined path is only as safe as what is
+/// joined onto it, and the api reads whatever this resolves to and serves it.
+///
+/// Absolute paths are refused for the same reason and a second one: `PathBuf`
+/// join *replaces* the base when the argument is absolute, so
+/// `lesson_dir.join("/etc/passwd")` is simply `/etc/passwd` — silently, with no
+/// error to notice.
+fn within_the_lesson(path: &str) -> Result<(), String> {
+    use std::path::{Component, Path};
+
+    if path.is_empty() {
+        return Err("is empty".to_owned());
+    }
+
+    for component in Path::new(path).components() {
+        match component {
+            Component::Normal(_) => {}
+            Component::ParentDir => {
+                return Err(format!(
+                    "{path:?} climbs out of the lesson folder"
+                ));
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                return Err(format!("{path:?} is absolute"));
+            }
+            // `./lesson.md`. Harmless, and refused anyway: one spelling per
+            // file keeps the yaml comparable by eye.
+            Component::CurDir => {
+                return Err(format!("{path:?} should not start with ./"));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// A lesson folder name, taken apart: `07-borrowing` is 7 and `borrowing`.
@@ -127,6 +229,10 @@ impl Content {
             });
         }
 
+        lesson
+            .validate()
+            .map_err(|cause| Error::Malformed { path, cause })?;
+
         Ok(lesson)
     }
 
@@ -137,11 +243,20 @@ impl Content {
     /// rendered when it is served, so the paid half never has to exist as html
     /// in a process that might hand it to the wrong person.
     ///
+    /// Takes the file rather than a locale, because resolving a language to a
+    /// file needs the lesson's yaml and this type does not hold one.
+    /// [`super::catalog::Catalog::body`] is where the two meet.
+    ///
     /// # Errors
     ///
     /// The markdown being absent or unreadable.
-    pub fn body(&self, book: &str, folder: &str) -> Result<Body, Error> {
-        let path = self.lesson_dir(book, folder).join("lesson.md");
+    pub fn body(
+        &self,
+        book: &str,
+        folder: &str,
+        file: &str,
+    ) -> Result<Body, Error> {
+        let path = self.lesson_dir(book, folder).join(file);
 
         Ok(Body::split(&read(&path)?))
     }
@@ -151,6 +266,10 @@ impl Content {
 mod tests {
     use super::super::fixture;
     use super::*;
+
+    fn parsed(yaml: &str) -> Lesson {
+        serde_norway::from_str(yaml).unwrap()
+    }
 
     #[test]
     fn a_lesson_parses_into_its_columns() {
@@ -170,7 +289,7 @@ mod tests {
     #[test]
     fn a_lesson_with_no_marker_is_wholly_free() {
         let body = fixture::content()
-            .body("fixture-book", "01-free-lesson")
+            .body("fixture-book", "01-free-lesson", "lesson.md")
             .unwrap();
 
         assert!(!body.has_paid_part());
@@ -180,7 +299,7 @@ mod tests {
     #[test]
     fn a_lesson_with_a_marker_splits_and_keeps_the_paid_half_out_of_free() {
         let body = fixture::content()
-            .body("fixture-book", "02-split-lesson")
+            .body("fixture-book", "02-split-lesson", "lesson.md")
             .unwrap();
 
         assert!(body.has_paid_part());
@@ -198,6 +317,114 @@ mod tests {
             .unwrap_err();
 
         assert!(error.to_string().contains("no-such-lesson"), "{error}");
+    }
+
+    #[test]
+    fn a_lesson_names_its_body_per_language() {
+        let lesson = fixture::content()
+            .lesson("fixture-book", "01-free-lesson")
+            .unwrap();
+
+        assert_eq!(lesson.body_file(Locale::En), "lesson.md");
+        assert_eq!(lesson.body_file(Locale::Bn), "lesson.bn.md");
+        assert_eq!(lesson.locales(), [Locale::En, Locale::Bn]);
+    }
+
+    #[test]
+    fn an_untranslated_language_falls_back_to_english() {
+        // Not a 404. A reader whose language is half translated should read
+        // the book, not hit holes in it.
+        let lesson = fixture::content()
+            .lesson("fixture-book", "02-split-lesson")
+            .unwrap();
+
+        assert_eq!(lesson.locales(), [Locale::En]);
+        assert_eq!(lesson.body_file(Locale::Bn), "lesson.md");
+    }
+
+    #[test]
+    fn the_translated_body_is_the_one_that_gets_read() {
+        // The whole point of the field: a different file, not a different
+        // rendering of the same one.
+        let english = fixture::content()
+            .body("fixture-book", "01-free-lesson", "lesson.md")
+            .unwrap();
+        let bengali = fixture::content()
+            .body("fixture-book", "01-free-lesson", "lesson.bn.md")
+            .unwrap();
+
+        assert!(english.free.contains("wholly free"));
+        assert!(bengali.free.contains("বিনামূল্যে"));
+        assert_ne!(english.free, bengali.free);
+    }
+
+    #[test]
+    fn a_lesson_with_no_english_is_refused() {
+        // English is the fallback every other language resolves through, so a
+        // lesson without it has languages that resolve to nothing.
+        let lesson =
+            parsed("slug: a\ntitle: A\ncontent_path:\n  bn: lesson.bn.md\n");
+
+        assert!(lesson.validate().unwrap_err().contains("no `en`"));
+    }
+
+    #[test]
+    fn a_body_path_cannot_climb_out_of_its_lesson() {
+        // `join` on a relative path that climbs is a real read of a real file
+        // somewhere else on the box, and nothing downstream would notice.
+        let lesson = parsed(
+            "slug: a\ntitle: A\ncontent_path:\n               en: ../../../../etc/passwd\n",
+        );
+
+        let cause = lesson.validate().unwrap_err();
+
+        assert!(cause.contains("climbs out"), "{cause}");
+        assert!(cause.contains("content_path.en"), "{cause}");
+    }
+
+    #[test]
+    fn an_absolute_body_path_is_refused() {
+        // `PathBuf::join` *replaces* the base when the argument is absolute,
+        // so this would silently resolve to /etc/passwd rather than error.
+        let lesson =
+            parsed("slug: a\ntitle: A\ncontent_path:\n  en: /etc/passwd\n");
+
+        assert!(lesson.validate().unwrap_err().contains("absolute"));
+    }
+
+    #[test]
+    fn an_empty_body_path_is_refused() {
+        let lesson = parsed("slug: a\ntitle: A\ncontent_path:\n  en: ''\n");
+
+        assert!(lesson.validate().unwrap_err().contains("is empty"));
+    }
+
+    #[test]
+    fn a_subfolder_is_allowed_because_it_stays_inside() {
+        let lesson =
+            parsed("slug: a\ntitle: A\ncontent_path:\n  en: parts/lesson.md\n");
+
+        assert!(lesson.validate().is_ok());
+    }
+
+    #[test]
+    fn a_language_the_site_does_not_publish_names_the_file() {
+        // The reason this is an enum: as a string key it would have parsed,
+        // and `end` would be a language nothing ever asks for.
+        let error = serde_norway::from_str::<Lesson>(
+            "slug: a\ntitle: A\ncontent_path:\n  end: lesson.md\n",
+        );
+
+        assert!(error.is_err());
+    }
+
+    #[test]
+    fn a_lesson_with_no_content_path_is_refused_rather_than_assumed() {
+        // A convention — "it is always lesson.md" — is a rule the files can
+        // break silently. Stating it is what makes a missing body loud.
+        assert!(
+            serde_norway::from_str::<Lesson>("slug: a\ntitle: A\n").is_err()
+        );
     }
 
     #[test]

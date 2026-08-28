@@ -20,7 +20,7 @@ use std::{
 };
 
 use super::{
-    Content, Error, Status, body::Body, book::Book, lesson::Folder,
+    Content, Error, Locale, Status, body::Body, book::Book, lesson::Folder,
     lesson::Lesson,
 };
 
@@ -298,29 +298,42 @@ impl Catalog {
         Ok(())
     }
 
-    /// A published lesson's prose, split at the paywall.
+    /// A published lesson's prose in `locale`, split at the paywall.
     ///
     /// `None` when no such published lesson exists — which is the same answer
     /// for a draft, a typo and a deleted lesson, because a reader is owed the
     /// same 404 for all three.
     ///
+    /// A language this lesson is not written in is *not* one of those cases:
+    /// it falls back to English rather than 404ing, so a reader whose language
+    /// is only half translated reads the book instead of hitting holes.
+    ///
     /// # Errors
     ///
-    /// The lesson is in the catalogue but its markdown cannot be read.
+    /// The lesson is in the catalogue but its markdown cannot be read — which,
+    /// with a `content_path` naming a file nobody wrote, is the mistake this
+    /// reports rather than silently serving English.
     pub fn body(
         &self,
         book: &str,
         lesson: &str,
+        locale: Locale,
     ) -> Result<Option<Body>, Error> {
-        let Some(folder) = self
-            .current()
-            .lesson(book, lesson)
-            .map(|entry| entry.folder.clone())
+        // The folder and the file are both taken while the snapshot is held,
+        // so a reload between the two cannot pair one lesson's folder with
+        // another's filename.
+        let Some((folder, file)) =
+            self.current().lesson(book, lesson).map(|entry| {
+                (
+                    entry.folder.clone(),
+                    entry.lesson.body_file(locale).to_owned(),
+                )
+            })
         else {
             return Ok(None);
         };
 
-        self.content.body(book, &folder).map(Some)
+        self.content.body(book, &folder, &file).map(Some)
     }
 }
 
@@ -417,7 +430,9 @@ mod tests {
     #[test]
     fn a_body_is_read_from_disk_rather_than_held() {
         let catalog = Catalog::load(fixture::content()).unwrap();
-        let body = catalog.body("fixture-book", "split-lesson").unwrap();
+        let body = catalog
+            .body("fixture-book", "split-lesson", Locale::En)
+            .unwrap();
 
         assert!(body.unwrap().has_paid_part());
     }
@@ -426,8 +441,18 @@ mod tests {
     fn an_unknown_lesson_is_none_rather_than_an_error() {
         let catalog = Catalog::load(fixture::content()).unwrap();
 
-        assert!(catalog.body("fixture-book", "nope").unwrap().is_none());
-        assert!(catalog.body("nope", "free-lesson").unwrap().is_none());
+        assert!(
+            catalog
+                .body("fixture-book", "nope", Locale::En)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            catalog
+                .body("nope", "free-lesson", Locale::En)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -441,7 +466,8 @@ mod tests {
         fs::create_dir_all(lessons.join("03-late")).unwrap();
         fs::write(
             lessons.join("03-late/lesson.yaml"),
-            "slug: late\ntitle: A Late Lesson\nstatus: published\n",
+            "slug: late\ntitle: A Late Lesson\nstatus: published\n\
+             content_path:\n  en: lesson.md\n",
         )
         .unwrap();
         fs::write(lessons.join("03-late/lesson.md"), "Written later.\n")

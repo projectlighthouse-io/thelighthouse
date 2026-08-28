@@ -2,3 +2,5 @@ id: 019205c7-4f3a-7c21-9f4e-0000000000dd
 slug: first
 title: First
 status: published
+content_path:
+  en: lesson.md

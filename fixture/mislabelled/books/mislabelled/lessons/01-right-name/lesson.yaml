@@ -4,3 +4,5 @@
 slug: wrong-name
 title: A Mislabelled Lesson
 status: draft
+content_path:
+  en: lesson.md

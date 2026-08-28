@@ -3,5 +3,7 @@ slug: split-lesson
 title: A Split Lesson
 description: a marker mid-lesson, so it has both halves
 status: published
+content_path:
+  en: lesson.md
 seo:
   meta_title: A Split Lesson
