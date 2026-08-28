@@ -1,8 +1,11 @@
 //! A note as it is read out of postgres and written onto the wire.
 
-use chrono::{NaiveDateTime, SecondsFormat};
-use serde::{Serialize, Serializer};
+use chrono::NaiveDateTime;
+use serde::Serialize;
 use sqlx::FromRow;
+use uuid::Uuid;
+
+use crate::response::as_utc;
 
 /// One note, with enough of its lesson and book to link back to it.
 ///
@@ -16,9 +19,17 @@ pub(crate) struct Note {
     pub(crate) id: i64,
     pub(crate) selected_text: Option<String>,
     pub(crate) note_content: Option<String>,
+    /// Character offsets over the rendered lesson body — where the passage
+    /// this note was taken against sits. Null on a note written with nothing
+    /// selected, and the reader page draws a highlight only when both are set.
+    pub(crate) start_offset: Option<i32>,
+    pub(crate) end_offset: Option<i32>,
     #[serde(serialize_with = "as_utc")]
     pub(crate) created_at: Option<NaiveDateTime>,
-    pub(crate) lesson_id: i64,
+    /// A uuid the content repo mints — see
+    /// `20260828020000_content_owns_its_ids.sql`. Not a number, and never
+    /// one the database issued.
+    pub(crate) lesson_id: Uuid,
     /// A slug is unique only within a book — `lessons_book_id_slug_unique` —
     /// so both are needed to name one lesson.
     pub(crate) lesson_slug: String,
@@ -26,28 +37,6 @@ pub(crate) struct Note {
     /// Whether the lesson's thread shows this to other readers.
     pub(crate) is_public: bool,
     pub(crate) parent_id: Option<i64>,
-}
-
-/// A timestamp as ISO-8601 in UTC: `2026-08-22T23:27:31Z`.
-///
-/// **The `Z` is load-bearing.** chrono writes `NaiveDateTime` with no offset,
-/// and `new Date("2026-08-22T23:27:31")` in a browser reads a bare date-time as
-/// *local* time — so every note would shift by the reader's offset, silently.
-///
-/// `&Option<_>` rather than `Option<&_>` to match serde's `serialize_with`.
-#[allow(clippy::ref_option)]
-pub(crate) fn as_utc<S: Serializer>(
-    at: &Option<NaiveDateTime>,
-    out: S,
-) -> Result<S::Ok, S::Error> {
-    match at {
-        Some(at) => {
-            let utc = at.and_utc().to_rfc3339_opts(SecondsFormat::Secs, true);
-
-            out.serialize_str(&utc)
-        }
-        None => out.serialize_none(),
-    }
 }
 
 #[cfg(test)]
@@ -61,8 +50,10 @@ mod tests {
             id: 1,
             selected_text: None,
             note_content: None,
+            start_offset: None,
+            end_offset: None,
             created_at,
-            lesson_id: 1,
+            lesson_id: Uuid::nil(),
             lesson_slug: "goroutines".to_owned(),
             book_slug: "go-fundamentals".to_owned(),
             is_public: true,

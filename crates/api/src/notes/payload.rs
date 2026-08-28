@@ -37,6 +37,37 @@ pub(crate) struct NewNoteRequest {
     pub(crate) parent_id: Option<i64>,
 }
 
+/// Narrows a listing to one lesson: `?book=go-fundamentals&lesson=goroutines`.
+///
+/// Beside [`crate::request::ListQuery`] rather than inside it — paging and
+/// search belong to every listing, and this belongs to one.
+///
+/// A reader page asks for its own lesson's notes so it can draw them on the
+/// passages they were taken against; `/notes` asks for all of them. One
+/// endpoint, because they are the same rows read two ways.
+#[derive(Debug, Default, Deserialize)]
+pub(crate) struct LessonFilter {
+    pub(crate) book: Option<String>,
+    pub(crate) lesson: Option<String>,
+}
+
+impl LessonFilter {
+    /// Both slugs, or neither, or a refusal.
+    ///
+    /// **A half-given filter is refused, not ignored.** A slug is unique only
+    /// within a book, so one alone cannot name a lesson — and quietly dropping
+    /// it would answer a lesson page with the reader's whole shelf, which looks
+    /// like working software right until notes from another book are drawn over
+    /// this one's prose.
+    pub(crate) fn slugs(&self) -> Result<Option<(&str, &str)>, Refusal> {
+        match (self.book.as_deref(), self.lesson.as_deref()) {
+            (None, None) => Ok(None),
+            (Some(book), Some(lesson)) => Ok(Some((book, lesson))),
+            _ => Err(Refusal::HalfGivenFilter),
+        }
+    }
+}
+
 /// The only field an update may touch, matching laravel's `UpdateNoteRequest`.
 /// Not `is_public` — a note that was public cannot go private after others have
 /// replied to it. Not the selection — a note whose passage moved is a different

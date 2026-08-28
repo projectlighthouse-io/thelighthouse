@@ -7,6 +7,7 @@
 //! `super::handler` decides what a caller is told.
 
 use sqlx::postgres::PgPool;
+use uuid::Uuid;
 
 use super::{note::Note, payload::ValidNote};
 use crate::request::Paging;
@@ -51,6 +52,8 @@ const COLUMNS: &str = "
     n.id,
     n.selected_text,
     n.note_content,
+    n.start_offset,
+    n.end_offset,
     n.created_at,
     n.lesson_id,
     l.slug AS lesson_slug,
@@ -71,13 +74,41 @@ const OWNED_AND_MATCHING: &str = "
           OR n.selected_text ILIKE $2
           OR n.note_content ILIKE $2
       )
+      AND ($3::uuid IS NULL OR n.lesson_id = $3)
 ";
+
+/// The lesson two slugs name, or `None` when there is no such book or lesson.
+///
+/// Its own query rather than a reuse of [`lesson_and_parent`], which exists to
+/// check a reply and answers about a parent nobody asked about here.
+pub(crate) async fn lesson_id(
+    db: &PgPool,
+    book: &str,
+    lesson: &str,
+) -> Result<Option<Uuid>, StoreError> {
+    let found = sqlx::query_as::<_, (Uuid,)>(
+        r"
+        SELECT l.id
+        FROM lessons l
+        JOIN books b ON b.id = l.book_id
+        WHERE b.slug = $1
+          AND l.slug = $2
+        ",
+    )
+    .bind(book)
+    .bind(lesson)
+    .fetch_optional(db)
+    .await?;
+
+    Ok(found.map(|(id,)| id))
+}
 
 /// One page of a reader's notes, newest first.
 pub(crate) async fn page(
     db: &PgPool,
     user_id: i64,
     pattern: Option<&str>,
+    lesson_id: Option<Uuid>,
     paging: Paging,
 ) -> Result<Vec<Note>, StoreError> {
     let sql = format!(
@@ -90,14 +121,15 @@ pub(crate) async fn page(
         -- `id` breaks ties, so two notes saved in the same second cannot swap
         -- between pages, which is how a listing drops and repeats rows.
         ORDER BY n.created_at DESC, n.id DESC
-        LIMIT $3
-        OFFSET $4
+        LIMIT $4
+        OFFSET $5
         "
     );
 
     Ok(sqlx::query_as::<_, Note>(&sql)
         .bind(user_id)
         .bind(pattern)
+        .bind(lesson_id)
         .bind(paging.per_page)
         .bind(paging.offset)
         .fetch_all(db)
@@ -113,12 +145,14 @@ pub(crate) async fn count(
     db: &PgPool,
     user_id: i64,
     pattern: Option<&str>,
+    lesson_id: Option<Uuid>,
 ) -> Result<i64, StoreError> {
     let sql = format!("SELECT count(n.id) FROM notes n {OWNED_AND_MATCHING}");
 
     let (total,) = sqlx::query_as::<_, (i64,)>(&sql)
         .bind(user_id)
         .bind(pattern)
+        .bind(lesson_id)
         .fetch_one(db)
         .await?;
 
@@ -130,7 +164,7 @@ pub(crate) async fn count(
 pub(crate) async fn insert(
     db: &PgPool,
     user_id: i64,
-    lesson_id: i64,
+    lesson_id: Uuid,
     payload: &ValidNote<'_>,
     is_public: bool,
     parent_id: Option<i64>,
@@ -154,6 +188,8 @@ pub(crate) async fn insert(
             RETURNING id,
                       selected_text,
                       note_content,
+                      start_offset,
+                      end_offset,
                       created_at,
                       lesson_id,
                       is_public,
@@ -200,6 +236,8 @@ pub(crate) async fn rewrite(
             RETURNING id,
                       selected_text,
                       note_content,
+                      start_offset,
+                      end_offset,
                       created_at,
                       lesson_id,
                       is_public,
@@ -248,8 +286,8 @@ pub(crate) async fn lesson_and_parent(
     book: &str,
     lesson: &str,
     parent_id: Option<i64>,
-) -> Result<Option<(i64, Option<bool>, Option<bool>)>, StoreError> {
-    Ok(sqlx::query_as::<_, (i64, Option<bool>, Option<bool>)>(
+) -> Result<Option<(Uuid, Option<bool>, Option<bool>)>, StoreError> {
+    Ok(sqlx::query_as::<_, (Uuid, Option<bool>, Option<bool>)>(
         r"
         SELECT l.id,
                p.parent_id IS NULL AS parent_is_root,

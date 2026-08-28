@@ -17,6 +17,7 @@ pub(crate) enum Refusal {
     BadAnchor,
     NestedReply,
     NoSuchNote,
+    HalfGivenFilter,
 }
 
 impl Refusal {
@@ -30,6 +31,7 @@ impl Refusal {
             Self::BadAnchor => "anchor_invalid",
             Self::NestedReply => "reply_not_top_level",
             Self::NoSuchNote => "note_not_found",
+            Self::HalfGivenFilter => "lesson_filter_incomplete",
         }
     }
 
@@ -50,6 +52,9 @@ impl Refusal {
             }
             Self::NestedReply => "You can only reply to top-level notes.",
             Self::NoSuchNote => "That note could not be found.",
+            Self::HalfGivenFilter => {
+                "Naming a lesson takes both a book and a lesson slug."
+            }
         }
     }
 }
@@ -65,13 +70,14 @@ mod tests {
 
     /// Every variant, so adding one fails here first — the prompt to give the
     /// frontend an entry for its code.
-    const REFUSALS: [Refusal; 6] = [
+    const REFUSALS: [Refusal; 7] = [
         Refusal::EmptyNote,
         Refusal::NoteTooLong,
         Refusal::SelectionTooLong,
         Refusal::BadAnchor,
         Refusal::NestedReply,
         Refusal::NoSuchNote,
+        Refusal::HalfGivenFilter,
     ];
 
     #[test]

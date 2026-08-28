@@ -13,7 +13,8 @@ use axum::{
 
 use super::{
     payload::{
-        EditNoteRequest, NewNoteRequest, validate_new_note, validate_note_body,
+        EditNoteRequest, LessonFilter, NewNoteRequest, validate_new_note,
+        validate_note_body,
     },
     refusal::{Refusal, refuse},
     store::{self, StoreError},
@@ -27,23 +28,54 @@ use crate::{
     session::Session,
 };
 
+/// A reader's notes, newest first: all of them, or one lesson's.
+///
+/// Two `Query` extractors, not one struct with five fields: paging and search
+/// are `request::ListQuery`'s and every listing has them, while the lesson pair
+/// is this endpoint's alone.
 pub(crate) async fn list(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
     Query(query): Query<ListQuery>,
+    Query(filter): Query<LessonFilter>,
 ) -> Response {
     let paging = query.paging(PageSize::DEFAULT);
     let pattern = query.pattern();
     let pattern = pattern.as_deref();
 
+    let lesson_id = match filter.slugs() {
+        Ok(None) => None,
+        Ok(Some((book, lesson))) => {
+            match store::lesson_id(&state.db, book, lesson).await {
+                // A lesson that is gone has no notes to show. Answering with
+                // an empty page rather than a 404 keeps a reader on a page
+                // whose content the api is still serving.
+                Ok(None) => return empty_page(paging),
+                Ok(Some(id)) => Some(id),
+                Err(error) => {
+                    tracing::error!(
+                        ?error,
+                        book,
+                        lesson,
+                        "failed to resolve the lesson"
+                    );
+                    return response::server_error();
+                }
+            }
+        }
+        Err(cause_of) => return refuse(cause_of),
+    };
+
     let Ok(notes) =
-        store::page(&state.db, session.user_id, pattern, paging).await
+        store::page(&state.db, session.user_id, pattern, lesson_id, paging)
+            .await
     else {
         tracing::error!(user_id = session.user_id, "failed to read notes");
         return response::server_error();
     };
 
-    let Ok(total) = store::count(&state.db, session.user_id, pattern).await
+    let Ok(total) =
+        store::count(&state.db, session.user_id, pattern, lesson_id).await
     else {
         tracing::error!(user_id = session.user_id, "failed to count notes");
         return response::server_error();
@@ -52,6 +84,15 @@ pub(crate) async fn list(
     json(
         StatusCode::OK,
         PaginatedResponse::new(notes, paging, total),
+        CachePolicy::NoStore,
+    )
+}
+
+/// The envelope with nothing in it, in the shape a client already reads.
+fn empty_page(paging: crate::request::Paging) -> Response {
+    json(
+        StatusCode::OK,
+        PaginatedResponse::<super::note::Note>::new(Vec::new(), paging, 0),
         CachePolicy::NoStore,
     )
 }
@@ -95,7 +136,7 @@ pub(crate) async fn create(
         Err(StoreError::LessonGone) => {
             tracing::info!(
                 user_id = session.user_id,
-                lesson_id,
+                %lesson_id,
                 "lesson deleted mid-write"
             );
             response::not_found()
@@ -104,7 +145,7 @@ pub(crate) async fn create(
             tracing::error!(
                 %error,
                 user_id = session.user_id,
-                lesson_id,
+                %lesson_id,
                 "failed to save the note"
             );
             response::server_error()

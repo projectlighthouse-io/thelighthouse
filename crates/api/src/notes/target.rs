@@ -4,6 +4,7 @@
 //! does not.
 
 use sqlx::postgres::PgPool;
+use uuid::Uuid;
 
 use super::{payload::NewNoteRequest, refusal::Refusal, store};
 
@@ -12,7 +13,7 @@ use super::{payload::NewNoteRequest, refusal::Refusal, store};
 pub(crate) enum NoteTarget {
     /// `LessonId`, not `Lesson`: it carries an id, and the content endpoints
     /// bring a real `Lesson` this must not be confused with.
-    LessonId(i64),
+    LessonId(Uuid),
     /// No such book or lesson.
     Missing,
     /// The parent named cannot be replied to. Carries what to tell the reader.

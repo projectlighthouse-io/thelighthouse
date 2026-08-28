@@ -14,12 +14,38 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use serde::Serialize;
+use chrono::{NaiveDateTime, SecondsFormat};
+use serde::{Serialize, Serializer};
 
 use crate::{
     cache::{self, CachePolicy},
     request::Paging,
 };
+
+/// A timestamp as ISO-8601 in UTC: `2026-08-22T23:27:31Z`.
+///
+/// **The `Z` is load-bearing.** chrono writes `NaiveDateTime` with no offset,
+/// and `new Date("2026-08-22T23:27:31")` in a browser reads a bare date-time as
+/// *local* time — so every row would shift by the reader's offset, silently.
+///
+/// Here rather than beside one row type because two carry timestamps now, and
+/// a second copy is a second chance to drop the `Z`.
+///
+/// `&Option<_>` rather than `Option<&_>` to match serde's `serialize_with`.
+#[allow(clippy::ref_option)]
+pub(crate) fn as_utc<S: Serializer>(
+    at: &Option<NaiveDateTime>,
+    out: S,
+) -> Result<S::Ok, S::Error> {
+    match at {
+        Some(at) => {
+            let utc = at.and_utc().to_rfc3339_opts(SecondsFormat::Secs, true);
+
+            out.serialize_str(&utc)
+        }
+        None => out.serialize_none(),
+    }
+}
 
 /// One page of results, as every listing answers.
 ///
