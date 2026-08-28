@@ -391,3 +391,45 @@
     line-height: 1.5;
     white-space: pre;
 }
+
+/* Heading anchors and where a jump lands.
+ *
+ * The renderer gives every heading an id and drops a deep-link <a class="anchor">
+ * inside it. Two things follow from that.
+ */
+
+/* A jump puts the heading hard against the top of the viewport, where it reads
+ * as the page having lost its first line. Land it a little below instead.
+ */
+.lesson-content :is(h1, h2, h3, h4) {
+    scroll-margin-top: 24px;
+}
+
+/* The injected anchor is empty, so it is invisible but still focusable — a
+ * keyboard user tabs through one per heading with nothing to see. Give it
+ * something on hover and, more importantly, on focus.
+ */
+.lesson-content .anchor {
+    margin-left: 0.4em;
+    opacity: 0;
+    text-decoration: none;
+    transition: opacity 120ms;
+}
+
+.lesson-content .anchor::after {
+    content: '#';
+}
+
+.lesson-content :is(h1, h2, h3, h4):hover .anchor,
+.lesson-content .anchor:focus-visible {
+    opacity: 0.45;
+}
+
+/* Smooth only where it is wanted: `prefers-reduced-motion` is a request from
+ * someone for whom motion is a symptom, not a preference.
+ */
+@media (prefers-reduced-motion: no-preference) {
+    html {
+        scroll-behavior: smooth;
+    }
+}
