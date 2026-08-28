@@ -210,6 +210,19 @@ pub(crate) mod fixture {
             "/../../fixture/mislabelled"
         ))
     }
+
+    /// A repo where two lessons claim the same id.
+    ///
+    /// Its own root for the same reason [`broken`] has one. Separate from it
+    /// because the mistakes are caught in different places — a slug that
+    /// disagrees with its folder is refused while parsing one file, and a
+    /// reused id is only visible once the whole repo has been walked.
+    pub(crate) fn duplicate_ids() -> Content {
+        Content::at(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../fixture/duplicate-ids"
+        ))
+    }
 }
 
 #[cfg(test)]

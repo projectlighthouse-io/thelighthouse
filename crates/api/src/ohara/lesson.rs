@@ -12,6 +12,23 @@ use super::{Content, Error, Status, body::Body, read};
 /// disagrees with, because it never states one.
 #[derive(Debug, Deserialize)]
 pub(crate) struct Lesson {
+    /// The lesson's permanent identity, and the only thing about it that never
+    /// changes.
+    ///
+    /// `notes.lesson_id` points at this. A note is anchored to a lesson by
+    /// character offsets into its body, so a note that follows the wrong id
+    /// lands on prose it was never written against — which is worse than a
+    /// note that fails to load. That is why this is authored and immutable
+    /// rather than derived from the slug or the folder number, both of which
+    /// move when a book is reordered or a title is retuned.
+    ///
+    /// Unique across every book, not just within one: `lessons.id` is a
+    /// primary key. [`Snapshot::load`] refuses a repo that reuses one.
+    ///
+    /// `None` for a lesson that has not been given one yet, for the same
+    /// reason [`super::book::Book::id`] is optional.
+    #[serde(default)]
+    pub(crate) id: Option<i64>,
     /// Checked against the folder name with its number stripped, for the reason
     /// `book` gives.
     pub(crate) slug: String,
@@ -141,6 +158,7 @@ mod tests {
             .lesson("fixture-book", "01-free-lesson")
             .unwrap();
 
+        assert_eq!(lesson.id, Some(1));
         assert_eq!(lesson.slug, "free-lesson");
         assert_eq!(lesson.title, "A Free Lesson");
         assert_eq!(lesson.status, Status::Published);

@@ -15,6 +15,7 @@
 
 use std::{
     collections::HashMap,
+    path::PathBuf,
     sync::{Arc, RwLock},
 };
 
@@ -62,7 +63,9 @@ impl Snapshot {
     ///
     /// Anything [`Content::book`] or [`Content::lesson`] refuses, and a lesson
     /// a chapter lists that is not on disk. A folder on disk that no chapter
-    /// lists is *not* an error — that is an unpublished draft.
+    /// lists is *not* an error — that is an unpublished draft. Two books or
+    /// two lessons claiming the same id is also an error, for the reason
+    /// [`unique_ids`] gives.
     pub(crate) fn load(content: &Content) -> Result<Self, Error> {
         let mut books = HashMap::new();
         let mut order = Vec::new();
@@ -78,7 +81,59 @@ impl Snapshot {
             order.push(slug);
         }
 
-        Ok(Self { books, order })
+        let snapshot = Self { books, order };
+        snapshot.unique_ids()?;
+
+        Ok(snapshot)
+    }
+
+    /// Refuses a repo where two books, or two lessons, claim the same id.
+    ///
+    /// The ids are hand written across one file per book and one per lesson,
+    /// and they are unique across the whole repo rather than within a book —
+    /// `books.id` and `lessons.id` are primary keys. Copying a lesson folder to
+    /// start a new one and forgetting to change the id is the obvious way to
+    /// break that, and it is not visible in either file on its own.
+    ///
+    /// The database would catch it eventually, as a primary key violation
+    /// during a sync. This catches it in `make content-check`, which is the
+    /// gate that runs before a deploy, and names both files instead of one id.
+    fn unique_ids(&self) -> Result<(), Error> {
+        let mut books = HashMap::new();
+        let mut lessons = HashMap::new();
+
+        for entry in self.books() {
+            if let Some(id) = entry.book.id
+                && let Some(seen) = books.insert(id, &entry.book.slug)
+            {
+                return Err(Error::Malformed {
+                    path: PathBuf::from(format!(
+                        "books/{}/book.yaml",
+                        entry.book.slug
+                    )),
+                    cause: format!("id {id} is already used by {seen}"),
+                });
+            }
+
+            for lesson in
+                entry.reading_order.iter().filter_map(|s| entry.lesson(s))
+            {
+                if let Some(id) = lesson.lesson.id
+                    && let Some(seen) =
+                        lessons.insert(id, lesson.lesson.slug.clone())
+                {
+                    return Err(Error::Malformed {
+                        path: PathBuf::from(format!(
+                            "books/{}/lessons/{}/lesson.yaml",
+                            entry.book.slug, lesson.folder
+                        )),
+                        cause: format!("id {id} is already used by {seen}"),
+                    });
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Published books, in directory order.
@@ -274,6 +329,18 @@ impl Catalog {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn two_lessons_claiming_one_id_are_refused_by_name() {
+        // The mistake this exists for: a lesson folder copied to start the
+        // next one, with the id left as it was. Neither file is wrong on its
+        // own, so nothing but a whole-repo pass can see it.
+        let error = Snapshot::load(&fixture::duplicate_ids()).unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("lesson.yaml"), "{message}");
+        assert!(message.contains("already used by"), "{message}");
+    }
     use std::{fs, path::PathBuf};
 
     use super::super::fixture;

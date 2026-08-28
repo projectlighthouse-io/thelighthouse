@@ -1,0 +1,14 @@
+# Two lessons claiming one id. Neither file is wrong on its own, which is the
+# whole point — only a walk of the repo can see it.
+id: 90
+slug: twice
+title: A Book That Numbers Twice
+status: published
+tier: foundation
+
+chapters:
+  - id: 1
+    title: The Only Chapter
+    lessons:
+      - "01-first"
+      - "02-second"
