@@ -3,7 +3,7 @@
 use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
-use crate::ohara::catalog::BookEntry;
+use ohara::catalog::BookEntry;
 
 /// What a reader gets, not whether they pass a test.
 ///
@@ -84,7 +84,7 @@ async fn holds(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ohara::{catalog::Snapshot, fixture};
+    use ohara::{catalog::Snapshot, fixture};
 
     fn fixture_book() -> Snapshot {
         Snapshot::load(&fixture::content()).unwrap()

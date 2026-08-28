@@ -1283,14 +1283,13 @@ dependencies = [
  "axum",
  "base64",
  "chrono",
- "comrak",
  "dotenvy",
  "form_urlencoded",
  "hmac",
  "loginwith",
+ "ohara",
  "serde",
  "serde_json",
- "serde_norway",
  "sha2",
  "sqlx",
  "subtle",
@@ -1299,7 +1298,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
- "walkdir",
 ]
 
 [[package]]
@@ -1491,6 +1489,17 @@ checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
 dependencies = [
  "hermit-abi",
  "libc",
+]
+
+[[package]]
+name = "ohara"
+version = "0.1.0"
+dependencies = [
+ "comrak",
+ "serde",
+ "serde_json",
+ "serde_norway",
+ "uuid",
 ]
 
 [[package]]

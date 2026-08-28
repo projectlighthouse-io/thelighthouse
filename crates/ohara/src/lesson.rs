@@ -12,7 +12,7 @@ use super::{Content, Error, Status, body::Body, read};
 /// the folder's own number — so a lesson cannot claim a position that the book
 /// disagrees with, because it never states one.
 #[derive(Debug, Deserialize)]
-pub(crate) struct Lesson {
+pub struct Lesson {
     /// The lesson's permanent identity, and the only thing about it that never
     /// changes.
     ///
@@ -32,16 +32,16 @@ pub(crate) struct Lesson {
     /// `None` for a lesson that has not been given one yet, for the same
     /// reason [`super::book::Book::id`] is optional.
     #[serde(default)]
-    pub(crate) id: Option<Uuid>,
+    pub id: Option<Uuid>,
     /// Checked against the folder name with its number stripped, for the reason
     /// `book` gives.
-    pub(crate) slug: String,
-    pub(crate) title: String,
-    pub(crate) description: Option<String>,
+    pub slug: String,
+    pub title: String,
+    pub description: Option<String>,
     #[serde(default)]
-    pub(crate) status: Status,
+    pub status: Status,
     #[serde(default)]
-    pub(crate) seo: LessonSeo,
+    pub seo: LessonSeo,
 }
 
 /// A lesson folder name, taken apart: `07-borrowing` is 7 and `borrowing`.
@@ -50,16 +50,16 @@ pub(crate) struct Lesson {
 /// A folder that is not `<number>-<slug>` has no place in the book's order, and
 /// guessing one would put a lesson somewhere nobody chose.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) struct Folder {
-    pub(crate) sort_order: i32,
-    pub(crate) slug: String,
+pub struct Folder {
+    pub sort_order: i32,
+    pub slug: String,
 }
 
 impl Folder {
     /// # Errors
     ///
     /// No `-`, or a number that is not one.
-    pub(crate) fn parse(name: &str) -> Result<Self, String> {
+    pub fn parse(name: &str) -> Result<Self, String> {
         let (order, slug) = name
             .split_once('-')
             .ok_or_else(|| format!("{name:?} is not <number>-<slug>"))?;
@@ -85,10 +85,10 @@ impl Folder {
 /// The shared `meta_` prefix is the column naming, not a stutter.
 #[allow(clippy::struct_field_names)]
 #[derive(Debug, Default, Deserialize)]
-pub(crate) struct LessonSeo {
-    pub(crate) meta_title: Option<String>,
-    pub(crate) meta_description: Option<String>,
-    pub(crate) meta_keywords: Option<String>,
+pub struct LessonSeo {
+    pub meta_title: Option<String>,
+    pub meta_description: Option<String>,
+    pub meta_keywords: Option<String>,
 }
 
 impl Content {
@@ -101,11 +101,7 @@ impl Content {
     ///
     /// As [`Content::book`]: absent, unparseable, or a slug that disagrees with
     /// its folder. Also a folder name that is not `<number>-<slug>`.
-    pub(crate) fn lesson(
-        &self,
-        book: &str,
-        folder: &str,
-    ) -> Result<Lesson, Error> {
+    pub fn lesson(&self, book: &str, folder: &str) -> Result<Lesson, Error> {
         let path = self.lesson_dir(book, folder).join("lesson.yaml");
         let named =
             Folder::parse(folder).map_err(|cause| Error::Malformed {
@@ -144,7 +140,7 @@ impl Content {
     /// # Errors
     ///
     /// The markdown being absent or unreadable.
-    pub(crate) fn body(&self, book: &str, folder: &str) -> Result<Body, Error> {
+    pub fn body(&self, book: &str, folder: &str) -> Result<Body, Error> {
         let path = self.lesson_dir(book, folder).join("lesson.md");
 
         Ok(Body::split(&read(&path)?))

@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/api", "crates/loginwith", "crates/migrate"]
+members = [
+    "crates/api",
+    "crates/loginwith",
+    "crates/migrate",
+    "crates/ohara",
+]
 
 # Declared once here and inherited by every crate, so a new crate cannot opt
 # out by forgetting to repeat them.

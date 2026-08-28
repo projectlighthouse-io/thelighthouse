@@ -14,7 +14,7 @@ use super::{Content, Error, Status, Tier, lesson::Folder, price::Price, read};
 /// `is_published`, `required_tier`, `lab_slug`, `details_component`,
 /// `visibility_level` — went with the migrations that dropped those columns.
 #[derive(Debug, Deserialize)]
-pub(crate) struct Book {
+pub struct Book {
     /// The book's permanent identity, and the only thing about it that never
     /// changes.
     ///
@@ -34,24 +34,24 @@ pub(crate) struct Book {
     /// entitlement row could name it — and answering that is better than
     /// refusing to parse the file.
     #[serde(default)]
-    pub(crate) id: Option<Uuid>,
+    pub id: Option<Uuid>,
     /// Checked against the directory name. They can disagree, and a book whose
     /// yaml claims a different slug would sync into the wrong row.
-    pub(crate) slug: String,
-    pub(crate) title: String,
-    pub(crate) description: Option<String>,
+    pub slug: String,
+    pub title: String,
+    pub description: Option<String>,
     #[serde(default)]
-    pub(crate) status: Status,
+    pub status: Status,
     #[serde(default)]
-    pub(crate) tier: Tier,
-    pub(crate) thumbnail_url: Option<String>,
+    pub tier: Tier,
+    pub thumbnail_url: Option<String>,
     /// Absent is free.
     #[serde(default)]
-    pub(crate) price: Price,
+    pub price: Price,
     #[serde(default)]
-    pub(crate) chapters: Vec<Chapter>,
+    pub chapters: Vec<Chapter>,
     #[serde(default)]
-    pub(crate) seo: Seo,
+    pub seo: Seo,
 }
 
 impl Book {
@@ -60,14 +60,15 @@ impl Book {
     /// Reading order is chapter order then position within the chapter, both of
     /// which are array position. A lesson on disk that no chapter lists is not
     /// here, and is not published — see [`Content::book`].
-    pub(crate) fn lesson_folders(&self) -> impl Iterator<Item = &str> {
+    pub fn lesson_folders(&self) -> impl Iterator<Item = &str> {
         self.chapters
             .iter()
             .flat_map(|chapter| chapter.lessons.iter().map(String::as_str))
     }
 
     /// Where "start reading" goes.
-    pub(crate) fn first_lesson_folder(&self) -> Option<&str> {
+    #[must_use]
+    pub fn first_lesson_folder(&self) -> Option<&str> {
         self.lesson_folders().next()
     }
 }
@@ -79,14 +80,14 @@ impl Book {
 /// No `sort_order`: chapters are ordered by their position in the file, which
 /// is the order they are read in anyway.
 #[derive(Debug, Deserialize)]
-pub(crate) struct Chapter {
+pub struct Chapter {
     /// Stable across reordering, because `lessons.chapter_id` in the database
     /// points at it and moving a chapter must not repoint every lesson.
-    pub(crate) id: i32,
-    pub(crate) title: String,
+    pub id: i32,
+    pub title: String,
     /// Lesson folder names — `07-borrowing`, the thing on disk.
     #[serde(default)]
-    pub(crate) lessons: Vec<String>,
+    pub lessons: Vec<String>,
 }
 
 /// Everything a crawler reads, and nothing a reader does.
@@ -95,13 +96,13 @@ pub(crate) struct Chapter {
 /// a book without a `meta_title` falls back to its title, and a book without a
 /// title is a bug.
 #[derive(Debug, Default, Deserialize)]
-pub(crate) struct Seo {
-    pub(crate) meta_title: Option<String>,
-    pub(crate) meta_description: Option<String>,
-    pub(crate) meta_keywords: Option<String>,
-    pub(crate) og_title: Option<String>,
-    pub(crate) og_description: Option<String>,
-    pub(crate) og_image: Option<String>,
+pub struct Seo {
+    pub meta_title: Option<String>,
+    pub meta_description: Option<String>,
+    pub meta_keywords: Option<String>,
+    pub og_title: Option<String>,
+    pub og_description: Option<String>,
+    pub og_image: Option<String>,
 }
 
 impl Book {
@@ -156,7 +157,7 @@ impl Content {
     /// row, or create a second one nobody meant. Also chapters that share an
     /// id, a lesson listed twice, or lesson numbers that disagree with the
     /// order the chapters put them in.
-    pub(crate) fn book(&self, slug: &str) -> Result<Book, Error> {
+    pub fn book(&self, slug: &str) -> Result<Book, Error> {
         let path = self.book_dir(slug).join("book.yaml");
         let raw = read(&path)?;
 

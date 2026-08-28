@@ -30,7 +30,7 @@ use super::{
 /// request holding an `Arc` to it keeps reading a consistent view even while
 /// the next one is being built.
 #[derive(Debug)]
-pub(crate) struct Snapshot {
+pub struct Snapshot {
     books: HashMap<String, BookEntry>,
     /// Book slugs, in the order [`Content::book_slugs`] found them.
     order: Vec<String>,
@@ -38,8 +38,8 @@ pub(crate) struct Snapshot {
 
 /// A book and its lessons, already in reading order.
 #[derive(Debug)]
-pub(crate) struct BookEntry {
-    pub(crate) book: Book,
+pub struct BookEntry {
+    pub book: Book,
     lessons: HashMap<String, LessonEntry>,
     /// Lesson slugs, chapter order then position within the chapter.
     reading_order: Vec<String>,
@@ -47,13 +47,13 @@ pub(crate) struct BookEntry {
 
 /// A lesson, and the two things about it that are not in its yaml.
 #[derive(Debug)]
-pub(crate) struct LessonEntry {
-    pub(crate) lesson: Lesson,
+pub struct LessonEntry {
+    pub lesson: Lesson,
     /// The folder on disk — `07-borrowing`. A url carries the slug, the
     /// filesystem needs the number, and this is the only place the two meet.
-    pub(crate) folder: String,
-    pub(crate) sort_order: i32,
-    pub(crate) chapter_id: i32,
+    pub folder: String,
+    pub sort_order: i32,
+    pub chapter_id: i32,
 }
 
 impl Snapshot {
@@ -66,7 +66,7 @@ impl Snapshot {
     /// lists is *not* an error — that is an unpublished draft. Two books or
     /// two lessons claiming the same id is also an error, for the reason
     /// [`unique_ids`] gives.
-    pub(crate) fn load(content: &Content) -> Result<Self, Error> {
+    pub fn load(content: &Content) -> Result<Self, Error> {
         let mut books = HashMap::new();
         let mut order = Vec::new();
 
@@ -137,19 +137,17 @@ impl Snapshot {
     }
 
     /// Published books, in directory order.
-    pub(crate) fn books(&self) -> impl Iterator<Item = &BookEntry> {
+    pub fn books(&self) -> impl Iterator<Item = &BookEntry> {
         self.order.iter().filter_map(|slug| self.books.get(slug))
     }
 
-    pub(crate) fn book(&self, slug: &str) -> Option<&BookEntry> {
+    #[must_use]
+    pub fn book(&self, slug: &str) -> Option<&BookEntry> {
         self.books.get(slug)
     }
 
-    pub(crate) fn lesson(
-        &self,
-        book: &str,
-        lesson: &str,
-    ) -> Option<&LessonEntry> {
+    #[must_use]
+    pub fn lesson(&self, book: &str, lesson: &str) -> Option<&LessonEntry> {
         self.books.get(book)?.lesson(lesson)
     }
 }
@@ -202,18 +200,20 @@ impl BookEntry {
     }
 
     /// Published lessons, in reading order.
-    pub(crate) fn lessons(&self) -> impl Iterator<Item = &LessonEntry> {
+    pub fn lessons(&self) -> impl Iterator<Item = &LessonEntry> {
         self.reading_order
             .iter()
             .filter_map(|slug| self.lessons.get(slug))
     }
 
-    pub(crate) fn lesson(&self, slug: &str) -> Option<&LessonEntry> {
+    #[must_use]
+    pub fn lesson(&self, slug: &str) -> Option<&LessonEntry> {
         self.lessons.get(slug)
     }
 
     /// Where "start reading" goes — the first published lesson.
-    pub(crate) fn first_lesson(&self) -> Option<&LessonEntry> {
+    #[must_use]
+    pub fn first_lesson(&self) -> Option<&LessonEntry> {
         self.lessons().next()
     }
 
@@ -222,10 +222,7 @@ impl BookEntry {
     /// Both `None` for a lesson that is not in this book, which is the same
     /// answer a one-lesson book gives — the caller has already established the
     /// lesson exists before it wants to know what is next to it.
-    pub(crate) fn neighbours(
-        &self,
-        slug: &str,
-    ) -> (Option<&str>, Option<&str>) {
+    pub fn neighbours(&self, slug: &str) -> (Option<&str>, Option<&str>) {
         let Some(at) = self.reading_order.iter().position(|s| s == slug) else {
             return (None, None);
         };
@@ -247,7 +244,7 @@ impl BookEntry {
 /// clone of the current [`Snapshot`] and let go of the lock immediately, so a
 /// reload never blocks a read for longer than a pointer swap.
 #[derive(Debug)]
-pub(crate) struct Catalog {
+pub struct Catalog {
     content: Content,
     current: RwLock<Arc<Snapshot>>,
 }
@@ -260,7 +257,7 @@ impl Catalog {
     /// As [`Snapshot::load`]. Failing here should stop the process: there is no
     /// previous snapshot to fall back on, and a site that boots with no content
     /// looks broken rather than down.
-    pub(crate) fn load(content: Content) -> Result<Self, Error> {
+    pub fn load(content: Content) -> Result<Self, Error> {
         let snapshot = Snapshot::load(&content)?;
 
         Ok(Self {
@@ -270,7 +267,7 @@ impl Catalog {
     }
 
     /// The snapshot as it is right now.
-    pub(crate) fn current(&self) -> Arc<Snapshot> {
+    pub fn current(&self) -> Arc<Snapshot> {
         match self.current.read() {
             Ok(current) => Arc::clone(&current),
             // A writer panicked while holding the lock. The data behind it is
@@ -290,7 +287,7 @@ impl Catalog {
     ///
     /// As [`Snapshot::load`] — and on error the previous snapshot stays in
     /// place, so a typo in one lesson does not empty the site.
-    pub(crate) fn reload(&self) -> Result<(), Error> {
+    pub fn reload(&self) -> Result<(), Error> {
         let rebuilt = Arc::new(Snapshot::load(&self.content)?);
 
         match self.current.write() {
@@ -310,7 +307,7 @@ impl Catalog {
     /// # Errors
     ///
     /// The lesson is in the catalogue but its markdown cannot be read.
-    pub(crate) fn body(
+    pub fn body(
         &self,
         book: &str,
         lesson: &str,

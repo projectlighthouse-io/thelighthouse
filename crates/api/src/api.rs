@@ -18,6 +18,7 @@ use axum::{
     routing::get,
 };
 use loginwith::Providers;
+use ohara::catalog::Catalog;
 use sqlx::postgres::PgPool;
 
 use crate::{
@@ -27,9 +28,7 @@ use crate::{
     db,
     limit::RateLimit,
     middleware::signature::require_signature,
-    notes,
-    ohara::catalog::Catalog,
-    telemetry,
+    notes, telemetry,
 };
 
 /// What every handler can reach. Cheap to clone — `PgPool` and `Providers` are

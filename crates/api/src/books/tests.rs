@@ -9,7 +9,7 @@ use axum::{
 use serde_json::Value;
 use tower::ServiceExt as _;
 
-use crate::{config::Config, ohara};
+use crate::config::Config;
 
 fn router() -> axum::Router {
     let config = Config::sample();

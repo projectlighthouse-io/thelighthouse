@@ -8,6 +8,16 @@ workspace = true
 
 [dependencies]
 loginwith = { path = "../loginwith" }
+# Reads the content repo: yaml beside markdown, walked from `CONTENT_PATH`. Its
+# own crate because two binaries read it — this one serves it,
+# `lighthouse-content` writes its metadata into postgres.
+#
+# `../ohara` is `crates/ohara`, in this repo — cargo resolves a path dependency
+# against the manifest's directory, so this is the same kind of in-tree link as
+# `loginwith` above. It is *not* the private content repo, which happens to
+# share the name and is found at runtime through `CONTENT_PATH`. A clone with no
+# access to that repo still builds and tests: `fixture/` is the stand-in.
+ohara = { path = "../ohara" }
 axum = "0.8"
 # `derive` but not `macros` — and they are not the same thing. sqlx defines
 # `macros = ["derive", "sqlx-macros/macros"]`, so the narrower half can be taken
@@ -31,25 +41,10 @@ sqlx = { version = "0.8", default-features = false, features = [
     "chrono",
     "uuid",
 ] }
-# The content repo: yaml beside markdown, walked from `CONTENT_PATH`.
-#
-# `serde_norway`, not `serde_yaml` — dtolnay archived that one and its published
-# version literally reads `0.9.34+deprecated`; `serde_yml` says "DEPRECATED —
-# unmaintained" on the tin. This is the fork that is still maintained, and a
-# public repo should not ship a dependency that announces its own abandonment.
-serde_norway = "0.9"
-
-# A book's and a lesson's identity, read out of the content yaml. No `v4`: this
-# crate never mints one. The content repo states it, which is the whole reason
-# it is a uuid — a number would have to be assigned by whoever can see all the
-# others, and that is the database, after the insert, too late for a file.
+# `entitlements.book_id`. The value is minted in the content repo and only read
+# here — `ohara` re-exports the type on its structs, but a column bound in this
+# crate's own SQL needs it nameable.
 uuid = { version = "1", features = ["serde"] }
-# GFM, not plain CommonMark. The laravel app renders lessons with
-# `GithubFlavoredMarkdownExtension`, so tables, strikethrough and task lists are
-# already in the prose. comrak is the cmark-gfm port and matches it;
-# pulldown-cmark is lighter but differs at exactly those edges.
-comrak = "0.54"
-walkdir = "2"
 # Already in the tree — sqlx's `chrono` feature pulls it — but not nameable
 # without being declared. Timestamp columns decode as `NaiveDateTime` and are
 # formatted here rather than by `to_char` in every query that selects one.
@@ -75,6 +70,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [dev-dependencies]
+# The fake content repo, which is `cfg(test)`-invisible across a crate boundary
+# and so arrives as a feature. Dev-only: the fixture is not in the release
+# binary.
+ohara = { path = "../ohara", features = ["testing"] }
 # Drives the real router in-process, so the route tests exercise the mounting
 # and the layers rather than calling the handlers directly and proving nothing
 # about where they are reachable from.

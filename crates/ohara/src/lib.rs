@@ -40,33 +40,32 @@
 //!   ppp.rs     what it costs somewhere poorer
 //! ```
 
-// Nothing reads the content repo yet — the sync binary and the lesson endpoint
-// are the next two commits. Holding the layout in someone's head until then is
-// how a directory convention ends up implemented twice, differently. This allow
-// goes with the first reader.
+// Two crates read this one and neither reads all of it: the api never syncs and
+// `lighthouse-content` never serves. A field that only one of them wants is
+// still part of the file format, so it is parsed either way.
 #![allow(dead_code)]
 
-pub(crate) mod body;
-pub(crate) mod book;
-pub(crate) mod catalog;
-pub(crate) mod lesson;
-pub(crate) mod ppp;
-pub(crate) mod price;
-pub(crate) mod status;
+pub mod body;
+pub mod book;
+pub mod catalog;
+pub mod lesson;
+pub mod ppp;
+pub mod price;
+pub mod status;
 
 use std::{
     io,
     path::{Path, PathBuf},
 };
 
-pub(crate) use status::{Status, Tier};
+pub use status::{Status, Tier};
 
 /// What went wrong reading the content repo.
 ///
 /// Every variant names the path, because the first question about any of these
 /// is "which file" and a bare `io::Error` does not say.
 #[derive(Debug)]
-pub(crate) enum Error {
+pub enum Error {
     /// The path does not exist, or cannot be read.
     Unreadable { path: PathBuf, cause: io::Error },
     /// The file is there and is not what it claims to be.
@@ -103,12 +102,12 @@ impl std::fmt::Display for Error {
 /// per-call, and whatever caches goes in front of this rather than inside it,
 /// so the CLI can expire that cache without this type having an opinion.
 #[derive(Clone, Debug)]
-pub(crate) struct Content {
+pub struct Content {
     root: PathBuf,
 }
 
 impl Content {
-    pub(crate) fn at(root: impl Into<PathBuf>) -> Self {
+    pub fn at(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
     }
 
@@ -125,7 +124,7 @@ impl Content {
     /// # Errors
     ///
     /// `books/` missing or unreadable.
-    pub(crate) fn book_slugs(&self) -> Result<Vec<String>, Error> {
+    pub fn book_slugs(&self) -> Result<Vec<String>, Error> {
         dirs_in(&self.books_dir())
     }
 
@@ -142,18 +141,17 @@ impl Content {
     /// # Errors
     ///
     /// The book's `lessons/` missing or unreadable.
-    pub(crate) fn lesson_folders(
-        &self,
-        book: &str,
-    ) -> Result<Vec<String>, Error> {
+    pub fn lesson_folders(&self, book: &str) -> Result<Vec<String>, Error> {
         dirs_in(&self.book_dir(book).join("lessons"))
     }
 
-    pub(crate) fn book_dir(&self, book: &str) -> PathBuf {
+    #[must_use]
+    pub fn book_dir(&self, book: &str) -> PathBuf {
         self.books_dir().join(book)
     }
 
-    pub(crate) fn lesson_dir(&self, book: &str, folder: &str) -> PathBuf {
+    #[must_use]
+    pub fn lesson_dir(&self, book: &str, folder: &str) -> PathBuf {
         self.book_dir(book).join("lessons").join(folder)
     }
 }
@@ -179,15 +177,26 @@ fn dirs_in(dir: &Path) -> Result<Vec<String>, Error> {
 }
 
 /// Reads a file, naming it if that fails.
-pub(crate) fn read(path: &Path) -> Result<String, Error> {
+///
+/// # Errors
+///
+/// [`Error::Unreadable`], carrying the path. Which file could not be read is
+/// the only useful thing about this failure, and a bare `io::Error` drops it.
+pub fn read(path: &Path) -> Result<String, Error> {
     std::fs::read_to_string(path).map_err(|cause| Error::Unreadable {
         path: path.to_owned(),
         cause,
     })
 }
 
-#[cfg(test)]
-pub(crate) mod fixture {
+/// Behind a feature rather than `cfg(test)`, which only applies while *this*
+/// crate's own tests compile. The api's tests build a router against the fake
+/// repo, and a dependency's `cfg(test)` items are invisible to a dependent —
+/// so the feature is what carries the fixture across the crate boundary.
+///
+/// Enabled as a dev-dependency only, so nothing ships in a release binary.
+#[cfg(any(test, feature = "testing"))]
+pub mod fixture {
     use super::Content;
 
     /// The thin, fake content repo this crate ships for tests.
@@ -195,7 +204,8 @@ pub(crate) mod fixture {
     /// Loads cleanly, end to end. Everything deliberately wrong lives in
     /// [`broken`] instead, because a catalogue walks the whole repo and one
     /// planted mistake would make every test about something else fail.
-    pub(crate) fn content() -> Content {
+    #[must_use]
+    pub fn content() -> Content {
         Content::at(concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixture"))
     }
 
@@ -204,7 +214,8 @@ pub(crate) mod fixture {
     ///
     /// Its own root, sitting *beside* `fixture/books/` rather than inside it,
     /// which is what keeps it out of every walk that is not looking for it.
-    pub(crate) fn broken() -> Content {
+    #[must_use]
+    pub fn broken() -> Content {
         Content::at(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../fixture/mislabelled"
@@ -217,7 +228,8 @@ pub(crate) mod fixture {
     /// because the mistakes are caught in different places — a slug that
     /// disagrees with its folder is refused while parsing one file, and a
     /// reused id is only visible once the whole repo has been walked.
-    pub(crate) fn duplicate_ids() -> Content {
+    #[must_use]
+    pub fn duplicate_ids() -> Content {
         Content::at(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../fixture/duplicate-ids"

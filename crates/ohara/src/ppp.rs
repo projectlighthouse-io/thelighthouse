@@ -13,11 +13,11 @@ use super::{Content, Error, price::Price, read};
 /// and a rate kept per book would be the same number copied once per title,
 /// with one of the copies eventually stale.
 #[derive(Debug, Deserialize)]
-pub(crate) struct Ppp {
+pub struct Ppp {
     /// Minor units. No sale lands below this: under roughly $2 the card fee is
     /// most of the charge, and Stripe refuses under $0.50 outright.
-    pub(crate) floor: i32,
-    pub(crate) tiers: Vec<Tier>,
+    pub floor: i32,
+    pub tiers: Vec<Tier>,
 }
 
 /// A discount, and everyone who gets it.
@@ -26,11 +26,11 @@ pub(crate) struct Ppp {
 /// countries rather than listed against each. `percent_off` is Stripe's field
 /// name in Stripe's units, so creating the coupon copies rather than converts.
 #[derive(Debug, Deserialize)]
-pub(crate) struct Tier {
-    pub(crate) percent_off: u8,
+pub struct Tier {
+    pub percent_off: u8,
     /// ISO 3166-1 alpha-2. Compared case-insensitively, because Cloudflare
     /// sends `BD` and the file reads better as `bd`.
-    pub(crate) countries: Vec<String>,
+    pub countries: Vec<String>,
 }
 
 /// What to actually charge, and whether Stripe can show it as a discount.
@@ -41,11 +41,11 @@ pub(crate) struct Tier {
 /// instead. The buyer then pays the floor without seeing a discount line —
 /// correct, and rare enough to be worth the plainness.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Charge {
+pub struct Charge {
     /// Minor units to send as the checkout amount.
-    pub(crate) amount: i32,
+    pub amount: i32,
     /// The coupon to apply on top, or `None` when `amount` is already final.
-    pub(crate) percent_off: Option<u8>,
+    pub percent_off: Option<u8>,
 }
 
 impl Ppp {
@@ -53,7 +53,8 @@ impl Ppp {
     ///
     /// Cloudflare's `XX` (unknown) and `T1` (Tor) match nothing and so pay full
     /// price, without either needing to be named here.
-    pub(crate) fn tier_for(&self, country: &str) -> Option<&Tier> {
+    #[must_use]
+    pub fn tier_for(&self, country: &str) -> Option<&Tier> {
         self.tiers.iter().find(|tier| {
             tier.countries
                 .iter()
@@ -62,7 +63,8 @@ impl Ppp {
     }
 
     /// What a book costs someone in `country`.
-    pub(crate) fn charge(&self, price: Price, country: &str) -> Charge {
+    #[must_use]
+    pub fn charge(&self, price: Price, country: &str) -> Charge {
         let full = Charge {
             amount: price.amount,
             percent_off: None,
@@ -150,7 +152,7 @@ impl Content {
     ///
     /// The file being absent or unparseable, or describing a discount that
     /// Stripe would refuse or that two tiers both claim.
-    pub(crate) fn ppp(&self) -> Result<Ppp, Error> {
+    pub fn ppp(&self) -> Result<Ppp, Error> {
         let path = self.root.join("pricing").join("ppp.yaml");
         let raw = read(&path)?;
 

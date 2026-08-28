@@ -15,7 +15,6 @@ mod db;
 mod limit;
 mod middleware;
 mod notes;
-mod ohara;
 mod request;
 mod response;
 mod session;

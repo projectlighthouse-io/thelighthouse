@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum Status {
+pub enum Status {
     #[default]
     /// Written, synced, and not for readers yet. A local run shows drafts so
     /// they can be read while being written; production does not, which is the
@@ -58,7 +58,7 @@ pub(crate) enum Status {
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum Tier {
+pub enum Tier {
     #[default]
     /// Assumes a working knowledge of one language and nothing else.
     Foundation,
@@ -71,7 +71,8 @@ pub(crate) enum Tier {
 impl Status {
     /// The stored representation. Paired with [`Status::from_db`]; changing one
     /// without the other silently remaps every row in the table.
-    pub(crate) const fn as_db(self) -> i16 {
+    #[must_use]
+    pub const fn as_db(self) -> i16 {
         match self {
             Self::Draft => 0,
             Self::Published => 1,
@@ -84,7 +85,8 @@ impl Status {
     /// the set means the database and this enum have drifted, and quietly
     /// treating it as unpublished would hide that for as long as nobody
     /// noticed the missing book.
-    pub(crate) const fn from_db(value: i16) -> Option<Self> {
+    #[must_use]
+    pub const fn from_db(value: i16) -> Option<Self> {
         match value {
             0 => Some(Self::Draft),
             1 => Some(Self::Published),
@@ -94,7 +96,8 @@ impl Status {
 }
 
 impl Tier {
-    pub(crate) const fn as_db(self) -> i16 {
+    #[must_use]
+    pub const fn as_db(self) -> i16 {
         match self {
             Self::Foundation => 0,
             Self::Intermediate => 1,
@@ -103,7 +106,8 @@ impl Tier {
     }
 
     /// `None` for anything outside the set — see [`Status::from_db`].
-    pub(crate) const fn from_db(value: i16) -> Option<Self> {
+    #[must_use]
+    pub const fn from_db(value: i16) -> Option<Self> {
         match value {
             0 => Some(Self::Foundation),
             1 => Some(Self::Intermediate),

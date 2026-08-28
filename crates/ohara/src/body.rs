@@ -10,7 +10,7 @@ use comrak::{Options, markdown_to_html};
 ///
 /// Matched on its own line and trimmed, so trailing whitespace in an editor
 /// does not silently stop it being a marker.
-pub(crate) const PAYWALL: &str = "<!-- paywall -->";
+pub const PAYWALL: &str = "<!-- paywall -->";
 
 /// A lesson split at the paywall.
 ///
@@ -26,14 +26,15 @@ pub(crate) const PAYWALL: &str = "<!-- paywall -->";
 /// who is entitled, so `paid` must never reach a response that a cache may hold
 /// — see `docs/rebuild.md`.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) struct Body {
-    pub(crate) free: String,
-    pub(crate) paid: Option<String>,
+pub struct Body {
+    pub free: String,
+    pub paid: Option<String>,
 }
 
 impl Body {
     /// Splits raw markdown at the marker. Nothing is rendered here.
-    pub(crate) fn split(markdown: &str) -> Self {
+    #[must_use]
+    pub fn split(markdown: &str) -> Self {
         let Some((free, paid)) = cut(markdown) else {
             return Self {
                 free: markdown.trim().to_owned(),
@@ -52,7 +53,8 @@ impl Body {
     /// A marker with nothing after it is not a paywall, so an editor who leaves
     /// one at the end of a draft does not accidentally show a "read the rest"
     /// call to action that leads to no rest.
-    pub(crate) fn has_paid_part(&self) -> bool {
+    #[must_use]
+    pub fn has_paid_part(&self) -> bool {
         self.paid.as_ref().is_some_and(|paid| !paid.is_empty())
     }
 }
@@ -83,7 +85,8 @@ fn cut(markdown: &str) -> Option<(&str, &str)> {
 /// the source is *not* enabled: the content repo is trusted, but a renderer
 /// that passes html through is one script tag away from being the reason a
 /// paywalled page leaks.
-pub(crate) fn render(markdown: &str) -> String {
+#[must_use]
+pub fn render(markdown: &str) -> String {
     let mut options = Options::default();
 
     options.extension.table = true;
@@ -97,9 +100,9 @@ pub(crate) fn render(markdown: &str) -> String {
 
 /// A heading in the table of contents, and the anchor it scrolls to.
 #[derive(Debug, PartialEq, Eq, serde::Serialize)]
-pub(crate) struct Heading {
-    pub(crate) id: String,
-    pub(crate) text: String,
+pub struct Heading {
+    pub id: String,
+    pub text: String,
 }
 
 /// The `##` headings, in order.
@@ -109,7 +112,8 @@ pub(crate) struct Heading {
 ///
 /// Fenced code is skipped, because `# comment` inside a shell block is not a
 /// heading and a contents list full of them is worse than none.
-pub(crate) fn headings(markdown: &str) -> Vec<Heading> {
+#[must_use]
+pub fn headings(markdown: &str) -> Vec<Heading> {
     let mut fenced = false;
 
     markdown
@@ -146,7 +150,8 @@ fn anchor(heading: &str) -> String {
 ///
 /// Counts the markdown rather than the html, so tags are not words. It is an
 /// estimate on the page and treated as one.
-pub(crate) fn read_minutes(markdown: &str) -> usize {
+#[must_use]
+pub fn read_minutes(markdown: &str) -> usize {
     let words = markdown.split_whitespace().count();
 
     (words.div_ceil(220)).max(1)

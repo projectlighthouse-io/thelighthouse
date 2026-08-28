@@ -1,0 +1,43 @@
+[package]
+name = "ohara"
+version = "0.1.0"
+edition = "2024"
+description = "Reads the content repo. Books, lessons, prices — what is on disk and what shape it has."
+
+[lints]
+workspace = true
+
+[features]
+# The fake content repo in `fixture/`, exposed across the crate boundary. A
+# `cfg(test)` module is invisible to a dependent, and the api's route tests need
+# a catalogue to build a router against. Dev-dependency only — see `fixture`.
+testing = []
+
+[dependencies]
+# `serde_norway`, not `serde_yaml` — dtolnay archived that one and its published
+# version literally reads `0.9.34+deprecated`; `serde_yml` says "DEPRECATED —
+# unmaintained" on the tin. This is the fork that is still maintained, and a
+# public repo should not ship a dependency that announces its own abandonment.
+serde_norway = "0.9"
+serde = { version = "1", features = ["derive"] }
+
+# A book's and a lesson's identity, read out of the content yaml. No `v4`: this
+# crate never mints one. The content repo states it, which is the whole reason
+# it is a uuid — a number would have to be assigned by whoever can see all the
+# others, and that is the database, after the insert, too late for a file.
+uuid = { version = "1", features = ["serde"] }
+
+# GFM, not plain CommonMark. The laravel app renders lessons with
+# `GithubFlavoredMarkdownExtension`, so tables, strikethrough and task lists are
+# already in the prose. comrak is the cmark-gfm port and matches it;
+# pulldown-cmark is lighter but differs at exactly those edges.
+comrak = "0.54"
+
+# No sqlx here, deliberately. This crate knows what the content *is*; writing it
+# into postgres is `lighthouse-content`'s job, and keeping the two apart is what
+# stops the api — which only ever reads — linking a database writer at all.
+
+[dev-dependencies]
+# The wire format assertions in `status`: the frontend reads names, not the
+# numbers the columns store.
+serde_json = "1"

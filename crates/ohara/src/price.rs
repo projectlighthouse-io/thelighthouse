@@ -13,15 +13,16 @@ use serde::{Deserialize, Serialize};
 /// Stripe login *and* a commit; the amount is sent inline at checkout instead,
 /// and changing it is a commit alone.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
-pub(crate) struct Price {
+pub struct Price {
     /// Minor units. Zero is free, and free is a real answer — not every book
     /// is sold.
-    pub(crate) amount: i32,
-    pub(crate) currency: Currency,
+    pub amount: i32,
+    pub currency: Currency,
 }
 
 impl Price {
-    pub(crate) const fn is_free(self) -> bool {
+    #[must_use]
+    pub const fn is_free(self) -> bool {
         self.amount == 0
     }
 }
@@ -36,7 +37,7 @@ impl Price {
     Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq,
 )]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum Currency {
+pub enum Currency {
     #[default]
     Usd,
 }

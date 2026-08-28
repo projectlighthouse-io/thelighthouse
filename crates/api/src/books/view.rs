@@ -6,7 +6,7 @@
 
 use serde::Serialize;
 
-use crate::ohara::{
+use ohara::{
     body::{self, Body, Heading},
     catalog::{BookEntry, LessonEntry},
     price::Price,

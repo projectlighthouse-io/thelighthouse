@@ -135,10 +135,7 @@ mod tests {
         // routing and cookies, and reading the real ohara would fail them on
         // whatever happens to be mid-edit there.
         let catalog = std::sync::Arc::new(
-            crate::ohara::catalog::Catalog::load(
-                crate::ohara::fixture::content(),
-            )
-            .unwrap(),
+            ohara::catalog::Catalog::load(ohara::fixture::content()).unwrap(),
         );
 
         crate::api::app(config, socials, db, catalog)
