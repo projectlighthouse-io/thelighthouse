@@ -8,15 +8,19 @@
 //! `entitlements.book_id`. A foreign key needs a row to point at, and that row
 //! is the whole job.
 //!
-//! Which is why there is no lesson translation written here at all, and why
-//! the table is gone: a lesson's title, description and seo are served from the
-//! catalogue, and its prose is read off disk per request so that entitlement
-//! decides which half a reader gets. A `content` column would have put the paid
-//! half of every lesson in a table no entitlement check guards.
+//! Which is why nothing readable is written here, and why both translation
+//! tables are gone. Titles, descriptions, seo and chapter names are served from
+//! the catalogue, and a lesson's prose is read off disk per request so that
+//! entitlement decides which half a reader gets — a `content` column would have
+//! put the paid half of every lesson in a table no entitlement check guards.
 //!
 //! Translation lives in the content repo instead. Each `lesson.yaml` maps a
 //! locale to a markdown file beside it, so a translation ships with the prose
-//! it translates rather than in a second row here.
+//! it translates rather than in a row here.
+//!
+//! What is left is two statements: a `books` row for `entitlements.book_id` to
+//! name, and a `lessons` row for `notes.lesson_id`, `lesson_bookmarks` and
+//! `lesson_completions` to point at.
 //!
 //! **Read-only against the content repo.** Nothing here opens a file for
 //! writing. A book or lesson with no `id` is refused by name rather than having
@@ -31,21 +35,9 @@
 //! accepted, because the alternative is a half-cloned content repo quietly
 //! unpublishing the site.
 
-use ohara::{
-    book::Book,
-    catalog::{BookEntry, LessonEntry, Snapshot},
-};
-use serde::Serialize;
+use ohara::catalog::{BookEntry, LessonEntry, Snapshot};
 use sqlx::{PgConnection, postgres::PgPool};
 use uuid::Uuid;
-
-/// The locale the one remaining translation row is written under.
-///
-/// Only `book_translations` has one now — a lesson's prose and metadata both
-/// come from the content repo, so `lesson_translations` was dropped rather
-/// than filled. Scoping the statement to `en` means a `bn` book row somebody
-/// wrote by hand is never touched by a sync.
-const LOCALE: &str = "en";
 
 /// The columns are `timestamp without time zone` and laravel wrote UTC into
 /// them. `now()` alone would be cast using the server's `TimeZone` setting,
@@ -94,23 +86,6 @@ impl std::fmt::Display for Error {
 pub(crate) struct Synced {
     pub(crate) books: usize,
     pub(crate) lessons: usize,
-}
-
-/// Chapter titles, which have no table of their own.
-///
-/// `lessons.chapter_id` is a bare integer and the titles are prose, so they
-/// belong with the other prose — `book_translations.metadata`, per the note on
-/// [`ohara::book::Chapter`]. Serialised whole and written whole, so a chapter
-/// removed from the yaml leaves the column rather than lingering in it.
-#[derive(Debug, Serialize)]
-struct Metadata<'a> {
-    chapters: Vec<ChapterEntry<'a>>,
-}
-
-#[derive(Debug, Serialize)]
-struct ChapterEntry<'a> {
-    id: i32,
-    title: &'a str,
 }
 
 /// Writes every published book and lesson in the snapshot.
@@ -170,11 +145,11 @@ pub(crate) async fn run(
     Ok(synced)
 }
 
-/// One book, and its `en` translation.
+/// One book: identity, price and ordering, and nothing a reader reads.
 ///
-/// Two statements rather than one: the columns a reader sees are prose and live
-/// in `book_translations`, which is what makes a Bengali edition a second row
-/// instead of a second table.
+/// One statement. The title, description and seo a reader sees are served from
+/// the content repo, and the chapter titles with them — see the note at the top
+/// of this file.
 async fn book(
     tx: &mut PgConnection,
     entry: &BookEntry,
@@ -206,47 +181,6 @@ async fn book(
     .bind(entry.first_lesson().map(|first| first.lesson.slug.as_str()))
     .bind(book.status.as_db())
     .bind(book.tier.as_db())
-    .execute(&mut *tx)
-    .await
-    .map_err(|cause| Error::Database {
-        writing: writing(),
-        cause,
-    })?;
-
-    // Bound as text and cast, not as a json value: the column is `json` and
-    // sqlx encodes `serde_json::Value` in jsonb's binary framing, which
-    // postgres reads as a corrupt document rather than as json.
-    sqlx::query(&format!(
-        "INSERT INTO book_translations
-             (book_id, locale, title, description,
-              meta_title, meta_description, meta_keywords,
-              og_title, og_description, og_image,
-              metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::json,
-                 {STAMP}, {STAMP})
-         ON CONFLICT (book_id, locale) DO UPDATE SET
-             title            = EXCLUDED.title,
-             description      = EXCLUDED.description,
-             meta_title       = EXCLUDED.meta_title,
-             meta_description = EXCLUDED.meta_description,
-             meta_keywords    = EXCLUDED.meta_keywords,
-             og_title         = EXCLUDED.og_title,
-             og_description   = EXCLUDED.og_description,
-             og_image         = EXCLUDED.og_image,
-             metadata         = EXCLUDED.metadata,
-             updated_at       = EXCLUDED.updated_at"
-    ))
-    .bind(id)
-    .bind(LOCALE)
-    .bind(&book.title)
-    .bind(book.description.as_deref())
-    .bind(book.seo.meta_title.as_deref())
-    .bind(book.seo.meta_description.as_deref())
-    .bind(book.seo.meta_keywords.as_deref())
-    .bind(book.seo.og_title.as_deref())
-    .bind(book.seo.og_description.as_deref())
-    .bind(book.seo.og_image.as_deref())
-    .bind(metadata(book))
     .execute(&mut *tx)
     .await
     .map_err(|cause| Error::Database {
@@ -303,25 +237,6 @@ async fn lesson(
     })?;
 
     Ok(())
-}
-
-/// The chapter titles, as the json the column holds.
-///
-/// Falls back to an empty list rather than propagating: serialising an `i32`
-/// and two borrowed strings has no failure mode short of the allocator, and the
-/// lints rule out asserting that with an `expect`.
-fn metadata(book: &Book) -> String {
-    serde_json::to_string(&Metadata {
-        chapters: book
-            .chapters
-            .iter()
-            .map(|chapter| ChapterEntry {
-                id: chapter.id,
-                title: &chapter.title,
-            })
-            .collect(),
-    })
-    .unwrap_or_else(|_| "{\"chapters\":[]}".to_owned())
 }
 
 /// Refuses a repo where anything to be written has no id.
@@ -386,28 +301,6 @@ mod tests {
 
         assert!(message.contains("books/a/book.yaml"), "{message}");
         assert!(message.contains("01-b/lesson.yaml"), "{message}");
-    }
-
-    #[test]
-    fn the_chapter_metadata_is_the_json_the_column_holds() {
-        let snapshot = snapshot();
-        let book = snapshot.book("fixture-book").unwrap();
-
-        let json = serde_json::to_string(&Metadata {
-            chapters: book
-                .book
-                .chapters
-                .iter()
-                .map(|chapter| ChapterEntry {
-                    id: chapter.id,
-                    title: &chapter.title,
-                })
-                .collect(),
-        })
-        .unwrap();
-
-        assert!(json.starts_with("{\"chapters\":["), "{json}");
-        assert!(json.contains("\"id\":1"), "{json}");
     }
 
     #[test]

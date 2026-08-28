@@ -1,0 +1,31 @@
+-- book_translations, and with it the last of laravel's translation tables.
+--
+-- Same argument as `lesson_translations` in the migration before this one, and
+-- now the same decision. Nothing in the rebuild reads it: a book's title,
+-- description, seo and og fields are served from the content repo through the
+-- in-memory catalogue, and the chapter titles it held in `metadata` come from
+-- `book.yaml` — which is where they were authored in the first place.
+--
+-- What the database keeps is what other tables point at. `books` is an id for
+-- `entitlements.book_id` to name, plus the slug a url is resolved by. After
+-- this a book row is `id, slug, thumbnail_url, price, first_lesson_slug,
+-- status, tier` and nothing a reader reads.
+--
+-- **`books` has no title column and is not getting one.** It never had one —
+-- the title only ever lived here — so from now on a book row is not
+-- human-readable in a sql client, and answering "which book is this" means the
+-- slug or the content repo. That is the cost, it is accepted, and it is the
+-- same trade lessons already made: one source for prose, and it is not
+-- postgres.
+--
+-- **Do not run this against production until ohara carries every book**, for
+-- the reason the previous migration gives. The titles, descriptions and seo of
+-- every course are in here, and the content repo currently has one book. They
+-- are not lost — `content/courses/*.yml` in the laravel repo is what generated
+-- them — but this removes the database's copy, so the migration into ohara has
+-- to come first.
+--
+-- The foreign key to `books` goes with the table; nothing references
+-- `book_translations` itself.
+
+DROP TABLE book_translations;
