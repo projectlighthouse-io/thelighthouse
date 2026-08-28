@@ -14,7 +14,10 @@
  */
 
 .masthead-title {
-    font-family: 'Lora', Georgia, serif;
+    /* The site's serif, from `--font-serif`: Lora, then Charter and Iowan Old
+     * Style before Georgia. Not spelled out again here — a second copy of a
+     * font stack is one that drifts from the first. */
+    font-family: var(--font-serif);
     font-weight: 600;
     font-size: 54px;
     line-height: 1.08;
@@ -24,7 +27,7 @@
 }
 
 .masthead-dek {
-    font-family: 'Lora', Georgia, serif;
+    font-family: var(--font-serif);
     font-weight: 400;
     font-size: 21px;
     line-height: 1.5;
