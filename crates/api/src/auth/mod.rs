@@ -34,10 +34,14 @@ mod signin;
 
 use axum::{
     Router,
+    middleware::{from_fn, from_fn_with_state},
     routing::{get, post},
 };
 
-use crate::api::AppState;
+use crate::{
+    api::AppState,
+    middleware::{csrf::require_csrf, reader::require_reader},
+};
 
 /// The session id. Site-wide path: every page may ask who the reader is.
 ///
@@ -84,10 +88,24 @@ pub(crate) const OAUTH_PATH: &str = "/";
 /// it is the one URL the rebuild cannot rename — see docs/rebuild.md. It keeps
 /// the path the laravel app serves (`config/services.php`), which is what makes
 /// the cutover a DNS change rather than a round trip through two OAuth consoles.
-pub(crate) fn routes() -> Router<AppState> {
+pub(crate) fn routes(state: &AppState) -> Router<AppState> {
+    // Signing out deletes a row, so it is a write and carries the same token
+    // every other write does. `SameSite=Lax` already stops the cross-site form
+    // POST, but that is one browser default standing alone in front of a
+    // mutation — every other write here is behind the token as well, and a
+    // forced sign-out is a real, if small, thing to be able to do to somebody.
+    //
+    // Behind `require_reader` because the token lives on the session: with no
+    // session there is nothing to forge and nothing to delete, and 401 is the
+    // honest answer to "sign out" from someone who is not signed in.
+    let logout = Router::new()
+        .route("/api/auth/logout", post(reader::logout))
+        .route_layer(from_fn(require_csrf))
+        .route_layer(from_fn_with_state(state.clone(), require_reader));
+
     Router::new()
         .route("/api/auth/session", get(reader::session))
-        .route("/api/auth/logout", post(reader::logout))
+        .merge(logout)
         .route("/api/auth/{provider}", get(signin::start))
         .route("/{provider}/callback", get(signin::callback))
 }
@@ -100,7 +118,6 @@ mod tests {
     use loginwith::{GithubProvider, GoogleProvider};
     use tower::ServiceExt as _;
 
-    use super::*;
     use crate::auth::signin::unpack;
 
     // These exist because the mounting is the part that fails silently: these
@@ -292,7 +309,14 @@ mod tests {
     // CLAUDE.local.md — the end-to-end check in the plan covers it instead.
 
     #[tokio::test]
-    async fn signing_out_clears_the_cookie_and_refuses_a_get() {
+    async fn signing_out_needs_a_session_to_sign_out_of() {
+        // 401, where this used to answer 204 and clear cookies for anybody who
+        // asked. Signing out is a write — it deletes the session row — so it
+        // is behind the reader gate and the csrf token like every other write,
+        // and neither can be checked without a session to check them against.
+        //
+        // Nothing is lost by refusing: a caller with no session has no row to
+        // delete and no cookie worth clearing.
         let response = router()
             .oneshot(
                 Request::builder()
@@ -304,24 +328,18 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(set_cookies(&response).is_empty());
+    }
 
-        // Both of them. The readable companion left behind would keep the
-        // frontend drawing a signed-in header for somebody who is not.
-        let cleared = set_cookies(&response);
-        assert_eq!(cleared.len(), 2);
-        for name in [SESSION_COOKIE, READER_COOKIE] {
-            let value = cleared
-                .iter()
-                .find(|c| c.starts_with(&format!("{name}=;")))
-                .unwrap_or_else(|| panic!("{name} was not cleared"));
-            assert!(value.contains("Max-Age=0"));
-        }
-
-        // GET would let a prefetch or an <img> sign a reader out.
+    #[tokio::test]
+    async fn signing_out_refuses_a_get() {
+        // GET would let a prefetch or an <img> sign a reader out. 401 rather
+        // than 405 now: the reader gate answers before the method does. Either
+        // way nothing is signed out, which is the property being asserted.
         assert_eq!(
             get("/api/auth/logout", None).await.status(),
-            StatusCode::METHOD_NOT_ALLOWED
+            StatusCode::UNAUTHORIZED
         );
     }
 
