@@ -35,12 +35,17 @@ struct Window {
 pub(crate) struct RateLimit {
     limit: u32,
     window: Duration,
+    /// Keyed by a string rather than a user id, because the caller is not
+    /// always a reader. `RateLimiter::for('api')` in the laravel app keys on
+    /// `$request->user()?->id ?: $request->ip()`, and this has to be able to
+    /// say both.
+    ///
     /// A `Mutex` rather than a lock-free structure: this is contended for the
     /// length of a hash lookup, on a path that is about to do a database write.
     ///
     /// ponytail: one lock for every reader. Per-shard locks if it ever shows up
     /// in a profile, which at this traffic it will not.
-    windows: Mutex<HashMap<i64, Window>>,
+    windows: Mutex<HashMap<String, Window>>,
 }
 
 impl RateLimit {
@@ -52,6 +57,16 @@ impl RateLimit {
     /// so two references would be two limiters with separate counters.
     pub(crate) fn note_writes() -> Self {
         Self::new(10, Duration::from_secs(60))
+    }
+
+    /// Sixty a minute, which is `RateLimiter::for('api')` in the laravel app —
+    /// the limit every route there inherits unless it names a stricter one.
+    ///
+    /// It sits *outside* the per-route limits rather than replacing them: a
+    /// note write counts against this and against `note_writes`, exactly as a
+    /// laravel route carrying both `throttle:api` and `throttle:notes` does.
+    pub(crate) fn requests() -> Self {
+        Self::new(60, Duration::from_secs(60))
     }
 
     /// The budget is the caller's, not this module's: a search box and a note
@@ -70,7 +85,7 @@ impl RateLimit {
     /// `None` to proceed. `Some(seconds)` to refuse, carrying what belongs in
     /// `Retry-After` — a 429 without one tells a client to back off but not by
     /// how much, so it guesses, and the guess is usually "immediately".
-    pub(crate) fn check(&self, key: i64) -> Option<u64> {
+    pub(crate) fn check(&self, key: &str) -> Option<u64> {
         let now = Instant::now();
 
         // A poisoned lock means a previous holder panicked while holding it.
@@ -86,7 +101,7 @@ impl RateLimit {
             });
         }
 
-        let window = windows.entry(key).or_insert(Window {
+        let window = windows.entry(key.to_owned()).or_insert(Window {
             started: now,
             hits: 0,
         });
@@ -126,10 +141,14 @@ mod tests {
         let limit = RateLimit::note_writes();
 
         for attempt in 1..=BUDGET {
-            assert_eq!(limit.check(1), None, "write {attempt} was refused");
+            assert_eq!(
+                limit.check("user:1"),
+                None,
+                "write {attempt} was refused"
+            );
         }
 
-        assert!(limit.check(1).is_some());
+        assert!(limit.check("user:1").is_some());
     }
 
     #[test]
@@ -137,11 +156,11 @@ mod tests {
         let limit = RateLimit::note_writes();
 
         for _ in 0..=BUDGET {
-            let _ = limit.check(1);
+            let _ = limit.check("user:1");
         }
 
-        assert!(limit.check(1).is_some());
-        assert_eq!(limit.check(2), None);
+        assert!(limit.check("user:1").is_some());
+        assert_eq!(limit.check("user:2"), None);
     }
 
     #[test]
@@ -149,10 +168,10 @@ mod tests {
         let limit = RateLimit::note_writes();
 
         for _ in 0..BUDGET {
-            let _ = limit.check(1);
+            let _ = limit.check("user:1");
         }
 
-        let retry = limit.check(1).unwrap();
+        let retry = limit.check("user:1").unwrap();
 
         assert!(retry >= 1);
         assert!(retry <= 60);
@@ -162,13 +181,13 @@ mod tests {
     fn the_window_expires_and_the_count_starts_again() {
         let limit = RateLimit::new(2, Duration::from_millis(30));
 
-        assert_eq!(limit.check(1), None);
-        assert_eq!(limit.check(1), None);
-        assert!(limit.check(1).is_some());
+        assert_eq!(limit.check("user:1"), None);
+        assert_eq!(limit.check("user:1"), None);
+        assert!(limit.check("user:1").is_some());
 
         std::thread::sleep(Duration::from_millis(40));
 
-        assert_eq!(limit.check(1), None, "the window did not expire");
+        assert_eq!(limit.check("user:1"), None, "the window did not expire");
     }
 
     #[test]
@@ -181,7 +200,7 @@ mod tests {
         let readers = i64::try_from(PRUNE_ABOVE).unwrap() * 4;
 
         for key in 0..readers {
-            let _ = limit.check(key);
+            let _ = limit.check(&format!("user:{key}"));
         }
 
         let held = limit.windows.lock().unwrap().len();

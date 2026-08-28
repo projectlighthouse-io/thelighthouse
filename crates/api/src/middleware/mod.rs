@@ -5,6 +5,7 @@
 //!   reader.rs     cookie -> Session in extensions   401
 //!   csrf.rs       header vs the session's token     403
 //!   throttle.rs   writes per minute, per reader     429
+//!   rate.rs       requests per minute, per caller   429
 //! ```
 //!
 //! One layer per gate, so a route says what it needs rather than a single layer
@@ -18,6 +19,7 @@
 //! 403 or 429 to everything instead of quietly letting writes through.
 
 pub(crate) mod csrf;
+pub(crate) mod rate;
 pub(crate) mod reader;
 pub(crate) mod signature;
 pub(crate) mod throttle;

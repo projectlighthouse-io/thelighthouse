@@ -29,7 +29,11 @@ pub(crate) async fn throttle(
         return StatusCode::TOO_MANY_REQUESTS.into_response();
     };
 
-    let Some(retry_after) = state.limits.check(session.user_id) else {
+    // Namespaced, so a reader's write budget can never share a bucket with an
+    // address in the limiter this one sits inside.
+    let key = format!("user:{}", session.user_id);
+
+    let Some(retry_after) = state.limits.check(&key) else {
         return next.run(request).await;
     };
 

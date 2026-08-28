@@ -27,7 +27,7 @@ use crate::{
     config::Config,
     db,
     limit::RateLimit,
-    middleware::signature::require_signature,
+    middleware::{rate::limit_requests, signature::require_signature},
     notes, response, telemetry,
 };
 
@@ -41,6 +41,9 @@ pub(crate) struct AppState {
     /// Shared, not cloned: an `Arc` so every clone of this state counts against
     /// the same buckets. A `RateLimit` per clone would be a limit per request.
     pub(crate) limits: Arc<RateLimit>,
+    /// The limit every route inherits, keyed by reader or address. Shared for
+    /// the same reason `limits` is: a per-clone counter is a per-request one.
+    pub(crate) requests: Arc<RateLimit>,
     /// Shared for the same reason, and more so: reloading swaps the snapshot
     /// inside this one, and a per-clone catalogue would leave most requests
     /// reading a copy nothing ever reloads.
@@ -58,6 +61,7 @@ pub(crate) fn app(
         socials,
         db,
         limits: Arc::new(RateLimit::note_writes()),
+        requests: Arc::new(RateLimit::requests()),
         catalog,
     };
 
@@ -77,19 +81,33 @@ pub(crate) fn app(
         from_fn_with_state(state.config.clone(), require_signature),
     );
 
-    Router::new()
-        .route("/health", get(health))
-        .merge(internal)
+    // Everything a caller off the internet can reach, under one limit.
+    //
+    // `RateLimiter::for('api')` from the laravel app — sixty a minute — and it
+    // is the floor, not the whole story: the note writes keep their own
+    // stricter budget inside this one, exactly as a laravel route carrying
+    // both `throttle:api` and `throttle:notes` does.
+    let public = Router::new()
         .nest("/api", signed)
         // Absolute paths, so these merge alongside `signed` rather than nesting
         // under the same prefix. Both carry their own gates — see their
         // `routes`.
         .merge(books::routes(&state))
         .merge(notes::routes(&state))
-        // Deliberately outside every gate: an OAuth callback is a browser
-        // navigation and cannot carry an HMAC or a session. Those four routes
+        // Deliberately outside the reader gate: an OAuth callback is a browser
+        // navigation and cannot carry an HMAC or a session. Those routes
         // authenticate themselves — see `auth`.
-        .merge(auth::routes())
+        .merge(auth::routes(&state))
+        .layer(from_fn_with_state(state.clone(), limit_requests));
+
+    Router::new()
+        // Outside the limit, both of them. `/health` is polled on a timer by
+        // whatever is watching the container, and a probe that starts failing
+        // because it probed too often is worse than no probe; `/reload` is
+        // signed, unrouted, and called by a deploy rather than by traffic.
+        .route("/health", get(health))
+        .merge(internal)
+        .merge(public)
         .layer(axum::middleware::from_fn(telemetry::trace_request))
         .with_state(state)
 }
