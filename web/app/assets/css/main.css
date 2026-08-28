@@ -10,6 +10,7 @@
 @import './pencil.css';
 @import './prose.css';
 @import './transition.css';
+@import './masthead.css';
 
 /* reader.css is NOT imported here on purpose — it is one system scoped under
    .reader-shell and only the lesson page needs it, so that page imports it

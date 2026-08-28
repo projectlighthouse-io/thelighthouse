@@ -88,13 +88,12 @@ useJsonLd('crumbs', () => ({
           </span>
         </div>
 
-        <h1
-          class="font-editorial text-ink font-semibold text-hero-lg leading-none tracking-editorial"
-        >
+        <!-- Set as the reader sets a lesson title — see masthead.css. -->
+        <h1 class="masthead-title">
           {{ book.title }}
         </h1>
 
-        <p class="mt-8 max-w-xl text-base leading-relaxed text-ink sm:text-lg">
+        <p class="masthead-dek">
           {{ book.description }}
         </p>
 

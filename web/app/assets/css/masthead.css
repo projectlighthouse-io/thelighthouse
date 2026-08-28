@@ -1,0 +1,64 @@
+/* The title block at the top of a page, set the way the reader sets a lesson's.
+ *
+ * The reader had this first and it is the look the rest of the site is moving
+ * towards, so the values here are its values — Lora, 54px, tight leading and a
+ * serif dek under it. What it is *not* is a second copy of `reader.css`: that
+ * file is one system scoped under `.reader-shell`, deliberately not imported
+ * globally, and pulling it in for a heading would ship ~20kb to every route to
+ * borrow three rules.
+ *
+ * The colours come from the `--color-read-*` tokens rather than the
+ * `--reader-*` aliases, because those aliases are declared on `.reader-shell`
+ * and do not exist outside it — using them here would silently fall back to
+ * nothing. The tokens themselves are on `:root` and invert with the theme.
+ */
+
+.masthead-title {
+    font-family: 'Lora', Georgia, serif;
+    font-weight: 600;
+    font-size: 54px;
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+    margin: 16px 0 0;
+    color: var(--color-read-ink);
+}
+
+.masthead-dek {
+    font-family: 'Lora', Georgia, serif;
+    font-weight: 400;
+    font-size: 21px;
+    line-height: 1.5;
+    color: var(--color-read-ink-soft);
+    margin-top: 20px;
+    max-width: 32em;
+}
+
+/* A kicker above the title: mono, teal, lowercase, with the slash the reader
+ * puts before its lesson number. Defined here and used where a page has
+ * something to put in it that is not already on screen.
+ */
+.masthead-eyebrow {
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: var(--color-teal-mid);
+    text-transform: lowercase;
+}
+
+.masthead-eyebrow::before {
+    content: '/ ';
+    color: var(--color-teal-mid);
+}
+
+/* The same step down the reader takes, at the same width. A 54px serif line is
+ * two or three words per line on a phone.
+ */
+@media (max-width: 880px) {
+    .masthead-title {
+        font-size: 40px;
+    }
+
+    .masthead-dek {
+        font-size: 18px;
+    }
+}
