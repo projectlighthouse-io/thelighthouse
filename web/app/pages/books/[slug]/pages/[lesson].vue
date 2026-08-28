@@ -71,11 +71,18 @@ onMounted(() => {
     }
 
     // At the bottom of the page the final section can never cross the line —
-    // there is no scroll left to bring it up. Without this the last entry is
-    // unreachable however far you scroll.
-    const atBottom
-      = window.innerHeight + window.scrollY >= document.body.scrollHeight - 2
-    if (atBottom) {
+    // there is no scroll left to bring it up, so without this the last entry
+    // is unreachable however far you scroll, and clicking it highlights the
+    // one before it.
+    //
+    // Measured against `documentElement`, which is the scrolling element, and
+    // against the real maximum — `scrollHeight - innerHeight` — rather than
+    // comparing a sum to `body.scrollHeight`. `body` and `html` need not be
+    // the same height, and when they are not, the old comparison is wrong in
+    // whichever direction the difference runs: too eager, or never true.
+    const doc = document.documentElement
+    const maxScroll = doc.scrollHeight - window.innerHeight
+    if (window.scrollY >= maxScroll - 2) {
       current = headings[headings.length - 1]!.id
     }
 
@@ -92,8 +99,20 @@ onMounted(() => {
     requestAnimationFrame(update)
   }
 
+  // A click is not a hint to be re-derived from scroll position — it says
+  // exactly which section was chosen. Set it, then let the scroll that follows
+  // keep it honest. Without this the last entry depends entirely on the
+  // bottom-of-page rescue above, which is a lot to rest on a measurement.
+  const onHash = (): void => {
+    const id = window.location.hash.slice(1)
+    if (id && (data.value?.toc ?? []).some(item => item.id === id)) {
+      activeId.value = id
+    }
+  }
+
   window.addEventListener('scroll', onScroll, { passive: true })
   window.addEventListener('resize', onScroll, { passive: true })
+  window.addEventListener('hashchange', onHash)
 
   // Re-measure when the lesson changes: same component, different headings.
   const stop = watch(() => data.value?.toc, () => nextTick(update), {
@@ -104,6 +123,7 @@ onMounted(() => {
     stop()
     window.removeEventListener('scroll', onScroll)
     window.removeEventListener('resize', onScroll)
+    window.removeEventListener('hashchange', onHash)
   })
 })
 
