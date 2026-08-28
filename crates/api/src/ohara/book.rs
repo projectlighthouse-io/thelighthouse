@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 
 use serde::Deserialize;
+use uuid::Uuid;
 
 use super::{Content, Error, Status, Tier, lesson::Folder, price::Price, read};
 
@@ -14,6 +15,19 @@ use super::{Content, Error, Status, Tier, lesson::Folder, price::Price, read};
 /// `visibility_level` — went with the migrations that dropped those columns.
 #[derive(Debug, Deserialize)]
 pub(crate) struct Book {
+    /// The book's permanent identity, and the only thing about it that never
+    /// changes.
+    ///
+    /// `None` means the book has not been synced yet. The sync mints one and
+    /// writes it back here, so this is required in practice and optional in
+    /// the type — a book that had to carry a uuid before it could be parsed
+    /// could never be given its first one.
+    ///
+    /// Everything that points at a book from another table points at this,
+    /// never at the slug: a slug is url prose and gets retuned, and an
+    /// entitlement keyed on one dies quietly the day somebody retunes it.
+    #[serde(default)]
+    pub(crate) uuid: Option<Uuid>,
     /// Checked against the directory name. They can disagree, and a book whose
     /// yaml claims a different slug would sync into the wrong row.
     pub(crate) slug: String,
@@ -175,6 +189,10 @@ mod tests {
     fn a_book_parses_into_its_columns() {
         let book = fixture::content().book("fixture-book").unwrap();
 
+        assert_eq!(
+            book.uuid,
+            "019205c7-4f3a-7c21-9f4e-6b8d2a1c5e70".parse().ok()
+        );
         assert_eq!(book.slug, "fixture-book");
         assert_eq!(book.title, "A Fixture Book");
         assert_eq!(book.status, Status::Published);
@@ -190,6 +208,16 @@ mod tests {
         let message = error.to_string();
 
         assert!(message.contains("mislabelled"), "{message}");
+    }
+
+    #[test]
+    fn a_book_that_has_never_been_synced_has_no_uuid_yet() {
+        // Optional in the type so a new book can be parsed at all — it cannot
+        // carry the uuid the sync has not minted for it yet. Everything after
+        // the first sync has one.
+        let book = parsed("slug: b\ntitle: B\n");
+
+        assert_eq!(book.uuid, None);
     }
 
     #[test]

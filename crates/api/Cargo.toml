@@ -38,6 +38,11 @@ sqlx = { version = "0.8", default-features = false, features = [
 # unmaintained" on the tin. This is the fork that is still maintained, and a
 # public repo should not ship a dependency that announces its own abandonment.
 serde_norway = "0.9"
+
+# A book's permanent identity, minted here rather than by the database so the
+# value can be written back into the content repo that owns it. `v4` to
+# generate, `serde` to read one out of yaml.
+uuid = { version = "1", features = ["v4", "serde"] }
 # GFM, not plain CommonMark. The laravel app renders lessons with
 # `GithubFlavoredMarkdownExtension`, so tables, strikethrough and task lists are
 # already in the prose. comrak is the cmark-gfm port and matches it;
