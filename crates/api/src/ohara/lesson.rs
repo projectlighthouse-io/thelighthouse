@@ -1,6 +1,5 @@
 //! A lesson's yaml, and the markdown beside it.
 
-use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -41,8 +40,6 @@ pub(crate) struct Lesson {
     pub(crate) description: Option<String>,
     #[serde(default)]
     pub(crate) status: Status,
-    /// See [`super::book::Book::published_at`].
-    pub(crate) published_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub(crate) seo: LessonSeo,
 }

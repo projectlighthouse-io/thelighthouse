@@ -57,12 +57,7 @@ walkdir = "2"
 # `clock` is not needed: nothing reads the current time through chrono, and
 # `NOW()` in a statement is postgres's clock, which is the one that should be
 # setting these columns anyway.
-# `serde` because the content yaml carries `published_at` as an rfc 3339
-# string and it is parsed straight into a `DateTime<Utc>`.
-chrono = { version = "0.4", default-features = false, features = [
-    "std",
-    "serde",
-] }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 # The session payload and the oauth cookie's redirect. Both go in a cookie
 # value, where a raw `,` or `;` would end the value early.
 base64 = "0.22"

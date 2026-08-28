@@ -2,7 +2,6 @@
 
 use std::collections::HashSet;
 
-use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -46,11 +45,6 @@ pub(crate) struct Book {
     #[serde(default)]
     pub(crate) tier: Tier,
     pub(crate) thumbnail_url: Option<String>,
-    /// When the book went live, which is not the same question as whether it
-    /// is live now — `status` answers that. Kept because the column exists and
-    /// the yaml carries it; dropping it on the way through would lose the only
-    /// copy.
-    pub(crate) published_at: Option<DateTime<Utc>>,
     /// Absent is free.
     #[serde(default)]
     pub(crate) price: Price,
