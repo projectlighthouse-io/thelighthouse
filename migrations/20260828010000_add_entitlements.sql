@@ -28,11 +28,16 @@
 --
 -- `expires_at` null means forever, which is what a purchase is. A grant with
 -- an end date is the case that needs the column.
+--
+-- No ON DELETE on the user key. Cascading would make deleting a user silently
+-- destroy the record of what they bought, and that record is the thing an
+-- argument about a refund is settled with. Refusing the delete says there is
+-- something to deal with first.
 
 CREATE TABLE entitlements (
     id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    book_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL REFERENCES users(id),
+    book_id uuid NOT NULL,
     source SMALLINT NOT NULL DEFAULT 0,
     granted_at TIMESTAMP(0) NOT NULL DEFAULT now(),
     expires_at TIMESTAMP(0),

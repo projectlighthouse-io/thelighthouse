@@ -2,7 +2,9 @@
 
 use std::collections::HashSet;
 
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
+use uuid::Uuid;
 
 use super::{Content, Error, Status, Tier, lesson::Folder, price::Price, read};
 
@@ -21,16 +23,19 @@ pub(crate) struct Book {
     /// never at the slug: a slug is url prose and gets retuned, and an
     /// entitlement keyed on one dies quietly the day somebody retunes it.
     ///
-    /// Chosen here rather than assigned by a database, and it owes the laravel
-    /// ids nothing — the cutover brings users, subscriptions and notes across
-    /// and leaves the books behind, so these start at one.
+    /// A uuid rather than a number, because the content repo has to be able to
+    /// state it *before* the row exists. A number would have to come from
+    /// whoever can see all the others — the database, on insert — which leaves
+    /// the yaml unable to name the book until after the first sync, and a
+    /// window in between where syncing again inserts it twice. A uuid is
+    /// minted anywhere, by anyone, with no coordination.
     ///
     /// `None` for a book that has not been given one yet. Optional in the type
     /// because a priced book without an id simply cannot be owned — no
     /// entitlement row could name it — and answering that is better than
     /// refusing to parse the file.
     #[serde(default)]
-    pub(crate) id: Option<i64>,
+    pub(crate) id: Option<Uuid>,
     /// Checked against the directory name. They can disagree, and a book whose
     /// yaml claims a different slug would sync into the wrong row.
     pub(crate) slug: String,
@@ -41,6 +46,11 @@ pub(crate) struct Book {
     #[serde(default)]
     pub(crate) tier: Tier,
     pub(crate) thumbnail_url: Option<String>,
+    /// When the book went live, which is not the same question as whether it
+    /// is live now — `status` answers that. Kept because the column exists and
+    /// the yaml carries it; dropping it on the way through would lose the only
+    /// copy.
+    pub(crate) published_at: Option<DateTime<Utc>>,
     /// Absent is free.
     #[serde(default)]
     pub(crate) price: Price,
@@ -192,7 +202,10 @@ mod tests {
     fn a_book_parses_into_its_columns() {
         let book = fixture::content().book("fixture-book").unwrap();
 
-        assert_eq!(book.id, Some(1));
+        assert_eq!(
+            book.id,
+            "019205c7-4f3a-7c21-9f4e-6b8d2a1c5e70".parse().ok()
+        );
         assert_eq!(book.slug, "fixture-book");
         assert_eq!(book.title, "A Fixture Book");
         assert_eq!(book.status, Status::Published);
@@ -208,6 +221,21 @@ mod tests {
         let message = error.to_string();
 
         assert!(message.contains("mislabelled"), "{message}");
+    }
+
+    #[test]
+    fn an_empty_id_is_refused_rather_than_read_as_absent() {
+        // `id: ""` is not a way to say "not yet". Absent is, and the two have
+        // to stay distinguishable: absent means unownable, whereas an empty
+        // string is a typo that would otherwise parse as unownable and look
+        // deliberate.
+        assert!(
+            serde_norway::from_str::<Book>("id: \"\"\nslug: b\ntitle: B\n")
+                .is_err()
+        );
+        assert!(
+            serde_norway::from_str::<Book>("id:\nslug: b\ntitle: B\n").is_ok()
+        );
     }
 
     #[test]

@@ -1,6 +1,7 @@
 //! How much of a book a reader may read.
 
 use sqlx::postgres::PgPool;
+use uuid::Uuid;
 
 use crate::ohara::catalog::BookEntry;
 
@@ -64,7 +65,7 @@ pub(crate) async fn access(
 async fn holds(
     db: &PgPool,
     user_id: i64,
-    book_id: i64,
+    book_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
     let row: Option<(i32,)> = sqlx::query_as(
         "SELECT 1 FROM entitlements \

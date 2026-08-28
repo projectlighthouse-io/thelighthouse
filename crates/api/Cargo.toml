@@ -38,6 +38,12 @@ sqlx = { version = "0.8", default-features = false, features = [
 # unmaintained" on the tin. This is the fork that is still maintained, and a
 # public repo should not ship a dependency that announces its own abandonment.
 serde_norway = "0.9"
+
+# A book's and a lesson's identity, read out of the content yaml. No `v4`: this
+# crate never mints one. The content repo states it, which is the whole reason
+# it is a uuid — a number would have to be assigned by whoever can see all the
+# others, and that is the database, after the insert, too late for a file.
+uuid = { version = "1", features = ["serde"] }
 # GFM, not plain CommonMark. The laravel app renders lessons with
 # `GithubFlavoredMarkdownExtension`, so tables, strikethrough and task lists are
 # already in the prose. comrak is the cmark-gfm port and matches it;
@@ -51,7 +57,12 @@ walkdir = "2"
 # `clock` is not needed: nothing reads the current time through chrono, and
 # `NOW()` in a statement is postgres's clock, which is the one that should be
 # setting these columns anyway.
-chrono = { version = "0.4", default-features = false, features = ["std"] }
+# `serde` because the content yaml carries `published_at` as an rfc 3339
+# string and it is parsed straight into a `DateTime<Utc>`.
+chrono = { version = "0.4", default-features = false, features = [
+    "std",
+    "serde",
+] }
 # The session payload and the oauth cookie's redirect. Both go in a cookie
 # value, where a raw `,` or `;` would end the value early.
 base64 = "0.22"

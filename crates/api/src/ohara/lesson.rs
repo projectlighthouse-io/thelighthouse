@@ -1,6 +1,8 @@
 //! A lesson's yaml, and the markdown beside it.
 
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
+use uuid::Uuid;
 
 use super::{Content, Error, Status, body::Body, read};
 
@@ -23,12 +25,15 @@ pub(crate) struct Lesson {
     /// move when a book is reordered or a title is retuned.
     ///
     /// Unique across every book, not just within one: `lessons.id` is a
-    /// primary key. [`Snapshot::load`] refuses a repo that reuses one.
+    /// primary key. A uuid makes that nearly free rather than something to
+    /// keep track of by hand, but [`Snapshot::load`] still refuses a repo that
+    /// reuses one — the way a duplicate happens here is a folder copied to
+    /// start the next lesson, and copying carries the uuid along.
     ///
     /// `None` for a lesson that has not been given one yet, for the same
     /// reason [`super::book::Book::id`] is optional.
     #[serde(default)]
-    pub(crate) id: Option<i64>,
+    pub(crate) id: Option<Uuid>,
     /// Checked against the folder name with its number stripped, for the reason
     /// `book` gives.
     pub(crate) slug: String,
@@ -36,6 +41,8 @@ pub(crate) struct Lesson {
     pub(crate) description: Option<String>,
     #[serde(default)]
     pub(crate) status: Status,
+    /// See [`super::book::Book::published_at`].
+    pub(crate) published_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub(crate) seo: LessonSeo,
 }
@@ -158,7 +165,10 @@ mod tests {
             .lesson("fixture-book", "01-free-lesson")
             .unwrap();
 
-        assert_eq!(lesson.id, Some(1));
+        assert_eq!(
+            lesson.id,
+            "019205c7-4f3a-7c21-9f4e-000000000001".parse().ok()
+        );
         assert_eq!(lesson.slug, "free-lesson");
         assert_eq!(lesson.title, "A Free Lesson");
         assert_eq!(lesson.status, Status::Published);
