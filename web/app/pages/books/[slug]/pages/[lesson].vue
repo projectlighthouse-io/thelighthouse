@@ -91,8 +91,25 @@ const {
   notes,
   load: loadNotes,
   create: createNote,
+  edit: editNote,
   remove: removeNote,
 } = useNotes(scope)
+
+/**
+ * The list under the lesson reads oldest first, while the api answers newest
+ * first — right for `/notes`, where the last thing written is the thing being
+ * looked for, and backwards here. Down the page is down the lesson, so the
+ * notes follow the prose they were taken against.
+ *
+ * Sorted on the anchor, not on the timestamp: a reader who goes back to
+ * annotate the introduction wrote that note last and means it to sit first.
+ * Unanchored notes have no place in the prose, so they go at the end.
+ */
+const inReadingOrder = computed<Note[]>(() =>
+  [...notes.value].sort(
+    (a, b) => (a.startOffset ?? Infinity) - (b.startOffset ?? Infinity),
+  ),
+)
 
 // Destructured rather than kept as objects: refs reached through a plain
 // object are not unwrapped in a template, and `bookmark.current.value` in
@@ -238,6 +255,46 @@ const signIn = (): void => {
 /** Back to the passage the reader marked. */
 const goToBookmark = (): void => {
   bookmarkMarks[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+/* ---------- the list under the lesson ---------- */
+const editingNoteId = ref<number | null>(null)
+const savingNoteId = ref<number | null>(null)
+
+/**
+ * Up to the highlight a listed note belongs to.
+ *
+ * `painted` is the only thing that knows which elements are note 12's — the
+ * marks carry no id, because nothing else would have read one.
+ */
+const jumpToNote = (note: Note): void => {
+  painted.get(note.id)?.[0]?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+  })
+}
+
+const saveNoteEdit = async (note: Note, content: string): Promise<void> => {
+  savingNoteId.value = note.id
+  const failed = await editNote(note.id, content)
+  savingNoteId.value = null
+
+  // Left open on failure, with what was typed still in the field. Closing it
+  // would look like the edit saved.
+  if (failed) return
+
+  editingNoteId.value = null
+}
+
+const removeListedNote = async (note: Note): Promise<void> => {
+  savingNoteId.value = note.id
+  const failed = await removeNote(note.id)
+  savingNoteId.value = null
+
+  if (failed) return
+
+  // The highlight in the prose goes with it.
+  repaint()
 }
 
 // The popover stops propagation, so anything that reaches the document is a
@@ -419,6 +476,17 @@ useJsonLd('crumbs', () => ({
             </NuxtLink>
           </div>
         </div>
+
+        <ReaderNotesList
+          :notes="inReadingOrder"
+          :editing-id="editingNoteId"
+          :saving-id="savingNoteId"
+          @jump="jumpToNote"
+          @edit="editingNoteId = $event.id"
+          @save="saveNoteEdit"
+          @cancel-edit="editingNoteId = null"
+          @remove="removeListedNote"
+        />
 
         <!-- Stacked on a phone: two lesson titles do not fit side by side. -->
         <div
