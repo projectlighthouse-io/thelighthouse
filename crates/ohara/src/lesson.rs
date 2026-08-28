@@ -48,7 +48,7 @@ pub struct Lesson {
     pub status: Status,
     /// How much of this lesson is free.
     ///
-    /// Absent is [`Access::Partial`] — the marker decides — so every lesson
+    /// Absent is [`Access::Free`] — the marker decides — so every lesson
     /// written before this field existed keeps the behaviour it had.
     ///
     /// This is about *this lesson*. Whether a reader clears it at all is the
@@ -305,12 +305,7 @@ mod tests {
     #[test]
     fn a_lesson_with_no_marker_is_wholly_free() {
         let body = fixture::content()
-            .body(
-                "fixture-book",
-                "01-free-lesson",
-                "lesson.md",
-                Access::Partial,
-            )
+            .body("fixture-book", "01-free-lesson", "lesson.md", Access::Free)
             .unwrap();
 
         assert!(!body.has_paid_part());
@@ -320,12 +315,7 @@ mod tests {
     #[test]
     fn a_lesson_with_a_marker_splits_and_keeps_the_paid_half_out_of_free() {
         let body = fixture::content()
-            .body(
-                "fixture-book",
-                "02-split-lesson",
-                "lesson.md",
-                Access::Partial,
-            )
+            .body("fixture-book", "02-split-lesson", "lesson.md", Access::Free)
             .unwrap();
 
         assert!(body.has_paid_part());
@@ -373,19 +363,14 @@ mod tests {
         // The whole point of the field: a different file, not a different
         // rendering of the same one.
         let english = fixture::content()
-            .body(
-                "fixture-book",
-                "01-free-lesson",
-                "lesson.md",
-                Access::Partial,
-            )
+            .body("fixture-book", "01-free-lesson", "lesson.md", Access::Free)
             .unwrap();
         let bengali = fixture::content()
             .body(
                 "fixture-book",
                 "01-free-lesson",
                 "lesson.bn.md",
-                Access::Partial,
+                Access::Free,
             )
             .unwrap();
 
