@@ -97,7 +97,6 @@ useJsonLd('crumbs', () => ({
       </aside>
 
       <article class="reader-article">
-        <div class="reader-eyebrow">/ {{ String(data.position).padStart(2, '0') }}</div>
         <h1>{{ lesson.title }}</h1>
         <p v-if="lesson.description" class="reader-dek">{{ lesson.description }}</p>
 
