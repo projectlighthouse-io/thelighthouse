@@ -22,10 +22,13 @@ CONTENT_PATH ?= ../ohara
 # The running container, for the signal that makes it reread ohara.
 CONTAINER ?= thelighthouse
 
+# Where the api listens on loopback. Matches API_PORT in .env.
+API_PORT ?= 9000
+
 .DEFAULT_GOAL := help
 .PHONY: help web up dev down db db-down db-reset psql migrate migrate-status fmt fmt-check \
         lint test build check audit image run login push clean \
-        content content-check content-sync content-db-sync
+        content content-check content-sync content-db-sync content-reload
 
 help: ## show this
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -185,3 +188,15 @@ content-sync: content content-check ## pull, check, and make the container rerea
 # production.
 content-db-sync: ## upsert ohara's books and lessons into postgres
 	CONTENT_PATH="$(CONTENT_PATH)" cargo run -q -p lighthouse-content -- sync
+
+# Rereads ohara and swaps the catalogue over in the *running* process. No
+# restart, no dropped request — the alternative is `docker kill -s HUP`, which
+# does the same thing without telling you whether it worked.
+#
+# Signed, because the endpoint is: the api verifies the HMAC itself and answers
+# 404 without it. The body is empty, so the signature is over nothing.
+content-reload: ## make the running api reread ohara
+	@test -n "$$LUXCTL_SECRET" || { . ./.env 2>/dev/null; }; \
+		sig=$$(printf '' | openssl dgst -sha256 -hmac "$${LUXCTL_SECRET}" -hex | sed 's/.*= *//'); \
+		curl -fsS -X POST -H "X-Luxctl-Signature: $$sig" \
+			http://127.0.0.1:$(API_PORT)/reload && echo

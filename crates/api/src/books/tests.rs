@@ -231,9 +231,49 @@ async fn seo_falls_back_to_what_a_reader_sees() {
     );
 }
 
+/// The signature `Config::sample`'s secret produces over an empty body.
+fn signature_for_empty_body() -> String {
+    use std::fmt::Write as _;
+
+    use hmac::{Hmac, Mac};
+
+    let mut mac =
+        <Hmac<sha2::Sha256>>::new_from_slice(b"luxctl").expect("any key size");
+    mac.update(b"");
+    mac.finalize()
+        .into_bytes()
+        .iter()
+        .fold(String::new(), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        })
+}
+
+async fn post_signed(uri: &str) -> Response {
+    router()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header("x-luxctl-signature", signature_for_empty_body())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn reloading_needs_a_signature_and_says_nothing_without_one() {
+    // 404, not 401: a 401 confirms the endpoint is there, which is free
+    // reconnaissance. Caddy never routes this path either — the signature is
+    // the boundary, the missing route is depth.
+    assert_eq!(post("/reload").await.status(), StatusCode::NOT_FOUND);
+}
+
 #[tokio::test]
 async fn reloading_swaps_the_catalogue_without_restarting() {
-    let response = post("/reload").await;
+    let response = post_signed("/reload").await;
 
     assert_eq!(response.status(), StatusCode::OK);
     // Nothing may hold this: it is a write, and its body is a count that is
@@ -256,11 +296,9 @@ async fn reloading_swaps_the_catalogue_without_restarting() {
 #[tokio::test]
 async fn reloading_is_a_post_because_it_changes_the_process() {
     // A GET would be fetched by anything that crawls, prefetches or
-    // revalidates, and this one does work.
-    assert_eq!(
-        get("/reload").await.status(),
-        StatusCode::METHOD_NOT_ALLOWED
-    );
+    // revalidates, and this one does work. 404 rather than 405: the signature
+    // layer answers before the method does, and says as little as possible.
+    assert_eq!(get("/reload").await.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

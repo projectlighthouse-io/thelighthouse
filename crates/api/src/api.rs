@@ -70,11 +70,16 @@ pub(crate) fn app(
             require_signature,
         ));
 
+    // Signed like luxctl's surface, and unrouted like `/health`. Two
+    // independent gates, because either alone is thin: caddy not naming a path
+    // is configuration, and configuration is one edit from being wrong.
+    let internal = Router::new().route("/reload", post(reload)).route_layer(
+        from_fn_with_state(state.config.clone(), require_signature),
+    );
+
     Router::new()
         .route("/health", get(health))
-        // Internal only, by the same rule as `/health`: it is not under
-        // `/api/*`, and caddy hands every other path to nuxt. See `reload`.
-        .route("/reload", post(reload))
+        .merge(internal)
         .nest("/api", signed)
         // Absolute paths, so these merge alongside `signed` rather than nesting
         // under the same prefix. Both carry their own gates — see their
@@ -118,17 +123,21 @@ async fn health(State(state): State<AppState>) -> Response {
 /// to call from a deploy script: the bad case is "still serving the old
 /// content", not "serving none".
 ///
-/// # Why this is reachable only from inside the container
+/// # Who may call it
 ///
-/// It is not mounted under `/api/*`, and the Caddyfile hands every path it does
-/// not name to nuxt — so nothing outside can reach it, exactly as with
-/// `/health`. Caddy is not being trusted to *authorise* anything here; it is
-/// simply never told to route this path, and the api listens on loopback.
+/// Two gates, and neither is trusted on its own.
 ///
-/// If it ever has to be reachable from outside, it must move under the
-/// signature boundary rather than gain a caddy rule. Rereading files is cheap
-/// but not free, and an unauthenticated trigger for it is a way to make the
-/// process do work on demand.
+/// It carries the same HMAC signature luxctl uses, verified here in constant
+/// time — so reaching the socket is not enough, and anything else sharing the
+/// container's loopback still cannot trigger it. And it is not mounted under
+/// `/api/*`, so the Caddyfile never routes it and nothing outside reaches it
+/// at all.
+///
+/// The signature is the boundary; the caddy rule is depth. Relying on caddy
+/// alone would make an unauthenticated way to run work on demand out of one
+/// mistaken proxy rule, and this repo's own rule is that caddy is not a
+/// security boundary — it cannot verify an HMAC, so it must never be the only
+/// thing standing in front of something that does work.
 async fn reload(State(state): State<AppState>) -> Response {
     match state.catalog.reload() {
         Ok(()) => {
