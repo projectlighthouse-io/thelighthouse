@@ -16,6 +16,7 @@ chapters:
     lessons:
       - "01-free-lesson"
       - "02-split-lesson"
+      - "03-draft-lesson"
 
 seo:
   meta_title: A Fixture Book

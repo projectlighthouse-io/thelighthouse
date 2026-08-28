@@ -367,7 +367,7 @@ mod tests {
     }
     use std::{fs, path::PathBuf};
 
-    use super::super::fixture;
+    use super::super::{Status, fixture};
     use super::*;
 
     fn snapshot() -> Snapshot {
@@ -443,6 +443,75 @@ mod tests {
     }
 
     #[test]
+    fn a_published_book_still_drops_its_draft_lessons() {
+        // The case a book-level check would miss: `fixture-book` is published
+        // and one of its three lessons is not. Status is per lesson, so the
+        // book being live says nothing about the lesson.
+        let snapshot =
+            Snapshot::load(&fixture::content(), Drafts::Hidden).unwrap();
+        let book = snapshot.book("fixture-book").unwrap();
+
+        assert_eq!(book.book.status, Status::Published);
+        assert_eq!(book.lessons().count(), 2);
+        assert!(book.lesson("draft-lesson").is_none());
+        // And it is absent from reading order, not merely unlisted — so
+        // `neighbours` cannot walk into it either.
+        assert_eq!(
+            book.neighbours("split-lesson"),
+            (Some("free-lesson"), None)
+        );
+    }
+
+    #[test]
+    fn a_local_run_keeps_the_draft_lesson_beside_the_published_ones() {
+        let snapshot =
+            Snapshot::load(&fixture::content(), Drafts::Shown).unwrap();
+        let book = snapshot.book("fixture-book").unwrap();
+
+        assert_eq!(book.lessons().count(), 3);
+
+        let draft = book.lesson("draft-lesson").unwrap();
+        assert_eq!(draft.lesson.status, Status::Draft);
+        // In reading order where it belongs, so it can be read while written.
+        assert_eq!(
+            book.neighbours("split-lesson"),
+            (Some("free-lesson"), Some("draft-lesson"))
+        );
+    }
+
+    #[test]
+    fn a_draft_book_is_absent_in_production_and_present_locally() {
+        // The other axis, so the two cannot be confused: whole-book status.
+        let hidden =
+            Snapshot::load(&fixture::drafts(), Drafts::Hidden).unwrap();
+        let shown = Snapshot::load(&fixture::drafts(), Drafts::Shown).unwrap();
+
+        assert_eq!(hidden.books().count(), 0);
+        assert_eq!(shown.books().count(), 1);
+    }
+
+    #[test]
+    fn a_drafts_body_is_only_readable_when_drafts_are_shown() {
+        let production =
+            Catalog::load(fixture::content(), Drafts::Hidden).unwrap();
+        let local = Catalog::load(fixture::content(), Drafts::Shown).unwrap();
+
+        // Not a different response for the same lesson — no lesson at all.
+        assert!(
+            production
+                .body("fixture-book", "draft-lesson", Locale::En)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            local
+                .body("fixture-book", "draft-lesson", Locale::En)
+                .unwrap()
+                .is_some()
+        );
+    }
+
+    #[test]
     fn a_body_is_read_from_disk_rather_than_held() {
         let catalog =
             Catalog::load(fixture::content(), Drafts::Hidden).unwrap();
@@ -481,20 +550,20 @@ mod tests {
         assert!(catalog.current().lesson("fixture-book", "late").is_none());
 
         let lessons = root.join("books/fixture-book/lessons");
-        fs::create_dir_all(lessons.join("03-late")).unwrap();
+        fs::create_dir_all(lessons.join("04-late")).unwrap();
         fs::write(
-            lessons.join("03-late/lesson.yaml"),
+            lessons.join("04-late/lesson.yaml"),
             "slug: late\ntitle: A Late Lesson\nstatus: published\n\
              content_path:\n  en: lesson.md\n",
         )
         .unwrap();
-        fs::write(lessons.join("03-late/lesson.md"), "Written later.\n")
+        fs::write(lessons.join("04-late/lesson.md"), "Written later.\n")
             .unwrap();
 
         let book = root.join("books/fixture-book/book.yaml");
         let listed = fs::read_to_string(&book).unwrap().replace(
-            "      - \"02-split-lesson\"",
-            "      - \"02-split-lesson\"\n      - \"03-late\"",
+            "      - \"03-draft-lesson\"",
+            "      - \"03-draft-lesson\"\n      - \"04-late\"",
         );
         fs::write(&book, listed).unwrap();
 

@@ -234,6 +234,16 @@ pub mod fixture {
         ))
     }
 
+    /// A repo whose only book is a draft, for the whole-book half of the
+    /// policy. Its own root so it cannot pad any other walk.
+    #[must_use]
+    pub fn drafts() -> Content {
+        Content::at(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../fixture/drafts"
+        ))
+    }
+
     /// A repo where two lessons claim the same id.
     ///
     /// Its own root for the same reason [`broken`] has one. Separate from it
@@ -260,7 +270,7 @@ mod tests {
         assert_eq!(content.book_slugs().unwrap(), ["fixture-book"]);
         assert_eq!(
             content.lesson_folders("fixture-book").unwrap(),
-            ["01-free-lesson", "02-split-lesson"]
+            ["01-free-lesson", "02-split-lesson", "03-draft-lesson"]
         );
     }
 

@@ -1,0 +1,11 @@
+---
+# Draft, inside a published book. The pair that matters: a book being live says
+# nothing about whether every lesson in it is, and production must drop this one
+# while a local run keeps it.
+id: 019205c7-4f3a-7c21-9f4e-000000000003
+slug: draft-lesson
+title: A Draft Lesson
+description: written, listed by a chapter, and not for readers yet
+status: draft
+content_path:
+  en: lesson.md

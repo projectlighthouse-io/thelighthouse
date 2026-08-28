@@ -1,0 +1,9 @@
+---
+# Published, inside a draft book — the inverse of `fixture-book`'s draft lesson.
+# The book's status is what keeps this out of production, not this lesson's.
+id: 019205c7-4f3a-7c21-9f4e-0000000000f1
+slug: a-lesson
+title: A Lesson
+status: published
+content_path:
+  en: lesson.md

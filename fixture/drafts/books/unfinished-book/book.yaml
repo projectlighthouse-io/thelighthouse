@@ -1,0 +1,13 @@
+---
+# The whole book is a draft, so production must not see it at all — including
+# the published lesson inside it.
+id: 019205c7-4f3a-7c21-9f4e-0000000000f0
+slug: unfinished-book
+title: An Unfinished Book
+status: draft
+tier: foundation
+chapters:
+  - id: 1
+    title: "The Only Chapter"
+    lessons:
+      - "01-a-lesson"
