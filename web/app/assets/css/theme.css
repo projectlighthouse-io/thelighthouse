@@ -109,6 +109,15 @@
     --color-teal-bright: #5dd3da;
     --color-teal-wash: #e4f1f1;
 
+    /* annotations — what a reader draws on the prose themselves.
+       Two families because they mean two things: a note is a passage somebody
+       wrote about, a bookmark is the single place they left off. Washes rather
+       than fills, so the words stay the thing being read. */
+    --color-mark-note: #fbf0c4;
+    --color-mark-note-edge: #e6d089;
+    --color-mark-bookmark: #d9efef;
+    --color-mark-bookmark-edge: #8fcccc;
+
     /* terminal — github dark, only inside terminal mock-ups */
     --color-term-void: #0b0f15;
     --color-term-bg: #0d1117;
@@ -254,6 +263,14 @@
 
     --color-teal: #4bbec5;
     --color-teal-deep: #7fd6db;
+
+    /* Not the light washes darkened — a pale yellow on a dark page glares and
+       the text on it stops being readable. These are dim, saturated grounds
+       that the reader's own ink still sits legibly on. */
+    --color-mark-note: #4a3f14;
+    --color-mark-note-edge: #6f5f22;
+    --color-mark-bookmark: #123c3d;
+    --color-mark-bookmark-edge: #1d5f61;
 
     /* shadcn tokens, kept in step with the palette above */
     --background: hsl(30 6% 8%);
