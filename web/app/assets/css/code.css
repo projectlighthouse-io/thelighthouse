@@ -1,25 +1,98 @@
-/* code blocks and syntax highlighting */
-
-/* inline and block code */
-
-pre code.hljs {
-    border-radius: 6px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 13px;
-    background: var(--color-code-bg);
-}
+/* Code blocks and inline code.
+ *
+ * Scoped to `.lesson-content`, which is the wrapper every page puts rendered
+ * markdown in — lessons, blog posts, syntax pages, terms, privacy. Six pages
+ * had the same unstyled blocks; styling them here fixes all of them rather
+ * than the one that was noticed.
+ *
+ * Global on purpose, unlike `reader.css`, which is one system scoped under
+ * `.reader-shell` and imported only by the pages that need it. A code block is
+ * not a reader feature.
+ */
 
 code {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-.hljs {
-    background: var(--color-code-bg);
+/* The panel.
+ *
+ * Dark in both themes: `--color-term-*` are declared once in `theme.css` and
+ * never redefined under the dark selector, the same decision `docs/rebuild.md`
+ * records for terminal mock-ups. Deliberately *not* `--color-code-bg`, which
+ * does invert — a block that follows the theme is not what this is.
+ */
+.lesson-content pre {
+    /* `!important` because the api's highlighter writes
+     * `style="background-color:#2b303b"` onto the <pre> itself, and an inline
+     * style beats any selector. Its theme background is the one thing we do
+     * not want from it; the token colours inside are its own.
+     *
+     * If syntect is ever swapped for a highlighter that emits classes rather
+     * than inline styles, this is the line that stops being necessary. */
+    background: var(--color-term-bg) !important;
+    border: 1px solid var(--color-term-line);
+    border-radius: 8px;
+    padding: 16px 18px;
+    font-size: 13px;
+    line-height: 1.65;
+    overflow-x: auto;
 }
 
-/* task descriptions */
+/* Code inside a block must not inherit the inline-code chrome — a bordered
+ * pill per line is exactly what that would give.
+ */
+.lesson-content pre code {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: inherit;
+    line-height: inherit;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    /* Light on the dark panel, and fixed with it. */
+    color: var(--color-term-text);
+    white-space: pre;
+}
 
-.task-description pre,
-.task-description pre code {
-    background-color: var(--color-stripe);
+/* Below tailwind's `md`, wrap long lines rather than scrolling the block
+ * sideways — on a phone a horizontal scroll inside a paragraph of code is
+ * missed as often as it is found.
+ */
+@media (max-width: 767px) {
+    .lesson-content pre,
+    .lesson-content pre code {
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+
+    /* Except where the characters are the meaning. An ascii diagram or a `txt`
+     * table is a grid, and wrapping it does not shorten it — it takes it
+     * apart. Those scroll instead.
+     *
+     * `:has()` reads the language off the <code> the renderer labelled, so
+     * nothing has to be added to the markdown. It is newer than the rest of
+     * this file; every browser this site targets supports it, and the failure
+     * if one does not is a wrapped diagram, not a broken page.
+     */
+    .lesson-content pre:has(code.language-txt),
+    .lesson-content pre:has(code.language-text),
+    .lesson-content pre:has(code.language-ascii),
+    .lesson-content pre:has(code.language-txt) code,
+    .lesson-content pre:has(code.language-text) code,
+    .lesson-content pre:has(code.language-ascii) code {
+        white-space: pre;
+        word-break: normal;
+        overflow-wrap: normal;
+    }
+}
+
+/* Phones — tailwind's `sm`. The panel keeps its inset; the code gives up a
+ * little size so a typical line still fits before the block scrolls.
+ */
+@media (max-width: 639px) {
+    .lesson-content pre {
+        padding: 14px;
+        font-size: 12.5px;
+    }
 }
