@@ -134,6 +134,14 @@
 		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
+	# The reader's place in one lesson, written and read by the reader page
+	# under the same session cookie its notes go out under. Its own rule
+	# because the block above is one path prefix, not a licence for the
+	# neighbouring one.
+	handle /api/bookmarks* {
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
+	}
+
 	# The provider's return leg, and the one URL here that was not ours to pick:
 	# it is registered with Google and GitHub, and is the path the laravel app
 	# already serves. Keeping it means the cutover is a DNS change rather than a

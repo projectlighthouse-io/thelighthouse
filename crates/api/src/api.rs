@@ -22,7 +22,7 @@ use ohara::catalog::Catalog;
 use sqlx::postgres::PgPool;
 
 use crate::{
-    auth, books,
+    auth, bookmarks, books,
     cache::{self, CachePolicy},
     config::Config,
     db,
@@ -98,6 +98,7 @@ pub(crate) fn app(
         // `routes`.
         .merge(books::routes(&state))
         .merge(notes::routes(&state))
+        .merge(bookmarks::routes(&state))
         // Deliberately outside the reader gate: an OAuth callback is a browser
         // navigation and cannot carry an HMAC or a session. Those routes
         // authenticate themselves — see `auth`.
