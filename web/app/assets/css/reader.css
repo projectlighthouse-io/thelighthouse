@@ -1087,3 +1087,183 @@
     width: 14px;
     height: 14px;
 }
+
+/* ---------- annotations: highlights, the selection menu, the note dialog ----------
+ *
+ * The marks are painted into the lesson body by `app/utils/Anchor.ts`, one
+ * <mark> per text node a passage spans, so a highlight crossing two paragraphs
+ * is two elements that read as one. That is why the rules below never assume a
+ * mark is a whole passage: no rounded ends, no padding that would show as a gap
+ * at every block boundary.
+ *
+ * Deliberately *not* scoped under .reader-shell like everything above it. The
+ * menu and the dialog are fixed-position and the page mounts them at its root,
+ * outside the shell, so a descendant selector would miss them. */
+.reader-mark-note {
+    background: var(--color-mark-note);
+    box-shadow: inset 0 -1px 0 var(--color-mark-note-edge);
+    color: inherit;
+    cursor: pointer;
+}
+
+.reader-mark-bookmark {
+    background: var(--color-mark-bookmark);
+    box-shadow: inset 0 -1px 0 var(--color-mark-bookmark-edge);
+    color: inherit;
+    cursor: pointer;
+}
+
+/* A passage carrying both. The note wins the ground and the bookmark keeps its
+   underline, so neither disappears under the other. */
+.reader-mark-note.reader-mark-bookmark {
+    box-shadow: inset 0 -2px 0 var(--color-mark-bookmark-edge);
+}
+
+.reader-selectmenu {
+    position: fixed;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    background: var(--color-panel);
+    border: 1px solid var(--color-rule);
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgb(0 0 0 / 12%);
+    overflow: hidden;
+}
+
+.reader-selectmenu__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 13px;
+    border: none;
+    background: none;
+    font-family: var(--reader-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px;
+    white-space: nowrap;
+    color: var(--color-ink);
+    cursor: pointer;
+    transition: background 120ms;
+}
+
+.reader-selectmenu__item:hover {
+    background: var(--color-paper-warm);
+}
+
+.reader-selectmenu__item svg {
+    width: 14px;
+    height: 14px;
+}
+
+.reader-selectmenu__sep {
+    width: 1px;
+    align-self: stretch;
+    background: var(--color-rule);
+}
+
+.reader-notedialog {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.reader-notedialog__veil {
+    position: absolute;
+    inset: 0;
+    background: rgb(0 0 0 / 35%);
+}
+
+.reader-notedialog__card {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    padding: 24px;
+    border-radius: 14px;
+    box-shadow: 0 18px 50px rgb(0 0 0 / 22%);
+}
+
+.reader-notedialog__passage {
+    margin: 12px 0 16px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--color-mark-note-edge);
+    background: var(--color-paper-warm);
+    font-family: var(--reader-serif, 'Newsreader', Georgia, serif);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--color-mono-ink);
+}
+
+.reader-notedialog__field {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-rule);
+    border-radius: 8px;
+    background: var(--color-paper);
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--color-ink);
+    resize: vertical;
+}
+
+.reader-notedialog__field:focus {
+    outline: none;
+    border-color: var(--color-stroke);
+}
+
+.reader-notedialog__error {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--color-bad);
+}
+
+.reader-notepop {
+    position: fixed;
+    z-index: 70;
+    width: 280px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
+}
+
+.reader-notepop__body {
+    margin: 0;
+    font-family: var(--reader-serif, 'Newsreader', Georgia, serif);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--color-ink);
+    white-space: pre-wrap;
+}
+
+.reader-notepop__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-rule);
+}
+
+.reader-notepop__action {
+    border: none;
+    background: none;
+    padding: 0;
+    font-family: var(--reader-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    color: var(--color-quiet);
+    cursor: pointer;
+    transition: color 120ms;
+}
+
+.reader-notepop__action:hover {
+    color: var(--color-ink);
+}
+
+.reader-notepop__action:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
