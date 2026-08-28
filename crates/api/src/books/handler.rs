@@ -2,6 +2,7 @@
 
 use axum::response::Response;
 use axum::{
+    Extension,
     extract::{Path, State},
     http::StatusCode,
 };
@@ -15,6 +16,7 @@ use crate::{
     cache::CachePolicy,
     ohara::body,
     response::{self, not_found},
+    session::Session,
 };
 
 /// Every published book.
@@ -88,6 +90,8 @@ pub(crate) async fn lesson(
 /// there is more to buy.
 pub(crate) async fn paid(
     State(state): State<AppState>,
+    // Behind `require_reader`, which put this here — see `books::routes`.
+    Extension(session): Extension<Session>,
     Path((book, lesson)): Path<(String, String)>,
 ) -> Response {
     let snapshot = state.catalog.current();
@@ -96,8 +100,13 @@ pub(crate) async fn paid(
         return not_found();
     };
 
-    if access(book_entry) == Access::FreeOnly {
-        return not_found();
+    match access(&state.db, Some(session.user_id), book_entry).await {
+        Ok(Access::Full) => {}
+        Ok(Access::FreeOnly) => return not_found(),
+        Err(cause) => {
+            tracing::error!(%book, %cause, "failed to check entitlement");
+            return response::server_error();
+        }
     }
 
     let prose = match state.catalog.body(&book, &lesson) {
