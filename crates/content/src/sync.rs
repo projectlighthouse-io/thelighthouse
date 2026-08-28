@@ -8,10 +8,15 @@
 //! `entitlements.book_id`. A foreign key needs a row to point at, and that row
 //! is the whole job.
 //!
-//! Which is also why `lesson_translations.content` is not in any statement
-//! below. The column exists, laravel filled it, and writing prose into it here
-//! would put the paid half of every lesson in a table that no entitlement check
-//! guards.
+//! Which is why there is no lesson translation written here at all, and why
+//! the table is gone: a lesson's title, description and seo are served from the
+//! catalogue, and its prose is read off disk per request so that entitlement
+//! decides which half a reader gets. A `content` column would have put the paid
+//! half of every lesson in a table no entitlement check guards.
+//!
+//! Translation lives in the content repo instead. Each `lesson.yaml` maps a
+//! locale to a markdown file beside it, so a translation ships with the prose
+//! it translates rather than in a second row here.
 //!
 //! **Read-only against the content repo.** Nothing here opens a file for
 //! writing. A book or lesson with no `id` is refused by name rather than having
@@ -34,11 +39,12 @@ use serde::Serialize;
 use sqlx::{PgConnection, postgres::PgPool};
 use uuid::Uuid;
 
-/// The only locale ohara carries.
+/// The locale the one remaining translation row is written under.
 ///
-/// Bengali content is translated by hand into the `*_translations` tables and
-/// is not in the content repo, so every statement here is scoped to this one
-/// row per book and per lesson. A `bn` row is never touched by a sync.
+/// Only `book_translations` has one now — a lesson's prose and metadata both
+/// come from the content repo, so `lesson_translations` was dropped rather
+/// than filled. Scoping the statement to `en` means a `bn` book row somebody
+/// wrote by hand is never touched by a sync.
 const LOCALE: &str = "en";
 
 /// The columns are `timestamp without time zone` and laravel wrote UTC into
@@ -251,7 +257,11 @@ async fn book(
     Ok(())
 }
 
-/// One lesson, and its `en` translation.
+/// One lesson: identity, ordering, and nothing a reader sees.
+///
+/// One statement, unlike [`book`], because a lesson has no translation row —
+/// see the note at the top of this file. Everything readable about a lesson
+/// comes from the content repo.
 ///
 /// `chapter_id` and `sort_order` come from the entry rather than the yaml: the
 /// chapter is whichever one listed this folder, and the order is the folder's
@@ -285,36 +295,6 @@ async fn lesson(
     .bind(held.chapter_id)
     .bind(held.sort_order)
     .bind(lesson.status.as_db())
-    .execute(&mut *tx)
-    .await
-    .map_err(|cause| Error::Database {
-        writing: writing(),
-        cause,
-    })?;
-
-    // No `content`. See the note at the top of this file — the body stays on
-    // disk, where entitlement decides who is handed which half of it.
-    sqlx::query(&format!(
-        "INSERT INTO lesson_translations
-             (lesson_id, locale, title, description,
-              meta_title, meta_description, meta_keywords,
-              created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, {STAMP}, {STAMP})
-         ON CONFLICT (lesson_id, locale) DO UPDATE SET
-             title            = EXCLUDED.title,
-             description      = EXCLUDED.description,
-             meta_title       = EXCLUDED.meta_title,
-             meta_description = EXCLUDED.meta_description,
-             meta_keywords    = EXCLUDED.meta_keywords,
-             updated_at       = EXCLUDED.updated_at"
-    ))
-    .bind(id)
-    .bind(LOCALE)
-    .bind(&lesson.title)
-    .bind(lesson.description.as_deref())
-    .bind(lesson.seo.meta_title.as_deref())
-    .bind(lesson.seo.meta_description.as_deref())
-    .bind(lesson.seo.meta_keywords.as_deref())
     .execute(&mut *tx)
     .await
     .map_err(|cause| Error::Database {

@@ -1,0 +1,40 @@
+-- lesson_translations.
+--
+-- The table laravel translated lessons in: a row per lesson per locale,
+-- carrying the title, the description, the seo fields and — in `content` — the
+-- prose itself.
+--
+-- Nothing in the rebuild reads it. A lesson's title, description and seo are
+-- served from the content repo through the in-memory catalogue, never from
+-- postgres, and the prose is read off disk per request so that entitlement
+-- decides which half a reader is handed. The rows the database still needs are
+-- `lessons` itself: an id for `notes.lesson_id`, `lesson_bookmarks.lesson_id`
+-- and `lesson_completions.lesson_id` to point at, plus the slug those are
+-- looked up by.
+--
+-- **Translation moved into the content repo, which is why this can go rather
+-- than being kept for bengali.** Each `lesson.yaml` now carries a
+-- `content_path` mapping a locale to a markdown file beside it, so a
+-- translation is a file that ships with the prose it translates. A second row
+-- in postgres would be a second place to forget.
+--
+-- `lessons` keeps no title of its own — it never had one, the column only ever
+-- existed here — so after this a lesson row is pure identity and ordering:
+-- id, book_id, slug, chapter_id, sort_order, status. That is what a foreign key
+-- target should be.
+--
+-- **Do not run this against production until ohara carries every book.** The
+-- `content` column holds the prose for all of them, and the content repo
+-- currently has one. The markdown itself is not at risk — it lives in the
+-- laravel repo under `content/lessons/` and that is where the rows were
+-- generated from — but this removes the database's copy, so the yaml-and-
+-- markdown migration has to have happened first. Locally the table is empty
+-- except for what the sync wrote.
+--
+-- `book_translations` is deliberately left alone. It is the same argument and
+-- it is not yet the same decision.
+--
+-- The foreign key to `lessons` goes with the table; nothing references
+-- `lesson_translations` itself.
+
+DROP TABLE lesson_translations;
