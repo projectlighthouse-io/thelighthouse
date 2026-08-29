@@ -1274,9 +1274,9 @@
  * two sites read the same. Sits inside `.reader-article`, which already holds
  * the column width, so this carries the rhythm and the type and not a second
  * max-width fighting the first. */
-/* No rule above the heading — the space does the separating. A line here sat
-   directly under the prev/next buttons and read as their underline rather than
-   as the top of this section. */
+/* No rule above the heading — the space does the separating. The prev/next
+   buttons sit directly above, and a line between them and this heading reads
+   as their underline rather than as the top of this section. */
 .reader-comments {
     margin-top: 64px;
     font-family: var(--reader-sans);

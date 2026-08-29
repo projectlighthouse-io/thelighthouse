@@ -517,24 +517,10 @@ useJsonLd('crumbs', () => ({
           </div>
         </div>
 
-        <ReaderCommentsThread
-          :notes="inReadingOrder"
-          :loading="!notesLoaded && isSignedIn"
-          :signed-in="isSignedIn"
-          :submitting="postingComment"
-          :submit-error="commentError"
-          :editing-id="editingNoteId"
-          :saving-id="savingNoteId"
-          @submit="postComment"
-          @jump="jumpToNote"
-          @edit="editingNoteId = $event.id"
-          @save="saveNoteEdit"
-          @cancel-edit="editingNoteId = null"
-          @remove="removeListedNote"
-          @sign-in="signIn"
-        />
-
-        <!-- Stacked on a phone: two lesson titles do not fit side by side. -->
+        <!-- Above the thread: carrying on with the book is what most readers
+             want at the end of a lesson, and their own notes are what a few of
+             them want. Stacked on a phone — two lesson titles do not fit side
+             by side. -->
         <div
           class="mt-12 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center sm:gap-4"
         >
@@ -554,6 +540,23 @@ useJsonLd('crumbs', () => ({
             {{ data.next.title }} →
           </NuxtLink>
         </div>
+
+        <ReaderCommentsThread
+          :notes="inReadingOrder"
+          :loading="!notesLoaded && isSignedIn"
+          :signed-in="isSignedIn"
+          :submitting="postingComment"
+          :submit-error="commentError"
+          :editing-id="editingNoteId"
+          :saving-id="savingNoteId"
+          @submit="postComment"
+          @jump="jumpToNote"
+          @edit="editingNoteId = $event.id"
+          @save="saveNoteEdit"
+          @cancel-edit="editingNoteId = null"
+          @remove="removeListedNote"
+          @sign-in="signIn"
+        />
       </article>
 
     </div>
