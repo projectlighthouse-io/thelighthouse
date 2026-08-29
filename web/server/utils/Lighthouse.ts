@@ -13,11 +13,17 @@ const base = (): string =>
   useRuntimeConfig().apiBase || 'http://127.0.0.1:9000'
 
 /**
- * A GET against the api, with its 404 turned into nitro's.
+ * A GET against the api, with its 404 turned into nitro's and its silence into
+ * a 502.
  *
- * Anything else — the api being down, a 500 — is left to throw as it is. A
- * page that renders "not found" because the backend was restarting is worse
- * than one that errors honestly.
+ * A rejection carrying no status at all is a connection that was never made —
+ * the api down, restarting, or not yet listening. Rethrown as it comes, nitro
+ * reports that as a 500, which says *this* process broke. It did not: it is the
+ * gateway, and its upstream did not answer. 502 says so, and is the difference
+ * between reading the logs of the right process and the wrong one.
+ *
+ * A real 5xx from the api keeps its own status. That one is genuinely the
+ * api's, and flattening it into 502 would lose which of the two failed.
  */
 export async function fromApi<T>(path: string): Promise<T> {
   try {
@@ -33,6 +39,13 @@ export async function fromApi<T>(path: string): Promise<T> {
 
     if (status === 404) {
       throw createError({ statusCode: 404, statusMessage: 'Not found' })
+    }
+
+    if (status === undefined) {
+      throw createError({
+        statusCode: 502,
+        statusMessage: 'The api is not answering',
+      })
     }
 
     throw error
