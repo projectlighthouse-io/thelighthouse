@@ -12,12 +12,35 @@ const lessonSlug = computed<string>(() => String(route.params.lesson))
 // through the book, what comes next. The paid half never enters this component,
 // which is the point — see docs/rebuild.md. During SSR this calls the handler
 // directly, so it costs no HTTP round trip.
-const { data } = await useAsyncData(
+const { data, error } = await useAsyncData(
   () => `lesson:${bookSlug.value}:${lessonSlug.value}`,
   () => $fetch<LessonResponse>(`/_api/books/${bookSlug.value}/pages/${lessonSlug.value}`),
   { watch: [bookSlug, lessonSlug] },
 )
 
+/**
+ * Why the failure is read before the absence.
+ *
+ * `useAsyncData` does not throw — a request that failed leaves `data` null and
+ * puts the reason in `error`. Checking only `data` therefore reports an api
+ * that is down, a 500, or a timeout as "lesson not found", which sends
+ * whoever reads it looking for missing content that is not missing.
+ *
+ * A rejection with no status is nitro never reaching the api at all, and 502 is
+ * what that is: this process is the gateway, and its upstream did not answer.
+ */
+if (error.value) {
+  const status = error.value.statusCode ?? 502
+
+  throw createError({
+    statusCode: status,
+    statusMessage:
+      status === 404 ? 'Lesson not found' : 'The api is not answering',
+    fatal: true,
+  })
+}
+
+// Past the error check, so this is a genuinely empty answer.
 if (!data.value) {
   throw createError({ statusCode: 404, statusMessage: 'Lesson not found', fatal: true })
 }

@@ -12,13 +12,35 @@ const slug = computed<string>(() => String(route.params.slug))
 
 // From ohara, through the rust api. During SSR this calls the handler directly,
 // so it costs no HTTP round trip.
-const { data } = await useAsyncData(
+const { data, error } = await useAsyncData(
   () => `book:${slug.value}`,
   () => $fetch<BookDetailResponse>(`/_api/books/${slug.value}`),
   { watch: [slug] },
 )
 
-// an unknown slug is a real 404, not an empty page
+/**
+ * Why the failure is read before the absence.
+ *
+ * `useAsyncData` does not throw — a request that failed leaves `data` null and
+ * puts the reason in `error`. Checking only `data` therefore reports an api
+ * that is down, a 500, or a timeout as "book not found", which sends
+ * whoever reads it looking for missing content that is not missing.
+ *
+ * A rejection with no status is nitro never reaching the api at all, and 502 is
+ * what that is: this process is the gateway, and its upstream did not answer.
+ */
+if (error.value) {
+  const status = error.value.statusCode ?? 502
+
+  throw createError({
+    statusCode: status,
+    statusMessage:
+      status === 404 ? 'Book not found' : 'The api is not answering',
+    fatal: true,
+  })
+}
+
+// Past the error check, so this is a genuinely empty answer.
 if (!data.value) {
   throw createError({ statusCode: 404, statusMessage: 'Book not found', fatal: true })
 }
