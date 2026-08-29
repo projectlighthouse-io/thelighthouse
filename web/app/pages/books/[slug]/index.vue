@@ -147,8 +147,12 @@ useJsonLd('crumbs', () => ({
       <BookCoverSlideshow :images="covers" :title="book.title" />
     </section>
 
-    <section class="grid gap-12 pb-20 lg:grid-cols-3 lg:items-start">
-      <div class="min-w-0 lg:col-span-2">
+    <!-- No grid any more: the third column existed for the aside, and a grid
+         still reserving it would leave the curriculum at two thirds width with
+         a hole beside it. `max-w-4xl` keeps roughly the measure it had, so the
+         lesson rows do not run the full 80rem. -->
+    <section class="pb-20">
+      <div class="min-w-0 max-w-4xl">
         <div v-for="chapter in chapters" :key="chapter.id" class="mb-16 last:mb-0">
           <header class="mb-6">
             <h2
@@ -206,30 +210,6 @@ useJsonLd('crumbs', () => ({
           </ul>
         </div>
       </div>
-
-      <aside class="hidden lg:block">
-        <div class="sticky top-24 rounded-lg bg-note p-7">
-          <div class="font-mono text-xs tracking-wider uppercase text-rose">
-            what you'll walk away with
-          </div>
-          <ul class="mt-5 space-y-4">
-            <li
-              v-for="chapter in chapters.slice(0, 6)"
-              :key="chapter.id"
-              class="flex gap-3 text-sm leading-relaxed text-ink"
-            >
-              <span class="mt-2 size-1.5 shrink-0 rounded-full bg-rose" />
-              <span>{{ chapter.title }}</span>
-            </li>
-          </ul>
-          <div
-            v-if="chapters.length > 6"
-            class="mt-6 border-t border-dashed border-rule-dashed pt-5 text-sm leading-relaxed italic text-quiet"
-          >
-            and {{ chapters.length - 6 }} more chapters.
-          </div>
-        </div>
-      </aside>
     </section>
   </div>
 </template>
