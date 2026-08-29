@@ -1,8 +1,11 @@
-/* The title block at the top of a page, set the way the reader sets a lesson's.
+/* The title block at the top of a page.
  *
- * The reader had this first and it is the look the rest of the site is moving
- * towards, so the values here are its values — Lora, 54px, tight leading and a
- * serif dek under it. What it is *not* is a second copy of `reader.css`: that
+ * It began as the reader's lesson title — its size, leading and dek — and has
+ * since taken a display face of its own, so a book's title and a lesson's no
+ * longer match. That is deliberate: a lesson title sits above prose in the same
+ * family, while a book title sits above a list of chapter headings and has to
+ * be a different thing from them. What this is *not* is a second copy of
+ * `reader.css`: that
  * file is one system scoped under `.reader-shell`, deliberately not imported
  * globally, and pulling it in for a heading would ship ~20kb to every route to
  * borrow three rules.
@@ -14,10 +17,21 @@
  */
 
 .masthead-title {
-    /* The site's serif, from `--font-serif`: Lora, then Charter and Iowan Old
-     * Style before Georgia. Not spelled out again here — a second copy of a
-     * font stack is one that drifts from the first. */
-    font-family: var(--font-serif);
+    /* Newsreader, not the site's Lora. A book's title is the one line on the
+     * page doing display work, and in Lora it is set in the same face as the
+     * chapter headings below it — so the biggest thing on screen read as a
+     * larger version of the list rather than as a title.
+     *
+     * Newsreader has sharper thick/thin contrast and carries an `opsz` axis, so
+     * optical sizing gives it finer detail at 54px than the same face would use
+     * at body size. Already loaded for the reader, where it is `--reader-serif`,
+     * so this costs no extra webfont.
+     *
+     * Spelled out rather than tokenised: there is one masthead, and a
+     * `--font-display` token with a single user is a token invented for the
+     * next user rather than this one. */
+    font-family: 'Newsreader', Georgia, serif;
+    font-optical-sizing: auto;
     font-weight: 600;
     font-size: 54px;
     line-height: 1.08;
