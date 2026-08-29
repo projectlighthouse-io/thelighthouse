@@ -58,7 +58,6 @@ const numberOf = (lesson: LessonSummary): string =>
 
 const firstLesson = computed<LessonSummary | undefined>(() => lessons.value[0])
 const hasLocked = computed<boolean>(() => lessons.value.some(l => l.locked))
-const estHours = computed<string>(() => `~${Math.max(1, Math.round(lessons.value.length * 0.4))} hours`)
 
 useSeo(() => ({
   title: `${book.value?.title} — projectlighthouse`,
@@ -90,7 +89,10 @@ useJsonLd('crumbs', () => ({
 </script>
 
 <template>
-  <div v-if="book" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <div v-if="book" class="mx-auto max-w-7xl bg-panel px-4 sm:px-6 lg:px-8">
+    <!-- `bg-panel`, not `bg-white`: the token is #ffffff in light and the dark
+         panel in dark, so this slab inverts with the theme rather than staying
+         a sheet of white on a dark page. -->
     <nav class="pt-10 pb-8 font-mono text-sm text-faint">
       <NuxtLink to="/books" class="hover:text-ink">books</NuxtLink>
       <span class="mx-3 text-crumb">/</span>
@@ -99,17 +101,6 @@ useJsonLd('crumbs', () => ({
 
     <section class="grid gap-12 pb-16 lg:grid-cols-[1fr_420px] lg:items-start">
       <div>
-        <div class="mb-10 flex flex-wrap items-center gap-2 font-mono text-xs">
-          <span class="inline-flex items-center rounded-md px-2.5 py-1 text-ink">
-            {{ lessons.length }} lessons
-          </span>
-          <span
-            class="inline-flex items-center rounded-full border border-stroke bg-panel px-3 py-1 text-ink"
-          >
-            {{ estHours }}
-          </span>
-        </div>
-
         <!-- Set as the reader sets a lesson title — see masthead.css. -->
         <h1 class="masthead-title">
           {{ book.title }}
