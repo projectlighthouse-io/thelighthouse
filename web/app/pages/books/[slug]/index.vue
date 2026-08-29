@@ -149,10 +149,11 @@ useJsonLd('crumbs', () => ({
 
     <!-- No grid any more: the third column existed for the aside, and a grid
          still reserving it would leave the curriculum at two thirds width with
-         a hole beside it. `max-w-4xl` keeps roughly the measure it had, so the
-         lesson rows do not run the full 80rem. -->
+         a hole beside it. `max-w-4xl` keeps roughly the measure it had so the
+         lesson rows do not run the full 80rem, and `mx-auto` centres that
+         column rather than leaving it against the left edge. -->
     <section class="pb-20">
-      <div class="min-w-0 max-w-4xl">
+      <div class="mx-auto min-w-0 max-w-4xl">
         <div v-for="chapter in chapters" :key="chapter.id" class="mb-16 last:mb-0">
           <header class="mb-6">
             <h2
