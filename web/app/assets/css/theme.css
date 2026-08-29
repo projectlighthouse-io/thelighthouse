@@ -264,6 +264,13 @@
     --color-teal: #4bbec5;
     --color-teal-deep: #7fd6db;
 
+    /* Only the foreground half of the bad family, because only the foreground
+       half is used outside prose.css — a refusal message, a delete on hover.
+       `#991b1b` is a dark red for a white page and is barely legible on this
+       one. Its `-bg` and `-line` partners belong to the callouts, which are
+       step 3 with the rest of prose.css. */
+    --color-bad: #f87171;
+
     /* Not the light washes darkened — a pale yellow on a dark page glares and
        the text on it stops being readable. These are dim, saturated grounds
        that the reader's own ink still sits legibly on. */
