@@ -50,6 +50,9 @@ impl<'b> BookSummary<'b> {
 pub(crate) struct BookDetail<'b> {
     #[serde(flatten)]
     summary: BookSummary<'b>,
+    /// Here and not on [`BookSummary`]: a listing of twenty books has no use
+    /// for seven image urls apiece, and would carry them anyway.
+    images: &'b [String],
     chapters: Vec<ChapterView<'b>>,
     seo: SeoView<'b>,
 }
@@ -84,6 +87,7 @@ impl<'b> BookDetail<'b> {
 
         Self {
             summary: BookSummary::of(entry),
+            images: &entry.book.images,
             chapters,
             seo: SeoView::of_book(entry),
         }
