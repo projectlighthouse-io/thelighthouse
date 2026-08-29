@@ -112,6 +112,7 @@ const scope = computed(() => ({
 
 const {
   notes,
+  loaded: notesLoaded,
   load: loadNotes,
   create: createNote,
   edit: editNote,
@@ -280,9 +281,25 @@ const goToBookmark = (): void => {
   bookmarkMarks[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
-/* ---------- the list under the lesson ---------- */
+/* ---------- the thread under the lesson ---------- */
 const editingNoteId = ref<number | null>(null)
 const savingNoteId = ref<number | null>(null)
+const postingComment = ref<boolean>(false)
+const commentError = ref<string | null>(null)
+
+/**
+ * A note with nothing selected — the comment box rather than the margin.
+ *
+ * The api takes it: `selected_text` and both offsets are nullable, and a note
+ * with no anchor is a thought about the lesson rather than about one sentence
+ * of it. It shows in the thread and draws no highlight, because there is no
+ * passage to draw it on.
+ */
+const postComment = async (content: string): Promise<void> => {
+  postingComment.value = true
+  commentError.value = await createNote(content)
+  postingComment.value = false
+}
 
 /**
  * Up to the highlight a listed note belongs to.
@@ -500,15 +517,21 @@ useJsonLd('crumbs', () => ({
           </div>
         </div>
 
-        <ReaderNotesList
+        <ReaderCommentsThread
           :notes="inReadingOrder"
+          :loading="!notesLoaded && isSignedIn"
+          :signed-in="isSignedIn"
+          :submitting="postingComment"
+          :submit-error="commentError"
           :editing-id="editingNoteId"
           :saving-id="savingNoteId"
+          @submit="postComment"
           @jump="jumpToNote"
           @edit="editingNoteId = $event.id"
           @save="saveNoteEdit"
           @cancel-edit="editingNoteId = null"
           @remove="removeListedNote"
+          @sign-in="signIn"
         />
 
         <!-- Stacked on a phone: two lesson titles do not fit side by side. -->

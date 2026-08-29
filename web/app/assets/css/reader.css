@@ -1268,107 +1268,341 @@
     opacity: 0.6;
 }
 
-/* ---------- the reader's own notes, listed under the lesson ---------- */
-.reader-notes {
+/* ---------- notes & highlights: the thread under a lesson ----------
+ *
+ * Ported from the laravel reader's `CommentsThread` and `NoteComment` so the
+ * two sites read the same. Sits inside `.reader-article`, which already holds
+ * the column width, so this carries the rhythm and the type and not a second
+ * max-width fighting the first. */
+.reader-comments {
     margin-top: 56px;
-    padding-top: 28px;
+    padding-top: 40px;
     border-top: 1px solid var(--reader-line);
-}
-
-.reader-notes__title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 0 0 20px;
-    font-family: var(--reader-mono);
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--reader-mute);
-}
-
-.reader-notes__count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 20px;
-    height: 20px;
-    padding: 0 6px;
-    border-radius: 10px;
-    background: var(--color-mark-note);
-    font-size: 11px;
-    letter-spacing: 0;
+    font-family: var(--reader-sans);
     color: var(--reader-ink);
 }
 
-.reader-notes__list {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+.reader-comments__title {
+    margin: 0 0 24px;
+    font-family: var(--reader-serif);
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--reader-ink);
 }
 
-.reader-notes__item {
-    padding: 16px 18px;
+.reader-comments__compose {
+    margin-bottom: 32px;
+    padding: 14px;
+    border: 1px solid var(--reader-line);
+    border-radius: 10px;
+    background: var(--reader-bg);
+}
+
+.reader-comments__signin {
+    margin-bottom: 32px;
+    padding: 18px 16px;
     border: 1px solid var(--reader-line);
     border-radius: 10px;
     background: var(--reader-bg-2);
+    font-family: var(--reader-mono);
+    font-size: 13px;
+    color: var(--reader-mute);
+    text-align: center;
 }
 
-/* A button, not a blockquote: it scrolls to the highlight, and anything that
-   moves the page on click has to be reachable from the keyboard too. */
-.reader-notes__passage {
-    display: block;
-    width: 100%;
-    margin: 0 0 10px;
-    padding: 0 0 0 12px;
+.reader-comments__signin-link {
+    margin-right: 4px;
+    padding: 0 0 1px;
     border: none;
-    border-left: 3px solid var(--color-mark-note-edge);
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-teal-d) 40%, transparent);
     background: none;
-    font-family: var(--reader-serif);
-    font-size: 15px;
-    line-height: 1.5;
-    text-align: left;
-    color: var(--reader-ink-2);
+    font: inherit;
+    color: var(--reader-teal-d);
     cursor: pointer;
+    transition: border-color 120ms;
 }
 
-.reader-notes__passage:hover {
-    color: var(--reader-ink);
+.reader-comments__signin-link:hover {
+    border-bottom-color: var(--reader-teal-d);
 }
 
-.reader-notes__body {
-    margin: 0;
-    font-family: var(--reader-serif);
-    font-size: 16px;
+.reader-comments__textarea {
+    width: 100%;
+    border: none;
+    background: transparent;
+    outline: none;
+    resize: none;
+    font: inherit;
+    font-size: 14px;
     line-height: 1.6;
     color: var(--reader-ink);
-    white-space: pre-wrap;
 }
 
-.reader-notes__meta {
+.reader-comments__textarea::placeholder {
+    color: var(--reader-faint);
+}
+
+.reader-comments__compose-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 12px;
+    margin-top: 10px;
 }
 
-.reader-notes__when {
+.reader-comments__counter {
     font-family: var(--reader-mono);
     font-size: 11px;
     color: var(--reader-faint);
 }
 
-.reader-notes__actions {
-    display: flex;
-    align-items: center;
-    gap: 14px;
+.reader-comments__submit {
+    padding: 7px 16px;
+    border: 1px solid var(--reader-ink);
+    border-radius: 6px;
+    background: var(--reader-ink);
+    font-family: var(--reader-mono);
+    font-size: 12px;
+    /* The page's own paper, so this inverts with the theme instead of being
+       white text on a light slab in dark mode. */
+    color: var(--reader-bg);
+    cursor: pointer;
+    transition: opacity 140ms;
 }
 
-.reader-notes__edit .reader-notes__actions {
-    justify-content: flex-end;
-    margin-top: 10px;
+.reader-comments__submit:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.reader-comments__submit:not(:disabled):hover {
+    opacity: 0.85;
+}
+
+.reader-comments__error {
+    margin-top: 8px;
+    font-family: var(--reader-mono);
+    font-size: 12px;
+    color: var(--color-bad);
+}
+
+.reader-comments__loading,
+.reader-comments__empty {
+    padding: 24px 0;
+    font-family: var(--reader-mono);
+    font-size: 12px;
+    color: var(--reader-mute);
+    text-align: center;
+}
+
+.reader-comments__list > * + * {
+    margin-top: 24px;
+}
+
+/* ---------- one note in the thread ---------- */
+.note-comment {
+    display: flex;
+    gap: 12px;
+}
+
+.note-comment__avatar {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: var(--reader-bg-2);
+}
+
+.note-comment__avatar--initials {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--reader-mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--reader-mute);
+}
+
+.note-comment__main {
+    flex: 1;
+    min-width: 0;
+}
+
+.note-comment__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.note-comment__who {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--reader-ink);
+}
+
+.note-comment__lock {
+    width: 13px;
+    height: 13px;
+    color: var(--reader-faint);
+}
+
+.note-comment__dot,
+.note-comment__when {
+    font-size: 12px;
+    color: var(--reader-faint);
+}
+
+/* Revealed on hover, so a thread at rest is the notes and not the chrome.
+   Always visible on touch, where there is no hover to reveal them with. */
+.note-comment__acts {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+@media (hover: hover) {
+    .note-comment__acts {
+        opacity: 0;
+        transition: opacity 140ms;
+    }
+
+    .note-comment:hover .note-comment__acts,
+    .note-comment:focus-within .note-comment__acts {
+        opacity: 1;
+    }
+}
+
+.note-comment__act {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--reader-faint);
+    cursor: pointer;
+    transition: color 120ms, background 120ms;
+}
+
+.note-comment__act svg {
+    width: 15px;
+    height: 15px;
+}
+
+.note-comment__act:hover {
+    background: var(--reader-bg-2);
+    color: var(--reader-ink-2);
+}
+
+.note-comment__act--danger:hover {
+    color: var(--color-bad);
+}
+
+.note-comment__act:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.note-comment__body {
+    margin: 0 0 8px;
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--reader-ink);
+    white-space: pre-wrap;
+}
+
+/* A button because it scrolls to the highlight, styled as the quotation it
+   is — anything that moves the page has to be reachable from the keyboard. */
+.note-comment__quote {
+    display: block;
+    width: 100%;
+    padding: 0 0 0 12px;
+    border: none;
+    border-left: 2px solid var(--reader-line);
+    background: none;
+    font-family: var(--reader-serif);
+    font-size: 14px;
+    font-style: italic;
+    line-height: 1.6;
+    text-align: left;
+    color: var(--reader-mute);
+    cursor: pointer;
+    transition: border-color 120ms, color 120ms;
+}
+
+.note-comment__quote:hover {
+    border-left-color: var(--color-mark-note-edge);
+    color: var(--reader-ink-2);
+}
+
+.note-comment__field {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--reader-line);
+    border-radius: 8px;
+    background: var(--reader-bg);
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--reader-ink);
+    resize: none;
+}
+
+.note-comment__field:focus {
+    outline: none;
+    border-color: var(--reader-mute);
+}
+
+.note-comment__editrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+}
+
+.note-comment__editacts {
+    display: flex;
+    gap: 8px;
+}
+
+.note-comment__cancel,
+.note-comment__save {
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: opacity 120ms;
+}
+
+.note-comment__cancel {
+    border: none;
+    background: none;
+    color: var(--reader-mute);
+}
+
+.note-comment__cancel:hover {
+    color: var(--reader-ink);
+}
+
+.note-comment__save {
+    border: 1px solid var(--reader-line);
+    background: var(--reader-bg);
+    font-weight: 500;
+    color: var(--reader-ink);
+}
+
+.note-comment__save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+    .note-comment__avatar {
+        width: 32px;
+        height: 32px;
+    }
 }
