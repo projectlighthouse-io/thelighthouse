@@ -45,6 +45,18 @@ pub struct Book {
     #[serde(default)]
     pub tier: Tier,
     pub thumbnail_url: Option<String>,
+    /// What the book's own page shows, in order, as a slideshow.
+    ///
+    /// Separate from `thumbnail_url`, which is one image with one job: the card
+    /// in a listing and the share preview, where a diagram from chapter six is
+    /// the wrong thing to hand a link unfurler. These are the book making its
+    /// case — the cover, then whichever figures are worth seeing before buying
+    /// it.
+    ///
+    /// Empty for a book with none, and the page shows nothing rather than a
+    /// frame around a missing image.
+    #[serde(default)]
+    pub images: Vec<String>,
     /// Absent is free.
     #[serde(default)]
     pub price: Price,
