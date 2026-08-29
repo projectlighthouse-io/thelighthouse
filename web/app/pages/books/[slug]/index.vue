@@ -59,6 +59,20 @@ const numberOf = (lesson: LessonSummary): string =>
 const firstLesson = computed<LessonSummary | undefined>(() => lessons.value[0])
 const hasLocked = computed<boolean>(() => lessons.value.some(l => l.locked))
 
+/**
+ * What the slideshow shows.
+ *
+ * `images` is the book's own list and the thumbnail is the fallback, so a book
+ * whose yaml has no `images:` yet still shows its cover rather than a gap. A
+ * book with neither shows nothing at all — the component renders no frame.
+ */
+const covers = computed<string[]>(() => {
+  const listed = book.value?.images ?? []
+  if (listed.length) return listed
+
+  return book.value?.thumbnailUrl ? [book.value.thumbnailUrl] : []
+})
+
 useSeo(() => ({
   title: `${book.value?.title} — projectlighthouse`,
   description: book.value?.description ?? '',
@@ -128,15 +142,9 @@ useJsonLd('crumbs', () => ({
         </div>
       </div>
 
-      <div class="hidden flex-col items-center gap-3 lg:flex">
-        <div class="relative aspect-[16/10] w-full overflow-hidden rounded-xl">
-          <img
-            :src="book.thumbnailUrl"
-            :alt="book.title"
-            class="absolute inset-0 h-full w-full rounded-xl object-contain"
-          >
-        </div>
-      </div>
+      <!-- The book's own images, not its thumbnail: `images` is what it has to
+           show, and falls back to the one image every book has. -->
+      <BookCoverSlideshow :images="covers" :title="book.title" />
     </section>
 
     <section class="grid gap-12 pb-20 lg:grid-cols-3 lg:items-start">

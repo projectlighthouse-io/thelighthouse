@@ -34,6 +34,9 @@ export default defineEventHandler(async (event) => {
       price: priceLabel(book.price),
       firstLesson: book.first_lesson,
       inProgress: false,
+      // In order, and the page shows them in order. Empty for a book with
+      // none, which is a page with no slideshow rather than an empty frame.
+      images: book.images ?? [],
     },
     chapters: book.chapters.map(chapter => ({
       id: chapter.id,

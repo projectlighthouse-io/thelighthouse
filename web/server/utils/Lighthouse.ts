@@ -85,6 +85,9 @@ export interface ApiChapter {
 }
 
 export interface ApiBookDetail extends ApiBookSummary {
+  /** The book page's slideshow, in order. Not on the summary — a listing has
+   *  no use for seven image urls a book. */
+  images: string[]
   chapters: ApiChapter[]
   seo: Record<string, string | null>
 }
