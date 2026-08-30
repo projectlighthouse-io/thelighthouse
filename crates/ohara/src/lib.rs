@@ -13,6 +13,15 @@
 //!             lesson.yaml
 //!             lesson.md
 //!             lesson.bn.md
+//!     projects/
+//!       hello-http-server/
+//!         project.yaml
+//!         blueprint.bp
+//!         overview.md
+//!         tasks/
+//!           01-listen-on-port/
+//!             task.yaml
+//!             task.md
 //!     pricing/
 //!       ppp.yaml
 //! ```
@@ -44,6 +53,8 @@
 //!   status.rs  the smallints `status` and `tier` store, and the draft policy
 //!   book.rs    a book's yaml
 //!   lesson.rs  a lesson's yaml, and its folder name
+//!   project.rs a project's yaml, and its blueprint
+//!   task.rs    a task's yaml
 //!   locale.rs  the languages a lesson can be read in
 //!   body.rs    markdown: the paywall split, and rendering both halves
 //!   price.rs   what a book costs
@@ -62,7 +73,9 @@ pub mod lesson;
 pub mod locale;
 pub mod ppp;
 pub mod price;
+pub mod project;
 pub mod status;
+pub mod task;
 
 use std::{
     io,
@@ -167,6 +180,42 @@ impl Content {
     pub fn lesson_dir(&self, book: &str, folder: &str) -> PathBuf {
         self.book_dir(book).join("lessons").join(folder)
     }
+
+    fn projects_dir(&self) -> PathBuf {
+        self.root.join("projects")
+    }
+
+    /// Every project slug, in directory order.
+    ///
+    /// # Errors
+    ///
+    /// `projects/` missing or unreadable.
+    pub fn project_slugs(&self) -> Result<Vec<String>, Error> {
+        dirs_in(&self.projects_dir())
+    }
+
+    /// Every task folder within a project — `01-listen-on-port`.
+    ///
+    /// Unlike a book's lessons, this listing *is* the order and the whole set:
+    /// a project's yaml names no tasks, so there is no second list to check it
+    /// against and nothing on disk that is a draft. See [`Self::project`].
+    ///
+    /// # Errors
+    ///
+    /// The project's `tasks/` missing or unreadable.
+    pub fn task_folders(&self, project: &str) -> Result<Vec<String>, Error> {
+        dirs_in(&self.project_dir(project).join("tasks"))
+    }
+
+    #[must_use]
+    pub fn project_dir(&self, project: &str) -> PathBuf {
+        self.projects_dir().join(project)
+    }
+
+    #[must_use]
+    pub fn task_dir(&self, project: &str, folder: &str) -> PathBuf {
+        self.project_dir(project).join("tasks").join(folder)
+    }
 }
 
 /// Subdirectory names, sorted.
@@ -187,6 +236,57 @@ fn dirs_in(dir: &Path) -> Result<Vec<String>, Error> {
     names.sort();
 
     Ok(names)
+}
+
+/// Refuses a path that would read outside the folder it is relative to.
+///
+/// The content repo is not hostile, but it is the one input to this process
+/// that is edited by hand in bulk, and `../` is one slip away from a path that
+/// resolves anywhere on the box. A joined path is only as safe as what is
+/// joined onto it, and the api reads whatever this resolves to and serves it.
+///
+/// Absolute paths are refused for the same reason and a second one: `PathBuf`
+/// join *replaces* the base when the argument is absolute, so
+/// `lesson_dir.join("/etc/passwd")` is simply `/etc/passwd` — silently, with no
+/// error to notice.
+///
+/// `folder` names the kind of folder in the message — "lesson", "task" — so
+/// the error says which one the path climbed out of.
+///
+/// # Errors
+///
+/// An empty path, one that climbs, one that is absolute, or one spelled with a
+/// leading `./`.
+pub(crate) fn within_the_folder(
+    path: &str,
+    folder: &str,
+) -> Result<(), String> {
+    use std::path::Component;
+
+    if path.is_empty() {
+        return Err("is empty".to_owned());
+    }
+
+    for component in Path::new(path).components() {
+        match component {
+            Component::Normal(_) => {}
+            Component::ParentDir => {
+                return Err(format!(
+                    "{path:?} climbs out of the {folder} folder"
+                ));
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                return Err(format!("{path:?} is absolute"));
+            }
+            // `./lesson.md`. Harmless, and refused anyway: one spelling per
+            // file keeps the yaml comparable by eye.
+            Component::CurDir => {
+                return Err(format!("{path:?} should not start with ./"));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Reads a file, naming it if that fails.

@@ -1,0 +1,25 @@
+id: 6f1d4a2e-0c3b-4f7a-9f2d-1b8e5c4a7d90
+slug: fixture-project
+name: Fixture Project
+headline: A project that exists so the parser has something to read
+short_description: Three tasks, one of them deliberately misnamed.
+long_description: |
+  Not a real project. The tasks below are the shapes this crate has to parse:
+  one with prose and a hint, one with neither, and one whose slug disagrees
+  with its folder.
+status: published
+difficulty: gentle
+runner_image: local|go
+unlock_mode: sequential
+is_challenge: false
+is_featured: false
+featured_order: 0
+show_tasks: true
+related_book_slug: fixture-book
+features:
+  - title: Deliberately thin
+    description: Enough to parse, and nothing anyone would read.
+    icon: box
+blueprint_path: blueprint.bp
+content_path:
+  en: overview.md

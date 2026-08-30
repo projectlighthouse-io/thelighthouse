@@ -1,0 +1,16 @@
+id: 2a7c9e10-5b4d-4c8e-9a1f-3d6b0e2f8c47
+slug: listen-on-port
+title: Listen on a Port
+points: 25
+visibility_level: 1
+is_free: true
+abandoned_deduction: 5
+input_type: none
+scores: '5:10:25|10:20:15'
+hints:
+  - id: 9c3f5b71-8e2a-4d60-b7c9-1f4a8d5e2b03
+    text: Bind before you listen.
+    unlock_criteria: '5:3:A'
+    points_deduction: 5
+content_path:
+  en: task.md

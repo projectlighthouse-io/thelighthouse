@@ -8,7 +8,7 @@ use uuid::Uuid;
 use super::{
     Content, Error, Locale, Status,
     body::{Access, Body},
-    read,
+    read, within_the_folder,
 };
 
 /// `books/<book>/lessons/<order>-<slug>/lesson.yaml`.
@@ -113,52 +113,12 @@ impl Lesson {
         }
 
         for (locale, path) in &self.content_path {
-            within_the_lesson(path)
+            within_the_folder(path, "lesson")
                 .map_err(|cause| format!("content_path.{locale}: {cause}"))?;
         }
 
         Ok(())
     }
-}
-
-/// Refuses a path that would read outside the lesson's own folder.
-///
-/// The content repo is not hostile, but it is the one input to this process
-/// that is edited by hand in bulk, and `../` is one slip away from a path that
-/// resolves anywhere on the box. A joined path is only as safe as what is
-/// joined onto it, and the api reads whatever this resolves to and serves it.
-///
-/// Absolute paths are refused for the same reason and a second one: `PathBuf`
-/// join *replaces* the base when the argument is absolute, so
-/// `lesson_dir.join("/etc/passwd")` is simply `/etc/passwd` — silently, with no
-/// error to notice.
-fn within_the_lesson(path: &str) -> Result<(), String> {
-    use std::path::{Component, Path};
-
-    if path.is_empty() {
-        return Err("is empty".to_owned());
-    }
-
-    for component in Path::new(path).components() {
-        match component {
-            Component::Normal(_) => {}
-            Component::ParentDir => {
-                return Err(format!(
-                    "{path:?} climbs out of the lesson folder"
-                ));
-            }
-            Component::RootDir | Component::Prefix(_) => {
-                return Err(format!("{path:?} is absolute"));
-            }
-            // `./lesson.md`. Harmless, and refused anyway: one spelling per
-            // file keeps the yaml comparable by eye.
-            Component::CurDir => {
-                return Err(format!("{path:?} should not start with ./"));
-            }
-        }
-    }
-
-    Ok(())
 }
 
 /// A lesson folder name, taken apart: `07-borrowing` is 7 and `borrowing`.

@@ -1,0 +1,8 @@
+id: 4e8b1d63-7a05-4f92-8c31-6b9d2e7a5f14
+slug: say-something
+title: Say Something
+points: 10
+visibility_level: 3
+is_free: false
+abandoned_deduction: 5
+input_type: text

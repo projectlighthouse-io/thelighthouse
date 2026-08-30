@@ -1,0 +1,14 @@
+# Not a real blueprint. luxctl owns this grammar; nothing in this workspace
+# parses it, so the fixture only has to be recognisable.
+
+blueprint "Fixture Project" {
+    config {
+        host: localhost
+        port: 4221
+    }
+
+    phase "listen" {
+        title: "Listen on a Port"
+        slug: listen-on-port
+    }
+}
