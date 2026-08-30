@@ -83,7 +83,12 @@
     --color-crumb: #c8c8bf;
     --color-locked-bg: #fafaf6;
 
-    /* lesson access pills */
+    /* lesson access pills.
+       lock/free are the reader's pills; teal-wash and amber carry the book
+       page's, which reads free against the site accent and paid against its
+       warm opposite rather than against a second green. */
+    --color-amber: #b07d2a;
+    --color-amber-soft: #f6eedc;
     --color-lock: #a16207;
     --color-lock-bg: #fefce8;
     --color-lock-line: #eab308;
@@ -262,6 +267,13 @@
 
     --color-teal: #4bbec5;
     --color-teal-deep: #7fd6db;
+
+    /* Not the light washes darkened. Both are pill grounds a few points off
+       the panel, so the pill reads as a tint rather than as a lit chip on a
+       dark page — the same reasoning as the mark-* pair below. */
+    --color-teal-wash: #12302f;
+    --color-amber: #d9a441;
+    --color-amber-soft: #2e2413;
 
     /* Only the foreground half of the bad family, because only the foreground
        half is used outside prose.css — a refusal message, a delete on hover.

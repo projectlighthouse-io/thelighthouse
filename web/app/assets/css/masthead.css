@@ -17,37 +17,40 @@
  */
 
 .masthead-title {
-    /* Newsreader, not the site's Lora. A book's title is the one line on the
-     * page doing display work, and in Lora it is set in the same face as the
-     * chapter headings below it — so the biggest thing on screen read as a
-     * larger version of the list rather than as a title.
+    /* Cormorant Garamond at 300, not a text face scaled up. The line is set
+     * large enough that stroke contrast is the whole effect, and a light
+     * Garamond at 62px has the thin hairlines to carry it — the same weight
+     * that would be unreadable at body size.
      *
-     * Newsreader has sharper thick/thin contrast and carries an `opsz` axis, so
-     * optical sizing gives it finer detail at 54px than the same face would use
-     * at body size. Already loaded for the reader, where it is `--reader-serif`,
-     * so this costs no extra webfont.
+     * The face below it changed too: the dek is now Newsreader rather than the
+     * site's Lora, so the title stands apart from the two serifs under it
+     * (the dek and the chapter headings) instead of being a bigger cut of one.
      *
      * Spelled out rather than tokenised: there is one masthead, and a
      * `--font-display` token with a single user is a token invented for the
      * next user rather than this one. */
-    font-family: 'Newsreader', Georgia, serif;
-    font-optical-sizing: auto;
-    font-weight: 600;
-    font-size: 54px;
-    line-height: 1.08;
-    letter-spacing: -0.01em;
-    margin: 16px 0 0;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 300;
+    font-size: 62px;
+    line-height: 1.04;
+    letter-spacing: -0.015em;
+    margin: 0;
     color: var(--color-read-ink);
 }
 
 .masthead-dek {
-    font-family: var(--font-serif);
+    font-family: 'Newsreader', Georgia, serif;
+    font-optical-sizing: auto;
     font-weight: 400;
-    font-size: 21px;
-    line-height: 1.5;
+    font-size: 16.5px;
+    line-height: 1.62;
     color: var(--color-read-ink-soft);
-    margin-top: 20px;
-    max-width: 32em;
+    margin-top: 16px;
+    max-width: 36em;
+}
+
+.masthead-dek em {
+    font-style: italic;
 }
 
 /* A kicker above the title: mono, teal, lowercase, with the slash the reader
@@ -67,15 +70,15 @@
     color: var(--color-teal-mid);
 }
 
-/* The same step down the reader takes, at the same width. A 54px serif line is
- * two or three words per line on a phone.
+/* The same step down the reader takes. A 62px display line is two or three
+ * words per line on a phone.
  */
-@media (max-width: 880px) {
+@media (max-width: 820px) {
     .masthead-title {
-        font-size: 40px;
+        font-size: 44px;
     }
 
     .masthead-dek {
-        font-size: 18px;
+        font-size: 15.5px;
     }
 }

@@ -43,6 +43,12 @@ const show = (index: number): void => {
   start()
 }
 
+/** the arrows either side of the dots. wraps in both directions. */
+const step = (by: number): void => {
+  const count = props.images.length
+  show((at.value + by + count) % count)
+}
+
 const zoom = (index: number): void => {
   zoomed.value = index
   stop()
@@ -77,9 +83,12 @@ watch(() => props.images, () => {
 </script>
 
 <template>
-  <div v-if="images.length" class="hidden flex-col items-center gap-3 lg:flex">
+  <!-- Shown at every width, not hidden below lg: the hero collapses to one
+       column on a narrow screen and the images sit under the title there,
+       which is a stack, not a reason to drop them. -->
+  <div v-if="images.length" class="flex max-w-[300px] flex-col gap-2.5">
     <div
-      class="relative aspect-[16/10] w-full cursor-zoom-in overflow-hidden rounded-xl"
+      class="relative aspect-[4/3] w-full cursor-zoom-in overflow-hidden rounded-lg"
       @click="zoom(at)"
     >
       <Transition name="cover-fade" mode="out-in">
@@ -87,21 +96,57 @@ watch(() => props.images, () => {
           :key="at"
           :src="images[at]"
           :alt="title"
-          class="absolute inset-0 h-full w-full rounded-xl object-contain"
+          class="absolute inset-0 h-full w-full rounded-lg object-contain"
         >
       </Transition>
     </div>
 
-    <div v-if="images.length > 1" class="flex gap-1.5">
+    <div v-if="images.length > 1" class="flex items-center justify-center gap-3.5">
       <button
-        v-for="(image, i) in images"
-        :key="image"
         type="button"
-        class="size-2 rounded-full transition-colors"
-        :class="i === at ? 'bg-ink' : 'bg-ink/20'"
-        :aria-label="`Show image ${i + 1}`"
-        @click="show(i)"
-      />
+        class="text-read-faint transition-colors hover:text-teal-deep"
+        aria-label="Previous image"
+        @click="step(-1)"
+      >
+        <svg class="size-3.5" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path
+            d="M10 3.5L5.5 8l4.5 4.5"
+            stroke="currentColor"
+            stroke-width="1.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+
+      <div class="flex gap-1.5">
+        <button
+          v-for="(image, i) in images"
+          :key="image"
+          type="button"
+          class="size-[5px] rounded-full transition-colors"
+          :class="i === at ? 'bg-teal' : 'bg-read-line'"
+          :aria-label="`Show image ${i + 1}`"
+          @click="show(i)"
+        />
+      </div>
+
+      <button
+        type="button"
+        class="text-read-faint transition-colors hover:text-teal-deep"
+        aria-label="Next image"
+        @click="step(1)"
+      >
+        <svg class="size-3.5" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path
+            d="M6 3.5L10.5 8 6 12.5"
+            stroke="currentColor"
+            stroke-width="1.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
     </div>
 
     <Teleport to="body">
