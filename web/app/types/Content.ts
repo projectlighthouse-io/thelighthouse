@@ -12,7 +12,6 @@ export interface Book {
   price: string | null
   /** Where "start reading" goes. Null for a book with no published lessons. */
   firstLesson?: string | null
-  inProgress: boolean
   /** The book page's slideshow, in reading order. Empty for a book with none.
    *  Optional because the listing endpoint does not send it. */
   images?: string[]

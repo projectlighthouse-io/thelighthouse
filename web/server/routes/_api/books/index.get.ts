@@ -21,6 +21,5 @@ export default defineEventHandler(async () => {
     firstLesson: book.first_lesson,
     // Nothing in ohara says a book is unfinished yet. Better a flat `false`
     // than a guess dressed up as data — see the note in the books page.
-    inProgress: false,
   }))
 })

@@ -92,7 +92,6 @@
     --color-free-line: #86efac;
 
     /* signals */
-    --color-wip: oklch(0.63 0.21 330.42);
     --color-live: #16a34a;
     --color-marker: #fef3c7;
     --color-ok: #166534;

@@ -13,7 +13,6 @@ export const books: Book[] = [
     thumbnailUrl: `${CDN}/c-programming/thumbnail.webp`,
     pages: 36,
     price: null,
-    inProgress: false,
   },
   {
     slug: 'crack-the-interview',
@@ -23,7 +22,6 @@ export const books: Book[] = [
     thumbnailUrl: `${CDN}/dsa/cract-the-interview.001.jpeg`,
     pages: 16,
     price: null,
-    inProgress: true,
   },
   {
     slug: 'dsa-fundamentals',
@@ -33,7 +31,6 @@ export const books: Book[] = [
     thumbnailUrl: `${CDN}/dsa/dsa.webp`,
     pages: 60,
     price: null,
-    inProgress: false,
   },
   {
     slug: 'go-fundamentals',
@@ -43,7 +40,6 @@ export const books: Book[] = [
     thumbnailUrl: `${CDN}/art/lighthouse.001.jpeg`,
     pages: 22,
     price: null,
-    inProgress: false,
   },
   {
     slug: 'go-intermediate',
@@ -53,7 +49,6 @@ export const books: Book[] = [
     thumbnailUrl: `${CDN}/go-intermediate/go-intermediate.jpeg`,
     pages: 31,
     price: null,
-    inProgress: false,
   },
   {
     slug: 'networking-fundamentals',
@@ -63,7 +58,6 @@ export const books: Book[] = [
     thumbnailUrl: `${CDN}/networking-fundamentals.webp`,
     pages: 44,
     price: null,
-    inProgress: false,
   },
   {
     slug: 'os-fundamentals',
@@ -73,7 +67,6 @@ export const books: Book[] = [
     thumbnailUrl: `${CDN}/os-fundamentals.webp`,
     pages: 70,
     price: null,
-    inProgress: false,
   },
   {
     slug: 'rust-101s',
@@ -83,7 +76,6 @@ export const books: Book[] = [
     thumbnailUrl: `${CDN}/rust-101s/rust-101s.jpeg`,
     pages: 17,
     price: null,
-    inProgress: false,
   },
   {
     slug: 'rust-from-zero',
@@ -93,6 +85,5 @@ export const books: Book[] = [
     thumbnailUrl: `${CDN}/rust-from-zero/rust-from-zero.webp`,
     pages: 18,
     price: null,
-    inProgress: false,
   },
 ]
