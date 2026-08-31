@@ -131,3 +131,65 @@ export function priceLabel(price: ApiPrice): string | null {
 
   return `$${(price.amount / 100).toFixed(2).replace(/\.00$/, '')}`
 }
+
+export interface ApiFeature {
+  title: string
+  description: string | null
+  icon: string | null
+}
+
+export interface ApiProjectSummary {
+  id: string | null
+  slug: string
+  name: string
+  headline: string | null
+  short_description: string | null
+  difficulty: string | null
+  runner_image: string | null
+  /** A challenge has no companion book: the tasks are the whole thing. It is
+   *  what the projects page splits its two tabs on. */
+  is_challenge: boolean
+  is_featured: boolean
+  featured_order: number
+  show_tasks: boolean
+  unlock_mode: 'open' | 'sequential'
+  related_book_slug: string | null
+  task_count: number
+}
+
+export interface ApiProjectTask {
+  slug: string
+  title: string
+  sort_order: number
+  points: number
+  is_free: boolean
+}
+
+export interface ApiProjectPage extends ApiProjectSummary {
+  long_description: string | null
+  features: ApiFeature[]
+  /** The project's long-form markdown, unrendered. */
+  overview: string | null
+  tasks: ApiProjectTask[]
+}
+
+export interface ApiTaskRef {
+  slug: string
+  title: string
+}
+
+export interface ApiTaskPage {
+  slug: string
+  title: string
+  sort_order: number
+  points: number
+  is_free: boolean
+  /** The brief, already rendered. A terminal gets the markdown; a browser gets
+   *  this. */
+  html: string
+  position: number
+  total: number
+  project: { slug: string, name: string }
+  previous: ApiTaskRef | null
+  next: ApiTaskRef | null
+}

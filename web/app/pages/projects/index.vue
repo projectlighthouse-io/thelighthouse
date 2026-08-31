@@ -1,11 +1,25 @@
 <script setup lang="ts">
-import { challenges, projects } from '@/data/Projects'
+import type { Project } from '@/types/Content'
 
 type Tab = 'projects' | 'challenges'
 
 const activeTab = ref<Tab>('projects')
 
-const shown = computed(() => (activeTab.value === 'projects' ? projects : challenges))
+// From ohara, through the rust api. During SSR this calls the handler
+// directly, so it costs no HTTP round trip.
+const { data } = await useAsyncData('projects', () =>
+  $fetch<Project[]>('/_api/projects'))
+
+const all = computed<Project[]>(() => data.value ?? [])
+
+// Split here rather than served as two lists: which tab a project belongs in
+// is `is_challenge` in its own yaml, so there is no second list that could
+// disagree with the first.
+const projects = computed<Project[]>(() => all.value.filter(p => !p.isChallenge))
+const challenges = computed<Project[]>(() => all.value.filter(p => p.isChallenge))
+
+const shown = computed<Project[]>(() =>
+  activeTab.value === 'projects' ? projects.value : challenges.value)
 
 const description
   = 'Hands-on coding projects: build Docker, HTTP servers, and DNS resolvers from scratch, or sharpen your grep, sed, and CLI skills. Automated validation and hints, run on your own machine.'
@@ -15,19 +29,19 @@ useSeo({
   description,
 })
 
-useJsonLd('projects', {
+useJsonLd('projects', () => ({
   '@type': 'CollectionPage',
   'name': 'Projects and challenges',
   'mainEntity': {
     '@type': 'ItemList',
-    'itemListElement': [...projects, ...challenges].map((p, i) => ({
+    'itemListElement': all.value.map((p, i) => ({
       '@type': 'ListItem',
       'position': i + 1,
       'url': `${SITE.url}/projects/${p.slug}`,
       'name': p.name,
     })),
   },
-})
+}))
 </script>
 
 <template>
