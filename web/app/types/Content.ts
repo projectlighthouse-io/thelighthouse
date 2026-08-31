@@ -3,6 +3,10 @@ export interface Book {
   title: string
   description: string
   thumbnailUrl: string
+  /** Which tracks the book is on, and where it falls in each — `{go: 4}`. The
+   *  book's own yaml says this; nothing here infers it. Empty means untracked,
+   *  which is not the same as last. */
+  tracks: Record<string, number>
   pages: number
   /**
    * A price tag, or null when the book is free. Never a number: the money

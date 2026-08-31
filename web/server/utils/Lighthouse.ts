@@ -63,6 +63,9 @@ export interface ApiBookSummary {
   title: string
   description: string | null
   thumbnail_url: string | null
+  /** The tracks the book is on, and its position in each — `{go: 4, rust: 3}`.
+   *  From `book.yaml`; empty for an untracked book. */
+  tracks: Record<string, number>
   price: ApiPrice
   lesson_count: number
   first_lesson: string | null

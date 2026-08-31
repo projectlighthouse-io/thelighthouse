@@ -16,6 +16,9 @@ export default defineEventHandler(async () => {
     title: book.title,
     description: book.description ?? '',
     thumbnailUrl: book.thumbnail_url ?? '',
+    // Defaulted rather than assumed: a book.yaml written before `tracks:`
+    // existed still parses, and arrives here without the field.
+    tracks: book.tracks ?? {},
     pages: book.lesson_count,
     price: priceLabel(book.price),
     firstLesson: book.first_lesson,
