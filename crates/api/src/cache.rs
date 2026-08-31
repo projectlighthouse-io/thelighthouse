@@ -8,6 +8,17 @@
 //! being cached, and the only way to do that is to say out loud that the
 //! response is the same for everybody. Forgetting fails closed.
 
+// This module is the api's cache *vocabulary*, and all of it belongs here
+// whether or not an endpoint currently reaches for every word. `Private` and
+// the three revalidation helpers lost their only callers when the `/api/me`
+// and `/api/ping` placeholders were replaced by `projects`: a CLI has no
+// browser cache to revalidate against, so none of luxctl's ten endpoints wants
+// them, and the browser endpoints that will are later slices of
+// `docs/rebuild.md`. Deleting them would mean rederiving `must-revalidate` and
+// weak ETags from scratch later, and getting one of those subtly wrong is how a
+// shared cache ends up holding one reader's own page.
+#![allow(dead_code)]
+
 use axum::http::{
     HeaderMap, HeaderValue, StatusCode,
     header::{CACHE_CONTROL, ETAG, IF_NONE_MATCH, VARY},

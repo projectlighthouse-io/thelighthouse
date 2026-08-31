@@ -16,10 +16,14 @@ mod db;
 mod limit;
 mod middleware;
 mod notes;
+mod projects;
 mod request;
 mod response;
 mod session;
 mod telemetry;
+#[cfg(test)]
+mod testing;
+mod tokens;
 mod users;
 
 use std::{

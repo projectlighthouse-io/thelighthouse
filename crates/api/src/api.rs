@@ -10,9 +10,9 @@
 use std::sync::Arc;
 
 use axum::{
-    Json, Router,
+    Router,
     extract::State,
-    http::{HeaderMap, HeaderValue, StatusCode, header::RETRY_AFTER},
+    http::{HeaderValue, StatusCode, header::RETRY_AFTER},
     middleware::from_fn_with_state,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -23,12 +23,12 @@ use sqlx::postgres::PgPool;
 
 use crate::{
     auth, bookmarks, books,
-    cache::{self, CachePolicy},
+    cache::CachePolicy,
     config::Config,
     db,
     limit::RateLimit,
     middleware::{rate::limit_requests, signature::require_signature},
-    notes, response, telemetry,
+    notes, projects, response, telemetry,
 };
 
 /// What every handler can reach. Cheap to clone — `PgPool` and `Providers` are
@@ -69,14 +69,13 @@ pub(crate) fn app(
         catalog,
     };
 
-    // luxctl's surface. Everything mounted here inherits the signature check.
-    let signed = Router::new()
-        .route("/ping", get(ping))
-        .route("/me", get(me))
-        .route_layer(from_fn_with_state(
-            state.config.clone(),
-            require_signature,
-        ));
+    // luxctl's surface. Everything mounted here inherits the signature check,
+    // and each route decides for itself whether a bearer token is required or
+    // merely read — see `projects::routes`.
+    let signed = projects::routes(&state).route_layer(from_fn_with_state(
+        state.config.clone(),
+        require_signature,
+    ));
 
     // Signed like luxctl's surface, and unrouted like `/health`. Two
     // independent gates, because either alone is thin: caddy not naming a path
@@ -92,10 +91,13 @@ pub(crate) fn app(
     // stricter budget inside this one, exactly as a laravel route carrying
     // both `throttle:api` and `throttle:notes` does.
     let public = Router::new()
-        .nest("/api", signed)
-        // Absolute paths, so these merge alongside `signed` rather than nesting
-        // under the same prefix. Both carry their own gates — see their
+        // Absolute paths throughout, so these merge alongside each other rather
+        // than nesting under one prefix. Each carries its own gates — see their
         // `routes`.
+        .merge(signed)
+        // The website's own project endpoints, which carry no signature — a
+        // browser cannot make one. See `projects::page_routes`.
+        .merge(projects::page_routes(&state))
         .merge(books::routes(&state))
         .merge(notes::routes(&state))
         .merge(bookmarks::routes(&state))
@@ -213,53 +215,4 @@ async fn reload(State(state): State<AppState>) -> Response {
             )
         }
     }
-}
-
-/// Stands in for the reader's own state — progress, bookmarks.
-///
-/// `Private`, not `NoStore`: it is scoped to one reader, so nothing shared may
-/// hold it, but their own browser revalidating with an `ETag` is both safe and
-/// the difference between a snappy dashboard and one that refetches everything.
-async fn me(headers: HeaderMap) -> Response {
-    revalidating(&headers, CachePolicy::Private, "placeholder")
-}
-
-/// Stands in for the luxctl surface: eleven endpoints, all behind the layer.
-///
-/// Signed, so session-dependent: `NoStore`. A luxctl response is scoped to one
-/// reader's progress and must not be held anywhere.
-async fn ping(headers: HeaderMap) -> Response {
-    revalidating(&headers, CachePolicy::NoStore, "pong")
-}
-
-/// A json body that answers 304 when the caller's copy is already current.
-///
-/// `response::json` with an `ETag` on top. Only worth it where a client repeats
-/// the same request often enough for the saved bytes to matter, which is why
-/// the note endpoints do not use it.
-fn revalidating<T: serde::Serialize>(
-    request_headers: &HeaderMap,
-    cache_policy: CachePolicy,
-    value: T,
-) -> Response {
-    let Ok(body) = serde_json::to_vec(&value) else {
-        return crate::response::server_error();
-    };
-
-    let etag = cache::etag_for(&body);
-
-    // 304 regardless of policy: revalidation is about not resending bytes the
-    // caller already has, which is orthogonal to whether anyone may store them.
-    if let Some(etag) = etag.as_ref()
-        && cache::matches_if_none_match(request_headers, etag)
-    {
-        let mut response = cache::NOT_MODIFIED.into_response();
-        cache::apply(response.headers_mut(), cache_policy, Some(etag.clone()));
-        return response;
-    }
-
-    let mut response = Json(value).into_response();
-    cache::apply(response.headers_mut(), cache_policy, etag);
-
-    response
 }

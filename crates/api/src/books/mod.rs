@@ -29,7 +29,7 @@
 //! then breaks no link and no indexed result — `ohara::catalog` is where the
 //! two are mapped.
 
-mod entitlement;
+pub(crate) mod entitlement;
 mod handler;
 #[cfg(test)]
 mod tests;
