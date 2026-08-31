@@ -9,7 +9,9 @@ use axum::{
 
 use super::{
     refusal::{Refusal, refuse},
-    view::{MAX_NAME, MintedView, NewToken, TokenView},
+    view::{
+        EditProfile, MAX_NAME, MintedView, NewToken, ProfileView, TokenView,
+    },
 };
 use crate::{
     api::AppState,
@@ -107,6 +109,69 @@ pub(crate) async fn revoke(
         Ok(false) => not_found(),
         Err(cause) => {
             tracing::error!(%cause, user_id = session.user_id, id, "failed to revoke a token");
+            response::server_error()
+        }
+    }
+}
+
+// ------------------------------------------------------------------ profile
+
+/// `GET /api/settings/profile` — what the public profile page renders.
+///
+/// Name, email and avatar are not here: they come from the provider and the
+/// page already has them from `GET /api/auth/session`. This is the part a
+/// reader writes.
+pub(crate) async fn profile(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+) -> Response {
+    match crate::users::profile(&state.db, session.user_id).await {
+        // A live session pointing at a reader who is gone. The session should
+        // have gone with them; until something sweeps it, 404 is the honest
+        // answer — the same one `projects::me` gives.
+        Ok(None) => not_found(),
+        Ok(Some(row)) => response::json(
+            StatusCode::OK,
+            ProfileView::from(row),
+            CachePolicy::NoStore,
+        ),
+        Err(cause) => {
+            tracing::error!(%cause, user_id = session.user_id, "failed to read a profile");
+            response::server_error()
+        }
+    }
+}
+
+/// `PATCH /api/settings/profile` — write the five fields a reader owns.
+///
+/// The whole profile every time; see `users::update_profile` for why there is
+/// no partial update. The answer is the row as it now stands, so the page
+/// renders what was stored rather than what it hoped was stored.
+pub(crate) async fn edit_profile(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    Json(body): Json<EditProfile>,
+) -> Response {
+    let fields = match body.checked() {
+        Ok(fields) => fields,
+        Err(refusal) => return refuse(refusal),
+    };
+
+    match crate::users::update_profile(&state.db, session.user_id, &fields)
+        .await
+    {
+        Ok(None) => not_found(),
+        Ok(Some(row)) => {
+            tracing::info!(user_id = session.user_id, "profile updated");
+
+            response::json(
+                StatusCode::OK,
+                ProfileView::from(row),
+                CachePolicy::NoStore,
+            )
+        }
+        Err(cause) => {
+            tracing::error!(%cause, user_id = session.user_id, "failed to update a profile");
             response::server_error()
         }
     }

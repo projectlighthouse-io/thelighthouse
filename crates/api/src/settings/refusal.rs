@@ -17,6 +17,13 @@ pub(crate) enum Refusal {
     NameTooLong,
     /// The system random source could not be read.
     NoRandomness,
+    /// Longer than `users.tagline` can hold.
+    TaglineTooLong,
+    BioTooLong,
+    /// A `varchar(255)` profile field over its cap.
+    FieldTooLong,
+    /// Not an `http(s)` link with a host — see `view::is_web_url`.
+    NotALink,
 }
 
 impl Refusal {
@@ -26,14 +33,21 @@ impl Refusal {
             Self::NameRequired => "name_required",
             Self::NameTooLong => "name_too_long",
             Self::NoRandomness => "no_randomness",
+            Self::TaglineTooLong => "tagline_too_long",
+            Self::BioTooLong => "bio_too_long",
+            Self::FieldTooLong => "field_too_long",
+            Self::NotALink => "not_a_link",
         }
     }
 
     const fn status(self) -> StatusCode {
         match self {
-            Self::NameRequired | Self::NameTooLong => {
-                StatusCode::UNPROCESSABLE_ENTITY
-            }
+            Self::NameRequired
+            | Self::NameTooLong
+            | Self::TaglineTooLong
+            | Self::BioTooLong
+            | Self::FieldTooLong
+            | Self::NotALink => StatusCode::UNPROCESSABLE_ENTITY,
             // Not the caller's fault, and retrying may well work.
             Self::NoRandomness => StatusCode::SERVICE_UNAVAILABLE,
         }
@@ -48,6 +62,10 @@ impl Refusal {
             Self::NoRandomness => {
                 "Could not generate a token just now. Try again."
             }
+            Self::TaglineTooLong => "Tagline must be 160 characters or less.",
+            Self::BioTooLong => "Bio must be 1000 characters or less.",
+            Self::FieldTooLong => "That is longer than 255 characters.",
+            Self::NotALink => "Enter a full link, starting with https://",
         }
     }
 }
@@ -68,10 +86,14 @@ pub(crate) fn refuse(cause_of: Refusal) -> Response {
 mod tests {
     use super::*;
 
-    const REFUSALS: [Refusal; 3] = [
+    const REFUSALS: [Refusal; 7] = [
         Refusal::NameRequired,
         Refusal::NameTooLong,
         Refusal::NoRandomness,
+        Refusal::TaglineTooLong,
+        Refusal::BioTooLong,
+        Refusal::FieldTooLong,
+        Refusal::NotALink,
     ];
 
     #[test]
@@ -94,7 +116,13 @@ mod tests {
                 code.chars().all(|c| c.is_ascii_lowercase() || c == '_'),
                 "{code} is not a stable identifier"
             );
-            assert!(refusal.message().ends_with('.'), "{code}");
+            // Prose, and it ends like prose — except the one that ends in a
+            // url, where a full stop would look like part of the link.
+            assert!(
+                refusal.message().ends_with('.')
+                    || refusal.message().ends_with('/'),
+                "{code}"
+            );
         }
     }
 

@@ -223,3 +223,80 @@ mod tests {
         assert_eq!(provider_column(Provider::Google), "google_id");
     }
 }
+
+/// The part of a reader's row they write themselves.
+///
+/// **Not `name`, `email` or `avatar_url`.** Those come from the provider on
+/// every sign-in and would be overwritten by the next one, so offering them as
+/// editable would be offering a change that quietly reverts. `username` is
+/// generated once at sign-up and is a public identifier other rows may come to
+/// point at; nothing here may retune it.
+#[derive(Debug, Default, sqlx::FromRow)]
+pub(crate) struct Profile {
+    pub(crate) username: Option<String>,
+    pub(crate) tagline: Option<String>,
+    pub(crate) bio: Option<String>,
+    pub(crate) company: Option<String>,
+    pub(crate) education: Option<String>,
+    pub(crate) github_username: Option<String>,
+    pub(crate) linkedin_url: Option<String>,
+}
+
+/// The profile fields of one reader.
+///
+/// # Errors
+///
+/// The query. `Ok(None)` for a session pointing at a reader who is gone.
+pub(crate) async fn profile(
+    db: &PgPool,
+    user_id: i64,
+) -> Result<Option<Profile>, sqlx::Error> {
+    sqlx::query_as::<_, Profile>(
+        "SELECT username, tagline, bio, company, education,
+                github_username, linkedin_url
+           FROM users
+          WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+}
+
+/// Writes the five fields a reader may change, and answers the row as it now
+/// stands.
+///
+/// **Every field is written on every call, `None` included.** A partial update
+/// would need the request to distinguish "leave it alone" from "clear it", and
+/// json cannot: an absent key and a null one both arrive as `None`. The form
+/// sends the whole profile, so the whole profile is what is written, and
+/// clearing a field is simply sending it empty.
+///
+/// # Errors
+///
+/// The query. `Ok(None)` for a reader who is gone.
+pub(crate) async fn update_profile(
+    db: &PgPool,
+    user_id: i64,
+    fields: &Profile,
+) -> Result<Option<Profile>, sqlx::Error> {
+    sqlx::query_as::<_, Profile>(
+        "UPDATE users
+            SET tagline = $2,
+                bio = $3,
+                company = $4,
+                education = $5,
+                linkedin_url = $6,
+                updated_at = (now() AT TIME ZONE 'utc')
+          WHERE id = $1
+      RETURNING username, tagline, bio, company, education,
+                github_username, linkedin_url",
+    )
+    .bind(user_id)
+    .bind(fields.tagline.as_deref())
+    .bind(fields.bio.as_deref())
+    .bind(fields.company.as_deref())
+    .bind(fields.education.as_deref())
+    .bind(fields.linkedin_url.as_deref())
+    .fetch_optional(db)
+    .await
+}

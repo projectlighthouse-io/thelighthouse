@@ -3,7 +3,9 @@
 mod store;
 mod username;
 
-pub(crate) use store::{Error, find, find_or_create};
+pub(crate) use store::{
+    Error, Profile, find, find_or_create, profile, update_profile,
+};
 
 /// What the frontend renders chrome from, and what a session points at.
 #[derive(Clone, Debug)]

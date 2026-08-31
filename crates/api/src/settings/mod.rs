@@ -1,6 +1,9 @@
 //! What a reader changes about their own account.
 //!
 //! ```text
+//!   GET    /api/settings/profile       what a reader writes about themselves
+//!   PATCH  /api/settings/profile       write it
+//!
 //!   GET    /api/settings/tokens        the tokens this reader holds
 //!   POST   /api/settings/tokens        mint one, shown once
 //!   DELETE /api/settings/tokens/{id}   revoke one
@@ -13,9 +16,15 @@
 //!   refusal.rs  why a write was refused, and its wire code
 //! ```
 //!
-//! The queries live in `tokens::store`, beside the lookup that reads the same
-//! table — one module owns `personal_access_tokens`, and this one owns the
-//! decisions about it.
+//! No SQL lives here. The token queries are in `tokens::store` beside the
+//! lookup that reads the same table, and the profile queries are in
+//! `users::store` beside everything else that reads `users` — one module owns
+//! a table, and this one owns the decisions about what a reader may do to it.
+//!
+//! **Name, email and avatar are not editable.** They arrive from the provider
+//! on every sign-in, so a field offering to change them would be offering a
+//! change that silently reverts on the next login. `username` is generated
+//! once at sign-up and is not on the request type at all.
 //!
 //! **A token cannot mint a token.** Everything here is behind the session
 //! cookie, never the bearer layer. luxctl holds a credential that lives on a
@@ -38,7 +47,7 @@ mod view;
 use axum::{
     Router,
     middleware::{from_fn, from_fn_with_state},
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
 };
 
 use crate::{
@@ -56,9 +65,12 @@ use crate::{
 /// place in the write limit. Minting is a write worth rate limiting on its own
 /// account — it is the one endpoint here that creates a credential.
 pub(crate) fn routes(state: &AppState) -> Router<AppState> {
-    let reads = Router::new().route("/api/settings/tokens", get(handler::list));
+    let reads = Router::new()
+        .route("/api/settings/profile", get(handler::profile))
+        .route("/api/settings/tokens", get(handler::list));
 
     let writes = Router::new()
+        .route("/api/settings/profile", patch(handler::edit_profile))
         .route("/api/settings/tokens", post(handler::create))
         .route("/api/settings/tokens/{id}", delete(handler::revoke))
         .route_layer(from_fn_with_state(state.clone(), throttle))

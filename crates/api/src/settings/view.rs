@@ -63,3 +63,248 @@ impl NewToken {
         self.name.trim()
     }
 }
+
+// ------------------------------------------------------------------ profile
+
+/// The caps, which are the columns' where the column has one.
+///
+/// `tagline` is `varchar(160)` and `bio` is `text`; the bio's limit is the
+/// laravel form's, kept because readers have written against it. Checking here
+/// rather than letting postgres refuse means a message that names the field
+/// instead of a constraint.
+pub(crate) const MAX_TAGLINE: usize = 160;
+pub(crate) const MAX_BIO: usize = 1_000;
+pub(crate) const MAX_SHORT: usize = 255;
+
+/// What the public profile page renders.
+///
+/// `username` and `github_username` are here and are not editable: one is
+/// generated at sign-up, the other arrives from GitHub. Sending them keeps the
+/// page from having to ask somewhere else for the two fields it displays
+/// beside the ones it edits.
+#[derive(Debug, Serialize)]
+pub(crate) struct ProfileView {
+    pub(crate) username: Option<String>,
+    pub(crate) github_username: Option<String>,
+    pub(crate) tagline: Option<String>,
+    pub(crate) bio: Option<String>,
+    pub(crate) company: Option<String>,
+    pub(crate) education: Option<String>,
+    pub(crate) linkedin_url: Option<String>,
+}
+
+impl From<crate::users::Profile> for ProfileView {
+    fn from(row: crate::users::Profile) -> Self {
+        Self {
+            username: row.username,
+            github_username: row.github_username,
+            tagline: row.tagline,
+            bio: row.bio,
+            company: row.company,
+            education: row.education,
+            linkedin_url: row.linkedin_url,
+        }
+    }
+}
+
+/// The body of `PATCH /api/settings/profile`.
+///
+/// Every field optional and every field written — see `users::update_profile`
+/// for why a partial update is not on offer. An absent key clears the column,
+/// which is what the form does when a reader empties an input.
+#[derive(Debug, Default, Deserialize)]
+pub(crate) struct EditProfile {
+    #[serde(default)]
+    pub(crate) tagline: Option<String>,
+    #[serde(default)]
+    pub(crate) bio: Option<String>,
+    #[serde(default)]
+    pub(crate) company: Option<String>,
+    #[serde(default)]
+    pub(crate) education: Option<String>,
+    #[serde(default)]
+    pub(crate) linkedin_url: Option<String>,
+}
+
+/// Trimmed, with empty meaning absent.
+///
+/// A column holding `""` renders as an empty line rather than as nothing, and
+/// is a different value from `NULL` for anything that later asks "has this
+/// reader written a bio". One representation of "no answer", chosen here.
+fn tidy(value: Option<&String>) -> Option<String> {
+    let trimmed = value?.trim();
+
+    (!trimmed.is_empty()).then(|| trimmed.to_owned())
+}
+
+/// Whether this is a link a page can safely render as an `href`.
+///
+/// **Not a url parser, and deliberately narrower than laravel's `url` rule.**
+/// The value comes back out into an anchor, and `javascript:...` is a
+/// perfectly valid url — so the scheme is checked against a list of two rather
+/// than parsed. A host has to follow it, and whitespace is refused outright
+/// because a link containing any is not one.
+fn is_web_url(value: &str) -> bool {
+    if value.len() > MAX_SHORT || value.chars().any(char::is_whitespace) {
+        return false;
+    }
+
+    let Some(("https" | "http", host)) = value.split_once("://") else {
+        return false;
+    };
+
+    // Something before the first slash, and a dot in it: `https://` and
+    // `https://localhost` are not profile links anybody meant to save.
+    let host = host.split('/').next().unwrap_or_default();
+
+    host.len() > 1 && host.contains('.')
+}
+
+impl EditProfile {
+    /// The fields as they will be written, or the first thing wrong with them.
+    ///
+    /// # Errors
+    ///
+    /// A field over its cap, or a link that is not an http(s) one.
+    pub(crate) fn checked(
+        &self,
+    ) -> Result<crate::users::Profile, super::refusal::Refusal> {
+        use super::refusal::Refusal;
+
+        let tagline = tidy(self.tagline.as_ref());
+        let bio = tidy(self.bio.as_ref());
+        let company = tidy(self.company.as_ref());
+        let education = tidy(self.education.as_ref());
+        let linkedin_url = tidy(self.linkedin_url.as_ref());
+
+        // Characters, not bytes: sixty accented letters are sixty characters.
+        let over = |value: &Option<String>, cap: usize| {
+            value.as_ref().is_some_and(|v| v.chars().count() > cap)
+        };
+
+        if over(&tagline, MAX_TAGLINE) {
+            return Err(Refusal::TaglineTooLong);
+        }
+        if over(&bio, MAX_BIO) {
+            return Err(Refusal::BioTooLong);
+        }
+        if over(&company, MAX_SHORT) || over(&education, MAX_SHORT) {
+            return Err(Refusal::FieldTooLong);
+        }
+        if linkedin_url.as_deref().is_some_and(|url| !is_web_url(url)) {
+            return Err(Refusal::NotALink);
+        }
+
+        Ok(crate::users::Profile {
+            username: None,
+            github_username: None,
+            tagline,
+            bio,
+            company,
+            education,
+            linkedin_url,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_link_must_be_http_and_have_a_host() {
+        for good in [
+            "https://linkedin.com/in/someone",
+            "http://example.co.uk/a/b",
+        ] {
+            assert!(is_web_url(good), "{good}");
+        }
+
+        for bad in [
+            // The reason this is not a url parser.
+            "javascript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "vbscript:msgbox",
+            // Shapes that are not links.
+            "",
+            "linkedin.com/in/someone",
+            "https://",
+            "https://localhost",
+            "https://has a space.com",
+        ] {
+            assert!(!is_web_url(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_link_longer_than_the_column_is_refused() {
+        let long = format!("https://x.com/{}", "a".repeat(MAX_SHORT));
+
+        assert!(!is_web_url(&long));
+    }
+
+    #[test]
+    fn empty_and_blank_are_one_answer_and_it_is_none() {
+        assert_eq!(tidy(None), None);
+        assert_eq!(tidy(Some(&String::new())), None);
+        assert_eq!(tidy(Some(&"   \n ".to_owned())), None);
+        assert_eq!(tidy(Some(&"  hi  ".to_owned())), Some("hi".to_owned()));
+    }
+
+    #[test]
+    fn a_field_over_its_cap_is_refused_by_name() {
+        let too_long = |field: fn(String) -> EditProfile, n: usize| {
+            field("x".repeat(n)).checked().unwrap_err()
+        };
+
+        assert_eq!(
+            too_long(
+                |v| EditProfile {
+                    tagline: Some(v),
+                    ..EditProfile::default()
+                },
+                MAX_TAGLINE + 1
+            ),
+            super::super::refusal::Refusal::TaglineTooLong
+        );
+        assert_eq!(
+            too_long(
+                |v| EditProfile {
+                    bio: Some(v),
+                    ..EditProfile::default()
+                },
+                MAX_BIO + 1
+            ),
+            super::super::refusal::Refusal::BioTooLong
+        );
+    }
+
+    #[test]
+    fn a_profile_at_its_caps_exactly_is_accepted() {
+        let edit = EditProfile {
+            tagline: Some("t".repeat(MAX_TAGLINE)),
+            bio: Some("b".repeat(MAX_BIO)),
+            company: Some("c".repeat(MAX_SHORT)),
+            education: Some("e".repeat(MAX_SHORT)),
+            linkedin_url: None,
+        };
+
+        assert!(edit.checked().is_ok());
+    }
+
+    #[test]
+    fn nothing_a_reader_sends_can_set_their_username() {
+        // The one field on the row that other things may point at. It is not
+        // on `EditProfile` at all, so this is a statement about the type
+        // rather than about a branch somebody could remove.
+        let written = EditProfile {
+            tagline: Some("hi".to_owned()),
+            ..EditProfile::default()
+        }
+        .checked()
+        .unwrap();
+
+        assert!(written.username.is_none());
+        assert!(written.github_username.is_none());
+    }
+}

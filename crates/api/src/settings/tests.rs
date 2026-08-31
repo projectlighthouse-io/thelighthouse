@@ -45,11 +45,13 @@ async fn send(method: &str, uri: &str) -> Response {
 }
 
 #[tokio::test]
-async fn every_token_route_needs_a_reader() {
+async fn every_settings_route_needs_a_reader() {
     // Mounted inside `require_reader` and outside the signature layer. If one
     // of these ever drifts out of the session gate, one reader's tokens are
-    // listable — or mintable — by anybody who asks.
+    // listable — or mintable — and their profile writable by anybody who asks.
     for (method, uri) in [
+        ("GET", "/api/settings/profile"),
+        ("PATCH", "/api/settings/profile"),
         ("GET", "/api/settings/tokens"),
         ("POST", "/api/settings/tokens"),
         ("DELETE", "/api/settings/tokens/1"),
