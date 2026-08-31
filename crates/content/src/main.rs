@@ -96,8 +96,13 @@ async fn run() -> Result<(), String> {
     // `lighthouse-migrate` names the migrations it applied: a write command
     // that is silent about what it wrote is one you have to go and check.
     println!(
-        "synced {} books and {} lessons from {path} ({drafts:?} drafts)",
-        synced.books, synced.lessons
+        "synced {} books, {} lessons, {} projects, {} tasks and {} hints \
+         from {path} ({drafts:?} drafts)",
+        synced.books,
+        synced.lessons,
+        synced.projects,
+        synced.tasks,
+        synced.hints
     );
 
     Ok(())

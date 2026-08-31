@@ -18,9 +18,17 @@
 //! locale to a markdown file beside it, so a translation ships with the prose
 //! it translates rather than in a row here.
 //!
-//! What is left is two statements: a `books` row for `entitlements.book_id` to
-//! name, and a `lessons` row for `notes.lesson_id`, `lesson_bookmarks` and
-//! `lesson_completions` to point at.
+//! What is left is five statements: a `books` row for `entitlements.book_id`
+//! to name, a `lessons` row for `notes.lesson_id`, `lesson_bookmarks` and
+//! `lesson_completions` to point at, and — the same argument one level down —
+//! `projects`, `tasks` and `task_hints` rows for `project_restarts.project_id`,
+//! `task_attempts.task_id` and `user_unlocked_hints.task_hint_id`.
+//!
+//! The project side is the starker case. Its readable columns did not merely
+//! move to the catalogue, they were *dropped*: `tasks.blueprint` held the whole
+//! `.bp` once per task, which in one project was eighteen copies of the same
+//! 46 KB. What a task is worth, what its hints say and when they unlock are all
+//! ohara's now — see `20260830010000` through `20260830060000`.
 //!
 //! **Read-only against the content repo.** Nothing here opens a file for
 //! writing. A book or lesson with no `id` is refused by name rather than having
@@ -35,7 +43,9 @@
 //! accepted, because the alternative is a half-cloned content repo quietly
 //! unpublishing the site.
 
-use ohara::catalog::{BookEntry, LessonEntry, Snapshot};
+use ohara::catalog::{
+    BookEntry, LessonEntry, ProjectEntry, Snapshot, TaskEntry,
+};
 use sqlx::{PgConnection, postgres::PgPool};
 use uuid::Uuid;
 
@@ -86,6 +96,9 @@ impl std::fmt::Display for Error {
 pub(crate) struct Synced {
     pub(crate) books: usize,
     pub(crate) lessons: usize,
+    pub(crate) projects: usize,
+    pub(crate) tasks: usize,
+    pub(crate) hints: usize,
 }
 
 /// Writes every published book and lesson in the snapshot.
@@ -134,6 +147,37 @@ pub(crate) async fn run(
 
             lesson(&mut tx, held, lesson_id, book_id, &entry.book.slug).await?;
             synced.lessons += 1;
+        }
+    }
+
+    for entry in snapshot.projects() {
+        let Some(project_id) = entry.project.id else {
+            continue;
+        };
+
+        project(&mut tx, entry, project_id).await?;
+        synced.projects += 1;
+
+        for held in entry.tasks() {
+            let Some(task_id) = held.task.id else {
+                continue;
+            };
+
+            task(&mut tx, held, task_id, project_id, &entry.project.slug)
+                .await?;
+            synced.tasks += 1;
+
+            // Ordered by their position in the yaml, which is the only order a
+            // hint has: `hints:` is a list, and `sort_order` is where that
+            // list's shape is written down for SQL to order by.
+            for (at, held_hint) in held.task.hints.iter().enumerate() {
+                let Some(hint_id) = held_hint.id else {
+                    continue;
+                };
+
+                hint(&mut tx, hint_id, task_id, at, &held.task.slug).await?;
+                synced.hints += 1;
+            }
         }
     }
 
@@ -239,6 +283,124 @@ async fn lesson(
     Ok(())
 }
 
+/// One project: an id, a slug and whether it is published.
+///
+/// Three columns and two timestamps, which is the entire row. Everything a
+/// reader sees — the headline, the pitch, the features, the difficulty, the
+/// runner image, the unlock mode — is served from `project.yaml`, and the link
+/// to a book is `related_book_slug` in that same file rather than a foreign key
+/// here that could disagree with it.
+async fn project(
+    tx: &mut PgConnection,
+    entry: &ProjectEntry,
+    id: Uuid,
+) -> Result<(), Error> {
+    let project = &entry.project;
+    let writing = || format!("project {:?}", project.slug);
+
+    sqlx::query(&format!(
+        "INSERT INTO projects
+             (id, slug, status, created_at, updated_at)
+         VALUES ($1, $2, $3, {STAMP}, {STAMP})
+         ON CONFLICT (id) DO UPDATE SET
+             slug       = EXCLUDED.slug,
+             status     = EXCLUDED.status,
+             updated_at = EXCLUDED.updated_at"
+    ))
+    .bind(id)
+    .bind(&project.slug)
+    .bind(project.status.as_db())
+    .execute(&mut *tx)
+    .await
+    .map_err(|cause| Error::Database {
+        writing: writing(),
+        cause,
+    })?;
+
+    Ok(())
+}
+
+/// One task: which project it belongs to, its slug, and its place in the order.
+///
+/// No `status` column, unlike a lesson: a task has no status of its own, and a
+/// draft project never reaches this loop — see `ohara::catalog`. `sort_order`
+/// comes from the folder's number, so a task cannot claim a position the
+/// directory disagrees with.
+async fn task(
+    tx: &mut PgConnection,
+    held: &TaskEntry,
+    id: Uuid,
+    project_id: Uuid,
+    project_slug: &str,
+) -> Result<(), Error> {
+    let task = &held.task;
+    let writing = || format!("task {:?} in {project_slug:?}", task.slug);
+
+    sqlx::query(&format!(
+        "INSERT INTO tasks
+             (id, project_id, slug, sort_order, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, {STAMP}, {STAMP})
+         ON CONFLICT (id) DO UPDATE SET
+             project_id = EXCLUDED.project_id,
+             slug       = EXCLUDED.slug,
+             sort_order = EXCLUDED.sort_order,
+             updated_at = EXCLUDED.updated_at"
+    ))
+    .bind(id)
+    .bind(project_id)
+    .bind(&task.slug)
+    .bind(held.sort_order)
+    .execute(&mut *tx)
+    .await
+    .map_err(|cause| Error::Database {
+        writing: writing(),
+        cause,
+    })?;
+
+    Ok(())
+}
+
+/// One hint: an id for an unlock to name, and where it sits in the task.
+///
+/// The text, the unlock criteria and the deduction are all in `task.yaml`. The
+/// deduction a reader actually paid is on `user_unlocked_hints` instead, which
+/// is what stops re-pricing a hint from rewriting what somebody was charged.
+async fn hint(
+    tx: &mut PgConnection,
+    id: Uuid,
+    task_id: Uuid,
+    at: usize,
+    task_slug: &str,
+) -> Result<(), Error> {
+    let writing = || format!("hint {at} of task {task_slug:?}");
+
+    // A task with two billion hints is not a thing a yaml file can hold, and
+    // the column is an `integer`. Clamped rather than refused so the cast is
+    // stated instead of being a lint waiver.
+    let sort_order = i32::try_from(at).unwrap_or(i32::MAX);
+
+    sqlx::query(&format!(
+        "INSERT INTO task_hints
+             (id, task_id, sort_order, created_at, updated_at)
+         VALUES ($1, $2, $3, {STAMP}, {STAMP})
+         ON CONFLICT (id) DO UPDATE SET
+             task_id    = EXCLUDED.task_id,
+             sort_order = EXCLUDED.sort_order,
+             updated_at = EXCLUDED.updated_at"
+    ))
+    .bind(id)
+    .bind(task_id)
+    .bind(sort_order)
+    .execute(&mut *tx)
+    .await
+    .map_err(|cause| Error::Database {
+        writing: writing(),
+        cause,
+    })?;
+
+    Ok(())
+}
+
 /// Refuses a repo where anything to be written has no id.
 ///
 /// Before the transaction rather than during it, so the answer is the whole
@@ -262,6 +424,32 @@ fn identified(snapshot: &Snapshot) -> Result<(), Error> {
                     "books/{slug}/lessons/{}/lesson.yaml has no id",
                     held.folder
                 ));
+            }
+        }
+    }
+
+    for entry in snapshot.projects() {
+        let slug = &entry.project.slug;
+
+        if entry.project.id.is_none() {
+            offenders.push(format!("projects/{slug}/project.yaml has no id"));
+        }
+
+        for held in entry.tasks() {
+            let file =
+                format!("projects/{slug}/tasks/{}/task.yaml", held.folder);
+
+            if held.task.id.is_none() {
+                offenders.push(format!("{file} has no id"));
+            }
+
+            // Named by position rather than by its text: a hint has no id
+            // *and* no file of its own, so "the second hint" is the only
+            // handle there is to send somebody back to the yaml with.
+            for (at, hint) in held.task.hints.iter().enumerate() {
+                if hint.id.is_none() {
+                    offenders.push(format!("{file} hint {at} has no id"));
+                }
             }
         }
     }
