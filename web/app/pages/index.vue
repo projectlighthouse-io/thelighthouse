@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { faqs } from '@/data/Faqs'
-import { books } from '@/data/Books'
 import { heroStats, horizonBooks } from '@/data/Home'
-import { challenges, projects } from '@/data/Projects'
+import type { Book, Project } from '@/types/Content'
 
 useSeo({
   title: 'projectlighthouse — Software Engineering Fundamentals',
@@ -18,17 +17,34 @@ useJsonLd('faq', {
   })),
 })
 
-useJsonLd('shelf', {
+useJsonLd('shelf', () => ({
   '@type': 'ItemList',
   'name': 'Books',
-  'itemListElement': books.map((b, i) => ({
+  'itemListElement': books.value.map((b, i) => ({
     '@type': 'ListItem',
     'position': i + 1,
     'url': `${SITE.url}/books/${b.slug}`,
     'name': b.title,
   })),
-})
+}))
 
+
+// The same listing the books and projects pages render, so the home bands
+// cannot drift from them — which they did, silently, for as long as each read
+// its own copy. The books band read a hand-kept array and was two books and
+// every track behind before this.
+const { data: allBooks } = await useAsyncData('home-books', () =>
+  $fetch<Book[]>('/_api/books'))
+
+const books = computed<Book[]>(() => allBooks.value ?? [])
+
+const { data: allProjects } = await useAsyncData('home-projects', () =>
+  $fetch<Project[]>('/_api/projects'))
+
+const projects = computed<Project[]>(() =>
+  (allProjects.value ?? []).filter(p => !p.isChallenge))
+const challenges = computed<Project[]>(() =>
+  (allProjects.value ?? []).filter(p => p.isChallenge))
 </script>
 
 <template>
@@ -42,10 +58,21 @@ useJsonLd('shelf', {
           <p class="text-mono-body">Carefully crafted books to help you level up your skills</p>
         </div>
 
-        <div class="lg:solid-gray-bg rounded-md p-0 lg:p-6">
-          <div class="grid w-full gap-8 md:grid-cols-2 lg:grid-cols-3">
-            <BookCard v-for="book in books" :key="book.slug" :book="book" />
-          </div>
+        <!-- The same component `/books` is built from, tabs and all, so the
+             two cannot drift apart. `bg-panel` for the same reason that page
+             carries it: the shelf's rows tint on hover, and without a ground
+             of their own they do it over the body's dotted paper. Padding
+             rather than none, because a row's hover band bleeds 22px past its
+             content on each side.
+
+             Capped and scrolled: eleven rows at a 300px cover apiece is a
+             band taller than several screens, and everything below it — the
+             founder edition, the projects, the faq — sat past it. The shelf
+             scrolls inside its own panel so the page itself stays walkable.
+             `overscroll-contain` so reaching the end of the shelf does not
+             hand the scroll on to the page mid-gesture. -->
+        <div class="max-h-[70vh] overflow-y-auto overscroll-contain rounded-md bg-panel p-6 max-[820px]:p-4">
+          <BookShelf :books="books" />
         </div>
 
         <div class="mt-10 text-center">
