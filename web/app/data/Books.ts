@@ -34,7 +34,7 @@ export const books: Book[] = [
     description:
       'data structures and algorithms from first principles — starting with how memory works and building up from there. arrays, linked lists, trees, graphs, heaps, hash tables, sorting, and searching.',
     thumbnailUrl: `${CDN}/dsa/dsa.webp`,
-    tracks: { go: 6, rust: 5 },
+    tracks: { go: 6, rust: 5, systems: 3 },
     pages: 60,
     price: null,
   },
@@ -64,7 +64,7 @@ export const books: Book[] = [
     description:
       'follow a packet from your keyboard to a server and back — what actually happens when you curl an endpoint. TCP/IP, sockets, routing, DNS, TLS, and HTTP, all from first principles.',
     thumbnailUrl: `${CDN}/networking-fundamentals.webp`,
-    tracks: { go: 5, rust: 4 },
+    tracks: { go: 5, rust: 4, systems: 2 },
     pages: 44,
     price: null,
   },
@@ -74,7 +74,7 @@ export const books: Book[] = [
     description:
       'inside the operating system — how processes are created, how memory is managed, how the scheduler decides what runs next. the layer between your code and the hardware.',
     thumbnailUrl: `${CDN}/os-fundamentals.webp`,
-    tracks: { go: 4, rust: 3 },
+    tracks: { go: 4, rust: 3, systems: 1 },
     pages: 70,
     price: null,
   },

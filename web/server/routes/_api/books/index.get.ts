@@ -7,9 +7,19 @@ import { fromApi, priceLabel } from '#server/utils/Lighthouse'
  * The mapping here is the whole job: the api speaks snake case and minor units,
  * the page wants camel case and a price tag. Keeping that translation in one
  * handler means neither side has to know about the other's conventions.
+ *
+ * **`?track=` is forwarded, not applied here.** The api owns which books are on
+ * a track and in what order, because that is what `book.yaml` states; filtering
+ * a second time in this handler would be a second place for the answer to be
+ * wrong. An unknown track is the api's `[]`, and reaches the caller as one.
  */
-export default defineEventHandler(async () => {
-  const books = await fromApi<ApiBookSummary[]>('/api/books')
+export default defineEventHandler(async (event) => {
+  const { track } = getQuery(event)
+
+  const books = await fromApi<ApiBookSummary[]>(
+    '/api/books',
+    typeof track === 'string' && track ? { track } : undefined,
+  )
 
   return books.map(book => ({
     slug: book.slug,

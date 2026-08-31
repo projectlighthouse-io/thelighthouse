@@ -25,13 +25,16 @@ const base = (): string =>
  * A real 5xx from the api keeps its own status. That one is genuinely the
  * api's, and flattening it into 502 would lose which of the two failed.
  */
-export async function fromApi<T>(path: string): Promise<T> {
+export async function fromApi<T>(
+  path: string,
+  query?: Record<string, string>,
+): Promise<T> {
   try {
     // Cast because `$fetch<T>` returns `TypedInternalResponse<..., T>`, which
     // resolves to T for a concrete type but not for a type parameter — the
     // compiler cannot prove the two agree while T is still open. The runtime
     // value is exactly what T describes; only the generic is unprovable.
-    return await $fetch<T>(`${base()}${path}`) as T
+    return await $fetch<T>(`${base()}${path}`, { query }) as T
   }
   catch (error: unknown) {
     const status = (error as { status?: number, statusCode?: number })?.status
