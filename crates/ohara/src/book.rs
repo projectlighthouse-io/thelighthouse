@@ -1,6 +1,6 @@
 //! A book's yaml.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use serde::Deserialize;
 use uuid::Uuid;
@@ -57,6 +57,28 @@ pub struct Book {
     /// frame around a missing image.
     #[serde(default)]
     pub images: Vec<String>,
+    /// The tracks this book is on, and where it falls in each — `{go: 4,
+    /// rust: 3}`.
+    ///
+    /// A map rather than a list of names, because a track is a reading order
+    /// and not a label: OS Fundamentals is the fourth book of the go track and
+    /// the third of the rust one, and a bare `[go, rust]` cannot say that. One
+    /// field carries both facts, so a book can never be on a track without a
+    /// position or hold a position on a track it is not on.
+    ///
+    /// Here rather than derived from the slug, because the two answer
+    /// different questions: `dsa-fundamentals` is on both tracks and its slug
+    /// says neither. A track inferred in the frontend would be a guess dressed
+    /// up as data; this is the book stating it.
+    ///
+    /// Empty for an untracked book — Crack the Interview, or anything still
+    /// finding its shape. It is on no track, not at the end of one.
+    ///
+    /// `BTreeMap` for a stable order on the wire: the json is cached at the
+    /// edge and keyed by etag, and a map that reordered itself between two
+    /// runs would change the body without changing the content.
+    #[serde(default)]
+    pub tracks: BTreeMap<String, i32>,
     /// Absent is free.
     #[serde(default)]
     pub price: Price,
