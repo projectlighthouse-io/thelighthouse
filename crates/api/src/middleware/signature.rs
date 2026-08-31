@@ -1,7 +1,36 @@
-//! The luxctl boundary: an HMAC over the body, verified here and nowhere else.
+//! The luxctl boundary: an HMAC over the method and the path, verified here
+//! and nowhere else.
+//!
+//! **The scheme is not ours to choose.** luxctl is installed on readers'
+//! machines with the client secret baked in at build time, and it signs
+//!
+//! ```text
+//!   "{unix seconds}.{METHOD}.{path}"
+//! ```
+//!
+//! sending the hex digest as `X-Luxctl-Signature` and the same timestamp as
+//! `X-Luxctl-Timestamp`. That is what `VerifyLuxctlClient` in the laravel app
+//! checks, byte for byte, and a binary somebody already installed cannot be
+//! asked to sign something else. So this matches it rather than improving on
+//! it, and the cutover is a DNS change instead of a forced upgrade.
+//!
+//! **The body is not signed, and that is the scheme's limit rather than an
+//! oversight here.** Anyone who can rewrite a request in flight can change its
+//! body and the signature still verifies. What the signature does establish is
+//! that the caller holds the client secret and that the request is recent,
+//! which is what it is for: keeping the api's surface closed to things that
+//! are not luxctl. Everything a body can then do is gated a second time, by
+//! the bearer token and by the reader's own id being bound into every
+//! statement — this is the outer door, never the only one. Signing the body as
+//! well would be strictly better and is a luxctl change first.
+//!
+//! **The timestamp is what stops a replay.** A captured request is valid for
+//! five minutes and then is not, which bounds what a recorded signature is
+//! worth without this process having to remember every one it has seen.
+
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::{
-    body::{Body, to_bytes},
     extract::{Request, State},
     http::StatusCode,
     middleware::Next,
@@ -15,12 +44,16 @@ use crate::config::Config;
 
 type HmacSha256 = Hmac<Sha256>;
 
-/// A signed body larger than this is refused outright. The whole body has to be
-/// buffered to compute the HMAC over it, so without a ceiling an unauthenticated
-/// caller can make the process allocate as much as it likes.
-const MAX_SIGNED_BODY: usize = 1024 * 1024;
-
 const SIGNATURE_HEADER: &str = "x-luxctl-signature";
+const TIMESTAMP_HEADER: &str = "x-luxctl-timestamp";
+
+/// How far out of step a request's clock may be, in seconds.
+///
+/// The laravel middleware's window, kept. luxctl's callers are on their own
+/// laptops with their own clocks, and five minutes is loose enough that an
+/// unsynchronised one still works while a captured request stops being worth
+/// anything the same afternoon.
+const MAX_SKEW: i64 = 300;
 
 /// Rejects anything without a valid luxctl signature.
 ///
@@ -35,35 +68,79 @@ pub(crate) async fn require_signature(
     // there, which is free reconnaissance for anyone probing.
     let deny = || StatusCode::NOT_FOUND.into_response();
 
-    let provided = request
-        .headers()
-        .get(SIGNATURE_HEADER)
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_owned)
-        .unwrap_or_default();
+    let provided = header(request.headers(), SIGNATURE_HEADER);
+    let timestamp = header(request.headers(), TIMESTAMP_HEADER);
 
-    // The body has to be buffered to sign over it, then handed onward intact.
-    let (parts, body) = request.into_parts();
-    let Ok(bytes) = to_bytes(body, MAX_SIGNED_BODY).await else {
+    let Some(now) = unix_seconds() else {
+        // A clock this process cannot read is a clock it cannot check skew
+        // against, and the safe answer to "I do not know what now is" is no.
+        tracing::error!("cannot read the clock; refusing signed requests");
         return deny();
     };
 
-    if !matches(&config.luxctl_secret, &bytes, &provided) {
+    if !recent(&timestamp, now) {
         return deny();
     }
 
-    next.run(Request::from_parts(parts, Body::from(bytes)))
-        .await
+    // The path only, never the query string: that is what luxctl signs, so
+    // `?page=2` is not part of it.
+    let payload =
+        format!("{timestamp}.{}.{}", request.method(), request.uri().path());
+
+    if !matches(&config.luxctl_secret, payload.as_bytes(), &provided) {
+        return deny();
+    }
+
+    next.run(request).await
 }
 
-fn matches(secret: &str, body: &[u8], provided: &str) -> bool {
+/// One header as a string, owned.
+///
+/// Owned rather than borrowed so nothing is still holding the request when it
+/// is handed to `next.run`. A missing header and an unreadable one both read as
+/// empty, which fails every check below — there is no case where the
+/// difference between them changes the answer.
+fn header(headers: &axum::http::HeaderMap, name: &str) -> String {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// Whether a request's own timestamp is close enough to ours.
+///
+/// Both directions, as the laravel middleware does: a clock ahead of ours is
+/// as much a sign of a forged request as one behind it, and checking only the
+/// past would let a caller mint a signature that is good for next year.
+///
+/// An absent or unparseable timestamp is refused rather than read as zero,
+/// which would be an instant in 1970 and rejected as stale — the same answer
+/// by accident rather than on purpose.
+fn recent(timestamp: &str, now: i64) -> bool {
+    let Ok(sent) = timestamp.parse::<i64>() else {
+        return false;
+    };
+
+    // Saturating, then absolute: a hostile timestamp at either end of the
+    // range must not wrap round into "a second ago".
+    now.saturating_sub(sent).saturating_abs() <= MAX_SKEW
+}
+
+/// Unix seconds, or `None` for a clock set before the epoch.
+fn unix_seconds() -> Option<i64> {
+    i64::try_from(SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs())
+        .ok()
+}
+
+fn matches(secret: &str, payload: &[u8], provided: &str) -> bool {
     let Some(provided) = hex_decode(provided) else {
         return false;
     };
     let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) else {
         return false;
     };
-    mac.update(body);
+    mac.update(payload);
 
     // Constant time. A byte-by-byte compare leaks the correct prefix through
     // timing, which is enough to forge a signature given enough attempts.
@@ -77,37 +154,116 @@ fn hex_decode(text: &str) -> Option<Vec<u8>> {
 
     (0..text.len())
         .step_by(2)
-        .map(|i| u8::from_str_radix(&text[i..i + 2], 16).ok())
+        .map(|i| u8::from_str_radix(text.get(i..i + 2)?, 16).ok())
         .collect()
+}
+
+/// The signature luxctl would send for one request.
+///
+/// Here rather than in the test module because the route tests in other
+/// modules need it to reach their own handlers at all — every signed route is
+/// a 404 without one.
+#[cfg(test)]
+pub(crate) fn sign(secret: &str, method: &str, path: &str, at: i64) -> String {
+    use std::fmt::Write as _;
+
+    let payload = format!("{at}.{method}.{path}");
+
+    let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) else {
+        return String::new();
+    };
+    mac.update(payload.as_bytes());
+
+    mac.finalize()
+        .into_bytes()
+        .iter()
+        .fold(String::new(), |mut out, byte| {
+            let _ = write!(out, "{byte:02x}");
+            out
+        })
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Write as _;
-
     use super::*;
 
+    const NOW: i64 = 1_800_000_000;
+
+    /// The one assertion that is about the *other* implementations rather than
+    /// this one: the payload luxctl builds, spelled out, so a change to the
+    /// format above fails here instead of in production against a CLI nobody
+    /// can redeploy.
     #[test]
-    fn rejects_a_wrong_signature() {
-        assert!(!matches("secret", b"", "00"));
-        assert!(!matches("secret", b"", "not-hex"));
-        assert!(!matches("secret", b"", ""));
+    fn the_payload_is_timestamp_then_method_then_path() {
+        let signature = sign("dev-secret-0", "GET", "/api/v1/ping", NOW);
+
+        assert!(matches(
+            "dev-secret-0",
+            b"1800000000.GET./api/v1/ping",
+            &signature
+        ));
     }
 
     #[test]
-    fn accepts_a_correct_signature() {
-        let mut mac = HmacSha256::new_from_slice(b"secret").unwrap();
-        mac.update(b"payload");
-        let signature = mac.finalize().into_bytes();
-        let hex = signature.iter().fold(String::new(), |mut out, byte| {
-            let _ = write!(out, "{byte:02x}");
-            out
-        });
+    fn rejects_a_wrong_signature() {
+        assert!(!matches("secret", b"payload", "00"));
+        assert!(!matches("secret", b"payload", "not-hex"));
+        assert!(!matches("secret", b"payload", ""));
+        // Odd length, so it does not divide into pairs.
+        assert!(!matches("secret", b"payload", "abc"));
+    }
 
-        assert!(matches("secret", b"payload", &hex));
-        // same signature, different body
-        assert!(!matches("secret", b"tampered", &hex));
-        // right body, wrong secret
-        assert!(!matches("other", b"payload", &hex));
+    #[test]
+    fn a_signature_is_bound_to_its_method_and_its_path() {
+        let signature = sign("secret", "GET", "/api/v1/projects", NOW);
+        let for_payload =
+            |payload: String| matches("secret", payload.as_bytes(), &signature);
+
+        assert!(for_payload(format!("{NOW}.GET./api/v1/projects")));
+        // Same secret, same second, a different request.
+        assert!(!for_payload(format!("{NOW}.POST./api/v1/projects")));
+        assert!(!for_payload(format!("{NOW}.GET./api/v1/projects/attempts")));
+        assert!(!for_payload(format!("{}.GET./api/v1/projects", NOW + 1)));
+        // The right request, the wrong secret.
+        assert!(!matches(
+            "other",
+            format!("{NOW}.GET./api/v1/projects").as_bytes(),
+            &signature
+        ));
+    }
+
+    #[test]
+    fn a_request_inside_the_window_is_recent_in_both_directions() {
+        assert!(recent(&NOW.to_string(), NOW));
+        assert!(recent(&(NOW - MAX_SKEW).to_string(), NOW));
+        // A clock a little ahead of ours is somebody's laptop, not an attack.
+        assert!(recent(&(NOW + MAX_SKEW).to_string(), NOW));
+    }
+
+    #[test]
+    fn a_captured_request_stops_being_worth_anything() {
+        assert!(!recent(&(NOW - MAX_SKEW - 1).to_string(), NOW));
+        assert!(!recent(&(NOW + MAX_SKEW + 1).to_string(), NOW));
+    }
+
+    #[test]
+    fn a_missing_or_unreadable_timestamp_is_refused_rather_than_read_as_zero() {
+        for timestamp in ["", "  ", "nope", "1e9", "9223372036854775808"] {
+            assert!(!recent(timestamp, NOW), "{timestamp:?}");
+        }
+    }
+
+    #[test]
+    fn a_timestamp_at_the_end_of_the_range_does_not_wrap_into_recent() {
+        assert!(!recent(&i64::MIN.to_string(), NOW));
+        assert!(!recent(&i64::MAX.to_string(), NOW));
+    }
+
+    #[test]
+    fn the_clock_is_readable_and_in_range() {
+        let now = unix_seconds().unwrap();
+
+        // Some time after this was written.
+        assert!(now > 1_700_000_000);
     }
 }

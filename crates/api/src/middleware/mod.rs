@@ -2,6 +2,7 @@
 //!
 //! ```text
 //!   signature.rs  the luxctl HMAC boundary          404
+//!   bearer.rs     token  -> Holder  in extensions   401
 //!   reader.rs     cookie -> Session in extensions   401
 //!   csrf.rs       header vs the session's token     403
 //!   throttle.rs   writes per minute, per reader     429
@@ -18,6 +19,7 @@
 //! find none — and both refuse rather than skip, so a misordered mount answers
 //! 403 or 429 to everything instead of quietly letting writes through.
 
+pub(crate) mod bearer;
 pub(crate) mod csrf;
 pub(crate) mod rate;
 pub(crate) mod reader;
