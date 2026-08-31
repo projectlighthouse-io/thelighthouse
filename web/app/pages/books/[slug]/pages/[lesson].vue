@@ -49,24 +49,85 @@ const book = computed(() => data.value?.book)
 const lesson = computed(() => data.value?.lesson)
 
 /**
- * Which contents entry is highlighted: whatever the url points at.
+ * Which contents entry is highlighted: the section actually being read.
  *
- * The url already holds the answer — clicking an entry puts `#some-heading`
- * there, and that is the section chosen. Deriving it from scroll position
- * instead meant measuring which heading had passed a line near the top of the
- * viewport, and the last entry can never pass it: there is not a screenful of
- * content below it, so the page stops scrolling while the heading is still
- * halfway down. The measurement then answered `N-1` and overwrote the click.
+ * Scroll position, not the url. The hash only says where the reader jumped
+ * last, so it goes stale the moment they scroll past that section — which is
+ * most of the time they spend on the page.
  *
- * No scroll listener, no bottom-of-page special case, no frame budget. A hash
- * that matches no entry — a stale link, a heading since renamed — leaves the
- * first one highlighted rather than none.
+ * The reason this was hash-driven before is real and is handled below: the
+ * last heading can never cross a line near the top of the viewport, because
+ * there is not a screenful of prose beneath it to scroll. Measuring alone
+ * therefore answers `N-1` forever and the last entry never lights. The bottom
+ * of the document is the special case that fixes it, and it is three lines.
  */
-// Seeded with the first entry: a hash is never sent to the server, so this is
-// the only thing it can know, and it is what `syncFromHash` falls back to
-// anyway. Left empty, the server would paint a contents list with nothing lit
-// until hydration.
+// Seeded with the first entry: neither a hash nor a scroll offset is sent to
+// the server, so this is the only thing it can know. Left empty, the server
+// would paint a contents list with nothing lit until hydration.
 const activeId = ref<string>(data.value?.toc?.[0]?.id ?? '')
+
+/**
+ * Where a heading counts as reached — just past the 110px `scroll-margin-top`
+ * the reader's headings carry, so a heading jumped to by its anchor lands on
+ * the reading side of the line rather than a pixel above it.
+ */
+const TOP_LINE = 116
+
+/**
+ * The last heading to have crossed the line, or the last heading outright once
+ * the page can scroll no further.
+ *
+ * Walks in document order and stops at the first heading still below the line
+ * — everything after it is below too, so there is nothing to gain by
+ * measuring the rest.
+ */
+const syncFromScroll = (): void => {
+  const toc = data.value?.toc ?? []
+  const last = toc.at(-1)
+
+  if (!last) return
+
+  // Bottom of the document. The final section is on screen and nothing else
+  // can be, whatever the measurement below would say.
+  const bottom = window.scrollY + window.innerHeight
+    >= document.documentElement.scrollHeight - 2
+
+  if (bottom) {
+    activeId.value = last.id
+    return
+  }
+
+  let current = toc[0]?.id ?? ''
+
+  for (const item of toc) {
+    const heading = document.getElementById(item.id)
+
+    if (!heading) continue
+    if (heading.getBoundingClientRect().top > TOP_LINE) break
+
+    current = item.id
+  }
+
+  activeId.value = current
+}
+
+/**
+ * One measurement a frame, at most.
+ *
+ * A scroll event fires far faster than the screen repaints, and every one of
+ * them would otherwise read layout — which forces the browser to flush pending
+ * style and layout work before it can answer.
+ */
+let queued = 0
+
+const onScroll = (): void => {
+  if (queued) return
+
+  queued = requestAnimationFrame(() => {
+    queued = 0
+    syncFromScroll()
+  })
+}
 
 /** The hash, but only when it names a section this lesson actually has. */
 const syncFromHash = (): void => {
@@ -77,18 +138,41 @@ const syncFromHash = (): void => {
 }
 
 onMounted(() => {
+  // The hash first, so a link opened at `#some-heading` is lit before the
+  // browser has finished scrolling to it. Scrolling corrects it from there.
   syncFromHash()
+  syncFromScroll()
+
+  // Passive: this handler never calls `preventDefault`, and saying so lets the
+  // browser scroll without waiting to find out.
+  window.addEventListener('scroll', onScroll, { passive: true })
+  // A resize moves every heading, and the reader can resize without scrolling.
+  window.addEventListener('resize', onScroll, { passive: true })
 
   // Plain `<a href="#…">` clicks are handled by the browser, not the router,
   // so `route.hash` does not see them — this event does.
   window.addEventListener('hashchange', syncFromHash)
-  onBeforeUnmount(() => window.removeEventListener('hashchange', syncFromHash))
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('scroll', onScroll)
+    window.removeEventListener('resize', onScroll)
+    window.removeEventListener('hashchange', syncFromHash)
+
+    if (queued) cancelAnimationFrame(queued)
+  })
 })
 
 // A different lesson has different headings, and the hash rarely survives the
 // move. Fall back to its first entry rather than keeping the old one lit.
-watch(() => data.value?.toc, () => {
+watch(() => data.value?.toc, async () => {
   activeId.value = data.value?.toc?.[0]?.id ?? ''
+
+  // After the new headings are in the dom — measuring before it would read the
+  // outgoing lesson's.
+  if (import.meta.client) {
+    await nextTick()
+    syncFromScroll()
+  }
 })
 
 /* ---------- annotations: highlights, notes, the bookmark ----------
