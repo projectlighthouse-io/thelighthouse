@@ -6,6 +6,10 @@ status: published
 tier: foundation
 thumbnail_url: https://example.test/fixture.webp
 
+tracks:
+  go: 2
+  rust: 1
+
 price:
   amount: 2900
   currency: usd

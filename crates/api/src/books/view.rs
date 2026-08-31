@@ -4,6 +4,8 @@
 //! not automatically a wire field: `status` never ships (nothing unpublished is
 //! in the catalogue), and the folder name never ships (a url carries the slug).
 
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 
 use ohara::{
@@ -22,6 +24,11 @@ pub(crate) struct BookSummary<'b> {
     title: &'b str,
     description: Option<&'b str>,
     thumbnail_url: Option<&'b str>,
+    /// Which tracks the book is on, and its position in each. What the
+    /// listing's track tabs filter and order on — hence on the summary and not
+    /// only the detail, since a tab that had to open every book to place it
+    /// would defeat the point.
+    tracks: &'b BTreeMap<String, i32>,
     price: Price,
     lesson_count: usize,
     /// Where "start reading" goes, or `None` for a book with no published
@@ -36,6 +43,7 @@ impl<'b> BookSummary<'b> {
             title: &entry.book.title,
             description: entry.book.description.as_deref(),
             thumbnail_url: entry.book.thumbnail_url.as_deref(),
+            tracks: &entry.book.tracks,
             price: entry.book.price,
             lesson_count: entry.lessons().count(),
             first_lesson: entry

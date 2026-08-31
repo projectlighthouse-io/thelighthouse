@@ -99,6 +99,10 @@ async fn a_listing_carries_enough_to_render_a_card() {
     assert_eq!(at(&books, "/0/price/currency"), "usd");
     assert_eq!(at(&books, "/0/lesson_count"), 2);
     assert_eq!(at(&books, "/0/first_lesson"), "free-lesson");
+    // Which tracks it is on, and where it falls in each. On the summary
+    // because the filtering and the ordering both happen on the listing.
+    assert_eq!(at(&books, "/0/tracks/go"), 2);
+    assert_eq!(at(&books, "/0/tracks/rust"), 1);
     // A listing must not carry every lesson of every book.
     assert!(books.pointer("/0/chapters").is_none());
 }
