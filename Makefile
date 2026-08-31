@@ -194,9 +194,15 @@ content-db-sync: ## upsert ohara's books and lessons into postgres
 # does the same thing without telling you whether it worked.
 #
 # Signed, because the endpoint is: the api verifies the HMAC itself and answers
-# 404 without it. The body is empty, so the signature is over nothing.
+# 404 without it. The payload is "{unix seconds}.{METHOD}.{path}" — luxctl's
+# scheme, which this endpoint inherits by sharing the middleware. The timestamp
+# goes in a header of its own and is checked against a five-minute window, so a
+# signature copied out of a shell history stops working.
 content-reload: ## make the running api reread ohara
 	@test -n "$$LUXCTL_SECRET" || { . ./.env 2>/dev/null; }; \
-		sig=$$(printf '' | openssl dgst -sha256 -hmac "$${LUXCTL_SECRET}" -hex | sed 's/.*= *//'); \
+		ts=$$(date +%s); \
+		sig=$$(printf '%s.POST./reload' "$$ts" \
+			| openssl dgst -sha256 -hmac "$${LUXCTL_SECRET}" -hex | sed 's/.*= *//'); \
 		curl -fsS -X POST -H "X-Luxctl-Signature: $$sig" \
+			-H "X-Luxctl-Timestamp: $$ts" \
 			http://127.0.0.1:$(API_PORT)/reload && echo

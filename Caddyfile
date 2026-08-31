@@ -142,6 +142,18 @@
 		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
+	# The project pages, and the progress an open tab polls for while its
+	# reader works in their terminal.
+	#
+	# Not the same thing as luxctl's `/api/v1/projects*`, which the rule above
+	# routes because it carries a signature. These are the browser's: the
+	# listing and the page are the same bytes for everyone and are held at the
+	# edge, the poll is behind the session cookie and behind `no-store`. Both
+	# gates are the api's — this rule only says the path is reachable.
+	handle /api/projects* {
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
+	}
+
 	# The provider's return leg, and the one URL here that was not ours to pick:
 	# it is registered with Google and GitHub, and is the path the laravel app
 	# already serves. Keeping it means the cutover is a DNS change rather than a
