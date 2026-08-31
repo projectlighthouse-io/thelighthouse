@@ -28,7 +28,7 @@ use crate::{
     db,
     limit::RateLimit,
     middleware::{rate::limit_requests, signature::require_signature},
-    notes, projects, response, telemetry,
+    notes, projects, response, settings, telemetry,
 };
 
 /// What every handler can reach. Cheap to clone — `PgPool` and `Providers` are
@@ -101,6 +101,7 @@ pub(crate) fn app(
         .merge(books::routes(&state))
         .merge(notes::routes(&state))
         .merge(bookmarks::routes(&state))
+        .merge(settings::routes(&state))
         // Deliberately outside the reader gate: an OAuth callback is a browser
         // navigation and cannot carry an HMAC or a session. Those routes
         // authenticate themselves — see `auth`.

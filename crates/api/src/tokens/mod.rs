@@ -30,7 +30,7 @@
 //! there is one, this is where it goes.
 
 pub(crate) mod store;
-mod token;
+pub(crate) mod token;
 
 pub(crate) use token::Presented;
 

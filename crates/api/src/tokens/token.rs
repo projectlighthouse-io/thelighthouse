@@ -60,21 +60,63 @@ impl Presented {
     /// to precompute. A password would need argon2; this is not a password.
     #[must_use]
     pub(crate) fn matches(&self, stored: &str) -> bool {
-        use std::fmt::Write as _;
-
-        let hex = Sha256::digest(self.secret.as_bytes()).iter().fold(
-            String::with_capacity(64),
-            |mut out, byte| {
-                let _ = write!(out, "{byte:02x}");
-                out
-            },
-        );
-
         // `ct_eq` on slices of different lengths returns false in variable
         // time, which leaks only the *length* of the column's value — not a
         // secret, and the digest's length is fixed and public anyway.
-        hex.as_bytes().ct_eq(stored.as_bytes()).into()
+        hex_sha256(&self.secret)
+            .as_bytes()
+            .ct_eq(stored.as_bytes())
+            .into()
     }
+}
+
+/// Lowercase hex of the sha256, which is exactly what the column holds.
+///
+/// One function, because [`Presented::matches`] and [`mint`] must agree about
+/// it forever: a mint that hashed differently would write rows that no
+/// presented token could ever match, and the failure would look like every new
+/// token being wrong rather than like a bug here.
+fn hex_sha256(value: &str) -> String {
+    use std::fmt::Write as _;
+
+    Sha256::digest(value.as_bytes()).iter().fold(
+        String::with_capacity(64),
+        |mut out, byte| {
+            let _ = write!(out, "{byte:02x}");
+            out
+        },
+    )
+}
+
+/// A token that has just been created: what the reader is shown, and what the
+/// row stores.
+///
+/// The pair is produced together and only by [`mint`], so the stored hash can
+/// never be of a different secret than the one handed out.
+pub(crate) struct Minted {
+    /// The half the reader copies. Never stored, and shown exactly once — the
+    /// api has no way to recover it afterwards, which is the point.
+    pub(crate) secret: String,
+    /// What `personal_access_tokens.token` gets.
+    pub(crate) hash: String,
+}
+
+/// Mints a secret from the system random source.
+///
+/// `None` when that source cannot be read, which is the answer `session::create`
+/// gives to the same problem and for the same reason: a guessable credential is
+/// worse than a failed request.
+///
+/// 32 bytes hex-encoded rather than Sanctum's 40 alphanumerics. Both are opaque
+/// to [`Presented::parse`], which splits on the first bar and hashes whatever
+/// follows, so the shape of a *new* secret was never part of the contract —
+/// only the `{id}|{secret}` frame around it is. This way there is one random
+/// source in the process rather than two.
+pub(crate) fn mint() -> Option<Minted> {
+    let secret = loginwith::random_state().ok()?;
+    let hash = hex_sha256(&secret);
+
+    Some(Minted { secret, hash })
 }
 
 #[cfg(test)]
@@ -84,6 +126,31 @@ mod tests {
     /// sha256("secret"), as `personal_access_tokens.token` would hold it.
     const SECRET_SHA256: &str =
         "2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b";
+
+    #[test]
+    fn a_minted_secret_authenticates_against_the_hash_stored_beside_it() {
+        // The round trip that matters: what `mint` writes to the column is
+        // what `matches` will compare a presented secret against. If these two
+        // ever disagree, every newly created token is refused and the symptom
+        // looks like a broken login rather than a hashing bug.
+        let minted = mint().expect("the system random source");
+
+        let presented =
+            Presented::parse(&format!("Bearer 9|{}", minted.secret)).unwrap();
+
+        assert!(presented.matches(&minted.hash));
+    }
+
+    #[test]
+    fn two_mints_do_not_share_a_secret() {
+        let one = mint().expect("the system random source");
+        let two = mint().expect("the system random source");
+
+        assert_ne!(one.secret, two.secret);
+        assert_ne!(one.hash, two.hash);
+        // Long enough to be worth having: 32 bytes, hex encoded.
+        assert_eq!(one.secret.len(), 64);
+    }
 
     #[test]
     fn a_token_is_an_id_and_a_secret_either_side_of_a_bar() {
@@ -164,17 +231,5 @@ mod tests {
                 .unwrap()
                 .matches(SECRET_SHA256)
         );
-    }
-
-    fn hex_sha256(value: &str) -> String {
-        use std::fmt::Write as _;
-
-        Sha256::digest(value.as_bytes()).iter().fold(
-            String::new(),
-            |mut out, byte| {
-                let _ = write!(out, "{byte:02x}");
-                out
-            },
-        )
     }
 }

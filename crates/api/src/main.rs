@@ -20,6 +20,7 @@ mod projects;
 mod request;
 mod response;
 mod session;
+mod settings;
 mod telemetry;
 #[cfg(test)]
 mod testing;

@@ -142,6 +142,17 @@
 		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
+	# What a reader changes about their own account. Behind the session cookie
+	# and, for the writes, a CSRF token — both the api's own gates. This rule
+	# only says the path is reachable.
+	#
+	# Never the bearer layer: a token minted here must not be able to mint
+	# another, which is why the whole prefix is a browser's and luxctl has no
+	# route to it. See `settings::routes`.
+	handle /api/settings* {
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
+	}
+
 	# The project pages, and the progress an open tab polls for while its
 	# reader works in their terminal.
 	#

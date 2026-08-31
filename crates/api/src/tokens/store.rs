@@ -3,6 +3,7 @@
 //! Nothing here knows about HTTP. It answers "which reader, if any" and the
 //! middleware decides what a caller is told.
 
+use chrono::NaiveDateTime;
 use sqlx::postgres::PgPool;
 
 use super::{Holder, Presented};
@@ -117,4 +118,104 @@ mod tests {
         assert_eq!(USER, "App\\Models\\User");
         assert_eq!(USER.matches('\\').count(), 2);
     }
+}
+
+/// One of a reader's tokens, as the settings page lists them.
+///
+/// **No `token` column.** The hash is not a secret worth leaking and is not
+/// useful to anybody, and a struct that carries it is one somebody eventually
+/// serialises.
+#[derive(Debug, sqlx::FromRow)]
+pub(crate) struct Record {
+    pub(crate) id: i64,
+    pub(crate) name: String,
+    pub(crate) last_used_at: Option<NaiveDateTime>,
+    pub(crate) created_at: Option<NaiveDateTime>,
+}
+
+/// Every token this reader holds, newest first.
+///
+/// # Errors
+///
+/// The query.
+pub(crate) async fn list(
+    db: &PgPool,
+    user_id: i64,
+) -> Result<Vec<Record>, sqlx::Error> {
+    sqlx::query_as::<_, Record>(
+        "SELECT id, name, last_used_at, created_at
+           FROM personal_access_tokens
+          WHERE tokenable_id = $1
+            AND tokenable_type = $2
+          ORDER BY id DESC",
+    )
+    .bind(user_id)
+    .bind(USER)
+    .fetch_all(db)
+    .await
+}
+
+/// Writes a token for this reader and answers the row.
+///
+/// **The hash arrives already computed.** Minting is `token::mint`, which makes
+/// the secret and the hash together; this only writes what it is given, so
+/// there is no path where a row is stored with a hash of something else.
+///
+/// `abilities` is `["*"]`, which is what every token this platform has ever
+/// issued holds — see the module note about not reading it yet.
+///
+/// # Errors
+///
+/// The query. A duplicate hash would be one too, and is not worth a branch:
+/// two 32-byte secrets colliding is not a case that happens.
+pub(crate) async fn create(
+    db: &PgPool,
+    user_id: i64,
+    name: &str,
+    hash: &str,
+) -> Result<Record, sqlx::Error> {
+    sqlx::query_as::<_, Record>(
+        "INSERT INTO personal_access_tokens
+                (tokenable_type, tokenable_id, name, token, abilities,
+                 created_at, updated_at)
+         VALUES ($1, $2, $3, $4, '[\"*\"]',
+                 (now() AT TIME ZONE 'utc'), (now() AT TIME ZONE 'utc'))
+         RETURNING id, name, last_used_at, created_at",
+    )
+    .bind(USER)
+    .bind(user_id)
+    .bind(name)
+    .bind(hash)
+    .fetch_one(db)
+    .await
+}
+
+/// Deletes one of this reader's tokens. `false` when there was none to delete.
+///
+/// **Scoped by owner in the statement, not checked afterwards.** A token
+/// belonging to somebody else and a token that does not exist are the same
+/// `false`, so the caller has one answer for both and cannot be used to find
+/// out which ids are real.
+///
+/// # Errors
+///
+/// The query.
+pub(crate) async fn revoke(
+    db: &PgPool,
+    user_id: i64,
+    id: i64,
+) -> Result<bool, sqlx::Error> {
+    let done = sqlx::query(
+        "DELETE FROM personal_access_tokens
+          WHERE id = $1
+            AND tokenable_id = $2
+            AND tokenable_type = $3",
+    )
+    .bind(id)
+    .bind(user_id)
+    .bind(USER)
+    .execute(db)
+    .await?;
+
+    Ok(done.rows_affected() > 0)
 }
