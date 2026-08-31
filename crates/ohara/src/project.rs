@@ -5,7 +5,7 @@
 //! nothing but the repo they live in — no chapters, no prose split at a
 //! paywall, no locales.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{Content, Error, Status, read, within_the_folder};
@@ -101,7 +101,9 @@ pub struct ContentPath {
 ///
 /// The database stores this as a smallint; the yaml spells it, because
 /// `unlock_mode: 1` in a file a human edits is a number nobody can read.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum UnlockMode {
     /// Every task is available from the start.
@@ -177,11 +179,37 @@ impl Content {
     ///
     /// The file named by `blueprint_path` being absent or unreadable.
     pub fn blueprint(&self, project: &Project) -> Result<String, Error> {
-        read(
-            &self
-                .project_dir(&project.slug)
-                .join(&project.blueprint_path),
-        )
+        self.blueprint_at(&project.slug, &project.blueprint_path)
+    }
+
+    /// The blueprint, given a slug and a path already taken off a [`Project`].
+    ///
+    /// The form the catalogue calls. It copies both out while it holds the
+    /// snapshot and opens the file after letting go, so a reload in between
+    /// cannot pair one project's slug with another's path.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::blueprint`].
+    pub fn blueprint_at(
+        &self,
+        project: &str,
+        path: &str,
+    ) -> Result<String, Error> {
+        read(&self.project_dir(project).join(path))
+    }
+
+    /// A project's long-form markdown, given the path off its `content_path`.
+    ///
+    /// # Errors
+    ///
+    /// The file being absent or unreadable.
+    pub fn overview_at(
+        &self,
+        project: &str,
+        path: &str,
+    ) -> Result<String, Error> {
+        read(&self.project_dir(project).join(path))
     }
 }
 

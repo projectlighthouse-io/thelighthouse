@@ -1,0 +1,5 @@
+blueprint "pointed at nothing" {
+    phase "a paid task" {
+        slug: a-paid-task
+    }
+}

@@ -1,0 +1,5 @@
+blueprint "once only" {
+    phase "only task" {
+        slug: only-task
+    }
+}

@@ -1,0 +1,5 @@
+blueprint "unfinished" {
+    phase "a task" {
+        slug: a-task
+    }
+}

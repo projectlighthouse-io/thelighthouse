@@ -1,0 +1,7 @@
+id: 1a9e7c05-6b38-4f21-90d4-2c7e5b8a3f16
+slug: unfinished-project
+name: An Unfinished Project
+short_description: Written, and not for readers yet.
+status: draft
+runner_image: local|go
+blueprint_path: blueprint.bp

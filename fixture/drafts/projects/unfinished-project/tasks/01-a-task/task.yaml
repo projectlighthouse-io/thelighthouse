@@ -1,0 +1,10 @@
+id: 3f6b2d81-4c09-4a7e-85b2-9d1f7e0c6a43
+slug: a-task
+title: A Task Nobody Should See Yet
+points: 10
+scores: '5:10:10'
+hints:
+  - id: 7b1c4e59-2a86-4d03-9f75-1e8b6c204d3a
+    text: A hint inside a draft.
+    unlock_criteria: '5:3:A'
+    points_deduction: 2
