@@ -3,9 +3,10 @@
 use axum::response::Response;
 use axum::{
     Extension,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
+use serde::Deserialize;
 
 use super::{
     entitlement::{Access, access},
@@ -20,14 +21,50 @@ use crate::{
     session::Session,
 };
 
-/// Every published book.
+/// What narrows [`list`]. Absent means the whole shelf.
+#[derive(Debug, Deserialize)]
+pub(crate) struct Shelf {
+    /// A track name — `go`, `rust`, `systems`. Not an enum: the tracks are
+    /// content, named in `book.yaml`, and an enum here would mean a rust change
+    /// every time somebody starts one. An unknown name is simply a track no
+    /// book is on.
+    track: Option<String>,
+}
+
+/// Every published book, or one track of them.
+///
+/// **A track is a reading order, so asking for one orders the answer by it.**
+/// Go Fundamentals before Go Intermediate, whatever order the catalogue walks
+/// the shelf in. Without a track the catalogue's own order stands, which is the
+/// only order a mixed shelf has.
+///
+/// A track nobody is on answers `[]` rather than 404 or the whole shelf: the
+/// question "which books are on this track" has an empty answer, and neither
+/// pretending the track exists nor pretending the filter was not asked for is
+/// an improvement on saying so.
 ///
 /// `Shared`: the same bytes for a subscriber, a stranger and a crawler, which
-/// is what lets the edge hold it.
-pub(crate) async fn list(State(state): State<AppState>) -> Response {
+/// is what lets the edge hold it. The query string is part of the url, so two
+/// tracks are two cache entries rather than one that keeps being overwritten.
+pub(crate) async fn list(
+    State(state): State<AppState>,
+    Query(shelf): Query<Shelf>,
+) -> Response {
     let snapshot = state.catalog.current();
+    let mut entries: Vec<_> = snapshot.books().collect();
+
+    // Empty is absent: `?track=` is a filter nobody filled in, and answering
+    // nothing to it would be a blank page for a stray `&track=` in a url.
+    if let Some(track) = shelf.track.as_deref().filter(|name| !name.is_empty())
+    {
+        entries.retain(|entry| entry.book.tracks.contains_key(track));
+        entries.sort_by_key(|entry| {
+            entry.book.tracks.get(track).copied().unwrap_or(i32::MAX)
+        });
+    }
+
     let books: Vec<BookSummary<'_>> =
-        snapshot.books().map(BookSummary::of).collect();
+        entries.into_iter().map(BookSummary::of).collect();
 
     response::json(StatusCode::OK, books, CachePolicy::public_content())
 }
