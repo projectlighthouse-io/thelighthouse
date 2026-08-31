@@ -108,6 +108,27 @@ async fn a_listing_carries_enough_to_render_a_card() {
 }
 
 #[tokio::test]
+async fn a_track_narrows_the_shelf_to_the_books_on_it() {
+    let on_go = json("/api/books?track=go").await;
+    assert_eq!(at(&on_go, "/0/slug"), "fixture-book");
+    assert!(on_go.as_array().is_some_and(|books| books.len() == 1));
+
+    // A track no book is on is an empty shelf, not the whole one and not a
+    // 404: the question has an answer and the answer is nothing.
+    let on_nothing = json("/api/books?track=no-such-track").await;
+    assert_eq!(on_nothing.as_array().map(Vec::len), Some(0));
+}
+
+#[tokio::test]
+async fn an_empty_track_is_a_filter_nobody_filled_in() {
+    // A stray `&track=` in a url should not blank the page.
+    let all = json("/api/books?track=").await;
+
+    assert_eq!(at(&all, "/0/slug"), "fixture-book");
+    assert!(all.as_array().is_some_and(|books| !books.is_empty()));
+}
+
+#[tokio::test]
 async fn a_book_groups_its_lessons_into_chapters() {
     let book = json("/api/books/fixture-book").await;
 
@@ -235,45 +256,15 @@ async fn seo_falls_back_to_what_a_reader_sees() {
     );
 }
 
-/// The signature `Config::sample`'s secret produces over an empty body.
-fn signature_for_empty_body() -> String {
-    use std::fmt::Write as _;
-
-    use hmac::{Hmac, Mac};
-
-    let mut mac =
-        <Hmac<sha2::Sha256>>::new_from_slice(b"luxctl").expect("any key size");
-    mac.update(b"");
-    mac.finalize()
-        .into_bytes()
-        .iter()
-        .fold(String::new(), |mut hex, byte| {
-            let _ = write!(hex, "{byte:02x}");
-            hex
-        })
-}
-
 /// A signed POST to `/reload`, built fresh each time so one router can serve
 /// several — the budget lives in the state, not the request.
 fn signed_reload() -> Request<Body> {
-    Request::builder()
-        .method("POST")
-        .uri("/reload")
-        .header("x-luxctl-signature", signature_for_empty_body())
-        .body(Body::empty())
-        .unwrap()
+    crate::testing::signed("POST", "/reload")
 }
 
 async fn post_signed(uri: &str) -> Response {
     router()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(uri)
-                .header("x-luxctl-signature", signature_for_empty_body())
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(crate::testing::signed("POST", uri))
         .await
         .unwrap()
 }
