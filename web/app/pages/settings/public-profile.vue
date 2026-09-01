@@ -17,26 +17,35 @@ interface Profile {
   bio: string | null
   company: string | null
   education: string | null
+  location: string | null
   linkedin_url: string | null
+  x_url: string | null
+  website_url: string | null
 }
 
-/** The five a reader owns. `username` and `github_username` are shown, not sent. */
+/** The eight a reader owns. `username` and `github_username` are shown, not sent. */
 interface Editable {
   tagline: string
   bio: string
   company: string
   education: string
+  location: string
   linkedin_url: string
+  x_url: string
+  website_url: string
 }
 
-const MAX = { tagline: 160, bio: 1000, short: 255 }
+const MAX = { tagline: 160, bio: 1000, short: 255, location: 120 }
 
 const form = reactive<Editable>({
   tagline: '',
   bio: '',
   company: '',
   education: '',
+  location: '',
   linkedin_url: '',
+  x_url: '',
+  website_url: '',
 })
 
 const username = ref<string | null>(null)
@@ -52,7 +61,10 @@ function fill(profile: Profile) {
   form.bio = profile.bio ?? ''
   form.company = profile.company ?? ''
   form.education = profile.education ?? ''
+  form.location = profile.location ?? ''
   form.linkedin_url = profile.linkedin_url ?? ''
+  form.x_url = profile.x_url ?? ''
+  form.website_url = profile.website_url ?? ''
   username.value = profile.username
   githubUsername.value = profile.github_username
 }
@@ -154,12 +166,45 @@ async function save() {
       </label>
 
       <label class="block">
+        <span class="font-mono text-xs tracking-wider uppercase text-faint">location</span>
+        <input
+          v-model="form.location"
+          type="text"
+          :maxlength="MAX.location"
+          placeholder="City, country"
+          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-ink focus:border-stroke focus:outline-none"
+        >
+      </label>
+
+      <label class="block">
         <span class="font-mono text-xs tracking-wider uppercase text-faint">linkedin</span>
         <input
           v-model="form.linkedin_url"
           type="url"
           :maxlength="MAX.short"
           placeholder="https://linkedin.com/in/your-handle"
+          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-ink focus:border-stroke focus:outline-none"
+        >
+      </label>
+
+      <label class="block">
+        <span class="font-mono text-xs tracking-wider uppercase text-faint">x</span>
+        <input
+          v-model="form.x_url"
+          type="url"
+          :maxlength="MAX.short"
+          placeholder="https://x.com/your-handle"
+          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-ink focus:border-stroke focus:outline-none"
+        >
+      </label>
+
+      <label class="block">
+        <span class="font-mono text-xs tracking-wider uppercase text-faint">website</span>
+        <input
+          v-model="form.website_url"
+          type="url"
+          :maxlength="MAX.short"
+          placeholder="https://yourdomain.dev"
           class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-ink focus:border-stroke focus:outline-none"
         >
       </label>
