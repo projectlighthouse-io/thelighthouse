@@ -1,0 +1,23 @@
+[package]
+name = "billing"
+version = "0.1.0"
+edition = "2024"
+description = "A generic billing module for subscription payments, with pluggable providers."
+
+[lints]
+workspace = true
+
+[dependencies]
+# The registry stores `Arc<dyn Gateway>`, so a driver can be written outside
+# this crate without editing it. A trait with native `async fn` is not
+# dyn-compatible — the future's type is the implementation's, and there is no
+# single one behind `dyn` — so the methods have to return a boxed future
+# instead. This writes that form; the alternative is hand-rolling
+# `Pin<Box<dyn Future<Output = _> + Send + '_>>` on every method and every impl.
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+# Period ends and cancellation dates. `default-features = false` drops `clock`:
+# nothing here reads the current time through chrono, and the api stores these
+# in `TIMESTAMP` columns whose clock is postgres's.
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+thiserror = "2"
