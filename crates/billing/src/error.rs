@@ -38,6 +38,14 @@ pub enum Error {
         cause: String,
     },
 
+    /// The system random source could not be read.
+    ///
+    /// Only reached where randomness is load-bearing — minting an idempotency
+    /// key. Failing the request is correct: the retries the key would have
+    /// made safe are not safe without it.
+    #[error("the system random source is unavailable")]
+    Entropy,
+
     /// The provider answered, and the answer was no.
     ///
     /// A card decline lives here, and so does a bad price id. The caller

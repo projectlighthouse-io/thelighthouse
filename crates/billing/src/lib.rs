@@ -64,6 +64,7 @@
 //! - `checkout` — who is paying, and where to send them.
 //! - `subscription` — a subscription as the provider currently sees it.
 //! - `registry` — registering the drivers at boot, and looking one up.
+//! - `request` — how hard to try, and how not to charge twice.
 //! - `event` — what a provider told us happened.
 //! - `error` — the one error type that crosses the boundary.
 
@@ -73,6 +74,7 @@ mod event;
 mod gateway;
 mod plan;
 mod registry;
+mod request;
 mod subscription;
 
 pub use checkout::{Customer, Handoff};
@@ -81,4 +83,5 @@ pub use event::Event;
 pub use gateway::Gateway;
 pub use plan::{Interval, Plan, PlanId};
 pub use registry::{Providers, Registration, providers};
+pub use request::{Attempts, IdempotencyKey, RequestStrategy};
 pub use subscription::{Cancel, Status, Subscription};
