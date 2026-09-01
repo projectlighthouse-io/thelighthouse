@@ -1,0 +1,26 @@
+# Every plan on sale, and the provider's handle for what to charge.
+#
+# A sample. Copy it, put the real handles in, and keep that copy out of version
+# control — a price handle is not a secret, but which plans exist and what they
+# map to is a deployment's business rather than this repository's.
+#
+# `id`        our name for the plan. Stored against an account and named in
+#             requests, so it outlives any one provider. Short and stable.
+# `price`     the provider's handle. Opaque: this crate copies it into a
+#             request and never reads it. Keeping the amount at the provider is
+#             what makes a price change a dashboard edit rather than a deploy.
+# `interval`  month, year, or once. `once` is a plan that is bought outright
+#             and never renews, which is the one nothing can cancel or resume.
+
+plans:
+  - id: monthly
+    price: price_REPLACE_ME
+    interval: month
+
+  - id: yearly
+    price: price_REPLACE_ME
+    interval: year
+
+  - id: lifetime
+    price: price_REPLACE_ME
+    interval: once

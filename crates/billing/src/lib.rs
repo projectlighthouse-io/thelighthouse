@@ -81,7 +81,7 @@ pub use checkout::{Customer, Handoff};
 pub use error::Error;
 pub use event::Event;
 pub use gateway::Gateway;
-pub use plan::{Interval, Plan, PlanId};
+pub use plan::{Interval, Plan, PlanId, Plans};
 pub use registry::{Providers, Registration, providers};
 pub use request::{Attempts, IdempotencyKey, RequestStrategy};
 pub use subscription::{Cancel, Status, Subscription};

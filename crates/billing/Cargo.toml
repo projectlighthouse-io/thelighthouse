@@ -16,6 +16,9 @@ workspace = true
 # `Pin<Box<dyn Future<Output = _> + Send + '_>>` on every method and every impl.
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
+# `serde_norway`, not `serde_yaml` — the latter is archived and its published
+# versions warn on use.
+serde_norway = "0.9"
 # Period ends and cancellation dates. `default-features = false` drops `clock`:
 # nothing here reads the current time through chrono, and the api stores these
 # in `TIMESTAMP` columns whose clock is postgres's.
