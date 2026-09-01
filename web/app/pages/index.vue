@@ -51,28 +51,28 @@ const challenges = computed<Project[]>(() =>
   <div>
     <MarketingHeroSection :stats="heroStats" />
 
+    <!-- Full width, unlike every other band on this page: the shelf is a grid
+         of ~290px cards, and inside the 7xl column it fits four and then stops
+         — the rest of a wide monitor stays empty while the band runs long. -->
     <section class="py-12">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div class="px-4 sm:px-6 lg:px-8">
         <div class="mx-auto mb-12 max-w-3xl text-center">
           <h2 class="mb-3 font-serif text-4xl text-ink sm:text-5xl">Books</h2>
           <p class="text-mono-body">Carefully crafted books to help you level up your skills</p>
         </div>
 
-        <!-- The same component `/books` is built from, tabs and all, so the
-             two cannot drift apart. `bg-panel` for the same reason that page
-             carries it: the shelf's rows tint on hover, and without a ground
-             of their own they do it over the body's dotted paper. Padding
-             rather than none, because a row's hover band bleeds 22px past its
-             content on each side.
+        <!-- `HomeShelf`, not the `Shelf` `/books` renders: the same books and
+             the same tabs, laid out two cards wide instead of eleven
+             full-width rows. Two columns halve the band's height, which is
+             what the scroll box was there to do — so the shelf sits on the
+             page in full and the page scrolls, rather than a panel scrolling
+             inside it.
 
-             Capped and scrolled: eleven rows at a 300px cover apiece is a
-             band taller than several screens, and everything below it — the
-             founder edition, the projects, the faq — sat past it. The shelf
-             scrolls inside its own panel so the page itself stays walkable.
-             `overscroll-contain` so reaching the end of the shelf does not
-             hand the scroll on to the page mid-gesture. -->
-        <div class="max-h-[70vh] overflow-y-auto overscroll-contain rounded-md bg-panel p-6 max-[820px]:p-4">
-          <BookShelf :books="books" />
+             `bg-panel` for the same reason `/books` carries it: the cards tint
+             on hover, and without a ground of their own they do it over the
+             body's dotted paper. -->
+        <div class="rounded-md bg-panel p-6 max-[820px]:p-4">
+          <BookHomeShelf :books="books" />
         </div>
 
         <div class="mt-10 text-center">
