@@ -21,3 +21,6 @@ serde = { version = "1", features = ["derive"] }
 # in `TIMESTAMP` columns whose clock is postgres's.
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 thiserror = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

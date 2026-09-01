@@ -46,7 +46,7 @@
 //!
 //! # Extending it
 //!
-//! `providers()` takes anything implementing [`Gateway`], so a provider that
+//! [`providers`] takes anything implementing [`Gateway`], so a provider that
 //! does not ship here is a driver you write and register alongside the ones
 //! that do. Nothing in this crate needs editing to accept it, which is the
 //! reason the registry holds trait objects rather than a closed enum of the
@@ -63,6 +63,7 @@
 //! - `plan` — what is being sold, and how often it is charged for.
 //! - `checkout` — who is paying, and where to send them.
 //! - `subscription` — a subscription as the provider currently sees it.
+//! - `registry` — registering the drivers at boot, and looking one up.
 //! - `event` — what a provider told us happened.
 //! - `error` — the one error type that crosses the boundary.
 
@@ -71,6 +72,7 @@ mod error;
 mod event;
 mod gateway;
 mod plan;
+mod registry;
 mod subscription;
 
 pub use checkout::{Customer, Handoff};
@@ -78,4 +80,5 @@ pub use error::Error;
 pub use event::Event;
 pub use gateway::Gateway;
 pub use plan::{Interval, Plan, PlanId};
+pub use registry::{Providers, Registration, providers};
 pub use subscription::{Cancel, Status, Subscription};
