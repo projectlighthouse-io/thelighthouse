@@ -142,7 +142,7 @@ pub(crate) async fn profile(
     }
 }
 
-/// `PATCH /api/settings/profile` — write the five fields a reader owns.
+/// `PATCH /api/settings/profile` — write the eight fields a reader owns.
 ///
 /// The whole profile every time; see `users::update_profile` for why there is
 /// no partial update. The answer is the row as it now stands, so the page

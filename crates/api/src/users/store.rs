@@ -238,8 +238,11 @@ pub(crate) struct Profile {
     pub(crate) bio: Option<String>,
     pub(crate) company: Option<String>,
     pub(crate) education: Option<String>,
+    pub(crate) location: Option<String>,
     pub(crate) github_username: Option<String>,
     pub(crate) linkedin_url: Option<String>,
+    pub(crate) x_url: Option<String>,
+    pub(crate) website_url: Option<String>,
 }
 
 /// The profile fields of one reader.
@@ -252,8 +255,8 @@ pub(crate) async fn profile(
     user_id: i64,
 ) -> Result<Option<Profile>, sqlx::Error> {
     sqlx::query_as::<_, Profile>(
-        "SELECT username, tagline, bio, company, education,
-                github_username, linkedin_url
+        "SELECT username, tagline, bio, company, education, location,
+                github_username, linkedin_url, x_url, website_url
            FROM users
           WHERE id = $1",
     )
@@ -262,7 +265,7 @@ pub(crate) async fn profile(
     .await
 }
 
-/// Writes the five fields a reader may change, and answers the row as it now
+/// Writes the eight fields a reader may change, and answers the row as it now
 /// stands.
 ///
 /// **Every field is written on every call, `None` included.** A partial update
@@ -285,18 +288,24 @@ pub(crate) async fn update_profile(
                 bio = $3,
                 company = $4,
                 education = $5,
-                linkedin_url = $6,
+                location = $6,
+                linkedin_url = $7,
+                x_url = $8,
+                website_url = $9,
                 updated_at = (now() AT TIME ZONE 'utc')
           WHERE id = $1
-      RETURNING username, tagline, bio, company, education,
-                github_username, linkedin_url",
+      RETURNING username, tagline, bio, company, education, location,
+                github_username, linkedin_url, x_url, website_url",
     )
     .bind(user_id)
     .bind(fields.tagline.as_deref())
     .bind(fields.bio.as_deref())
     .bind(fields.company.as_deref())
     .bind(fields.education.as_deref())
+    .bind(fields.location.as_deref())
     .bind(fields.linkedin_url.as_deref())
+    .bind(fields.x_url.as_deref())
+    .bind(fields.website_url.as_deref())
     .fetch_optional(db)
     .await
 }

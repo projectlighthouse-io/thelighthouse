@@ -22,6 +22,8 @@ pub(crate) enum Refusal {
     BioTooLong,
     /// A `varchar(255)` profile field over its cap.
     FieldTooLong,
+    /// Longer than `users.location`, which is narrower than the rest.
+    LocationTooLong,
     /// Not an `http(s)` link with a host — see `view::is_web_url`.
     NotALink,
 }
@@ -36,6 +38,7 @@ impl Refusal {
             Self::TaglineTooLong => "tagline_too_long",
             Self::BioTooLong => "bio_too_long",
             Self::FieldTooLong => "field_too_long",
+            Self::LocationTooLong => "location_too_long",
             Self::NotALink => "not_a_link",
         }
     }
@@ -47,6 +50,7 @@ impl Refusal {
             | Self::TaglineTooLong
             | Self::BioTooLong
             | Self::FieldTooLong
+            | Self::LocationTooLong
             | Self::NotALink => StatusCode::UNPROCESSABLE_ENTITY,
             // Not the caller's fault, and retrying may well work.
             Self::NoRandomness => StatusCode::SERVICE_UNAVAILABLE,
@@ -65,6 +69,7 @@ impl Refusal {
             Self::TaglineTooLong => "Tagline must be 160 characters or less.",
             Self::BioTooLong => "Bio must be 1000 characters or less.",
             Self::FieldTooLong => "That is longer than 255 characters.",
+            Self::LocationTooLong => "Location must be 120 characters or less.",
             Self::NotALink => "Enter a full link, starting with https://",
         }
     }
@@ -86,13 +91,14 @@ pub(crate) fn refuse(cause_of: Refusal) -> Response {
 mod tests {
     use super::*;
 
-    const REFUSALS: [Refusal; 7] = [
+    const REFUSALS: [Refusal; 8] = [
         Refusal::NameRequired,
         Refusal::NameTooLong,
         Refusal::NoRandomness,
         Refusal::TaglineTooLong,
         Refusal::BioTooLong,
         Refusal::FieldTooLong,
+        Refusal::LocationTooLong,
         Refusal::NotALink,
     ];
 

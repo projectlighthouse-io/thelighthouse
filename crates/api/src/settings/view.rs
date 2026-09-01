@@ -68,11 +68,12 @@ impl NewToken {
 
 /// The caps, which are the columns' where the column has one.
 ///
-/// `tagline` is `varchar(160)` and `bio` is `text`; the bio's limit is the
-/// laravel form's, kept because readers have written against it. Checking here
-/// rather than letting postgres refuse means a message that names the field
-/// instead of a constraint.
+/// `tagline` is `varchar(160)`, `location` is `varchar(120)` and `bio` is
+/// `text`; the bio's limit is the laravel form's, kept because readers have
+/// written against it. Checking here rather than letting postgres refuse means
+/// a message that names the field instead of a constraint.
 pub(crate) const MAX_TAGLINE: usize = 160;
+pub(crate) const MAX_LOCATION: usize = 120;
 pub(crate) const MAX_BIO: usize = 1_000;
 pub(crate) const MAX_SHORT: usize = 255;
 
@@ -90,7 +91,10 @@ pub(crate) struct ProfileView {
     pub(crate) bio: Option<String>,
     pub(crate) company: Option<String>,
     pub(crate) education: Option<String>,
+    pub(crate) location: Option<String>,
     pub(crate) linkedin_url: Option<String>,
+    pub(crate) x_url: Option<String>,
+    pub(crate) website_url: Option<String>,
 }
 
 impl From<crate::users::Profile> for ProfileView {
@@ -102,7 +106,10 @@ impl From<crate::users::Profile> for ProfileView {
             bio: row.bio,
             company: row.company,
             education: row.education,
+            location: row.location,
             linkedin_url: row.linkedin_url,
+            x_url: row.x_url,
+            website_url: row.website_url,
         }
     }
 }
@@ -123,7 +130,13 @@ pub(crate) struct EditProfile {
     #[serde(default)]
     pub(crate) education: Option<String>,
     #[serde(default)]
+    pub(crate) location: Option<String>,
+    #[serde(default)]
     pub(crate) linkedin_url: Option<String>,
+    #[serde(default)]
+    pub(crate) x_url: Option<String>,
+    #[serde(default)]
+    pub(crate) website_url: Option<String>,
 }
 
 /// Trimmed, with empty meaning absent.
@@ -175,7 +188,10 @@ impl EditProfile {
         let bio = tidy(self.bio.as_ref());
         let company = tidy(self.company.as_ref());
         let education = tidy(self.education.as_ref());
+        let location = tidy(self.location.as_ref());
         let linkedin_url = tidy(self.linkedin_url.as_ref());
+        let x_url = tidy(self.x_url.as_ref());
+        let website_url = tidy(self.website_url.as_ref());
 
         // Characters, not bytes: sixty accented letters are sixty characters.
         let over = |value: &Option<String>, cap: usize| {
@@ -191,7 +207,17 @@ impl EditProfile {
         if over(&company, MAX_SHORT) || over(&education, MAX_SHORT) {
             return Err(Refusal::FieldTooLong);
         }
-        if linkedin_url.as_deref().is_some_and(|url| !is_web_url(url)) {
+        if over(&location, MAX_LOCATION) {
+            return Err(Refusal::LocationTooLong);
+        }
+
+        // Every one of the three is reader-supplied and comes back out of the
+        // profile page as an `href`, so all three go through the same check.
+        let links = [&linkedin_url, &x_url, &website_url];
+        if links
+            .iter()
+            .any(|link| link.as_deref().is_some_and(|url| !is_web_url(url)))
+        {
             return Err(Refusal::NotALink);
         }
 
@@ -202,7 +228,10 @@ impl EditProfile {
             bio,
             company,
             education,
+            location,
             linkedin_url,
+            x_url,
+            website_url,
         })
     }
 }
@@ -286,10 +315,58 @@ mod tests {
             bio: Some("b".repeat(MAX_BIO)),
             company: Some("c".repeat(MAX_SHORT)),
             education: Some("e".repeat(MAX_SHORT)),
+            location: Some("l".repeat(MAX_LOCATION)),
             linkedin_url: None,
+            x_url: None,
+            website_url: None,
         };
 
         assert!(edit.checked().is_ok());
+    }
+
+    #[test]
+    fn location_has_its_own_cap_and_its_own_refusal() {
+        // `varchar(120)`, not the 255 the other short fields share, so the
+        // reader is told the number their column actually holds.
+        let edit = EditProfile {
+            location: Some("l".repeat(MAX_LOCATION + 1)),
+            ..EditProfile::default()
+        };
+
+        assert_eq!(
+            edit.checked().unwrap_err(),
+            super::super::refusal::Refusal::LocationTooLong
+        );
+    }
+
+    #[test]
+    fn every_link_field_is_checked_and_not_only_linkedin() {
+        let fields: [fn(String) -> EditProfile; 3] = [
+            |v| EditProfile {
+                linkedin_url: Some(v),
+                ..EditProfile::default()
+            },
+            |v| EditProfile {
+                x_url: Some(v),
+                ..EditProfile::default()
+            },
+            |v| EditProfile {
+                website_url: Some(v),
+                ..EditProfile::default()
+            },
+        ];
+
+        for field in fields {
+            assert_eq!(
+                field("javascript:alert(1)".to_owned())
+                    .checked()
+                    .unwrap_err(),
+                super::super::refusal::Refusal::NotALink
+            );
+            assert!(
+                field("https://example.com/a".to_owned()).checked().is_ok()
+            );
+        }
     }
 
     #[test]
