@@ -1,8 +1,7 @@
 //! The http half of the Stripe driver: one request, retried to a plan.
 
-use std::fmt;
-
 use reqwest::{Method, StatusCode};
+use secrecy::{ExposeSecret, SecretString};
 use serde::de::DeserializeOwned;
 
 use super::wire;
@@ -29,29 +28,19 @@ const USER_AGENT: &str = concat!("billing/", env!("CARGO_PKG_VERSION"));
 /// connection does not hold a request handler open indefinitely.
 const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+#[derive(Debug)]
 pub(crate) struct Client {
     http: reqwest::Client,
-    secret: String,
+    /// `SecretString`, so this struct can derive `Debug` without leaking the
+    /// key into any log line that formats the driver.
+    secret: SecretString,
     base: String,
     strategy: RequestStrategy,
 }
 
-/// Hand written, so a state dump cannot print the api key.
-impl fmt::Debug for Client {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Client")
-            .field("base", &self.base)
-            .field("secret", &"<redacted>")
-            .field("strategy", &self.strategy)
-            // The http client itself has no state worth printing, and the
-            // secret above is the reason this impl is written by hand.
-            .finish_non_exhaustive()
-    }
-}
-
 impl Client {
     pub(crate) fn new(
-        secret: impl Into<String>,
+        secret: SecretString,
         strategy: RequestStrategy,
     ) -> Result<Self, Error> {
         let http = reqwest::Client::builder()
@@ -64,7 +53,7 @@ impl Client {
 
         Ok(Self {
             http,
-            secret: secret.into(),
+            secret,
             base: BASE.to_owned(),
             strategy,
         })
@@ -95,7 +84,8 @@ impl Client {
             let mut request = self
                 .http
                 .request(method.clone(), &url)
-                .basic_auth(&self.secret, None::<&str>)
+                // Exposed for the length of this expression and no longer.
+                .basic_auth(self.secret.expose_secret(), None::<&str>)
                 .header("Stripe-Version", API_VERSION);
 
             if let Some(key) = attempts.key() {

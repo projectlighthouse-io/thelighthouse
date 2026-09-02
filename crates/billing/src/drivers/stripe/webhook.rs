@@ -14,6 +14,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use hmac::{Hmac, Mac};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
@@ -33,7 +34,7 @@ const MAX_SKEW: i64 = 300;
 
 /// Check the signature, then say what the delivery means.
 pub(crate) fn settle(
-    secret: &str,
+    secret: &SecretString,
     body: &[u8],
     signature: &str,
 ) -> Result<Event, Error> {
@@ -58,7 +59,7 @@ fn now() -> Result<i64, Error> {
 
 /// Whether this body was signed with this secret, recently.
 fn verify(
-    secret: &str,
+    secret: &SecretString,
     body: &[u8],
     signature: &str,
     now: i64,
@@ -69,7 +70,7 @@ fn verify(
         return Err(Error::Signature);
     }
 
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+    let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes())
         .map_err(|_| Error::Signature)?;
     mac.update(timestamp.to_string().as_bytes());
     mac.update(b".");
@@ -210,7 +211,9 @@ mod tests {
     use super::*;
     use crate::subscription::Status;
 
-    const SECRET: &str = "whsec_test";
+    fn secret(key: &str) -> SecretString {
+        key.into()
+    }
 
     fn sign(secret: &str, body: &[u8], timestamp: i64) -> String {
         let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
@@ -232,7 +235,15 @@ mod tests {
     fn a_delivery_signed_with_the_secret_verifies() {
         let body = br#"{"type":"ping","data":{"object":{}}}"#;
 
-        assert!(verify(SECRET, body, &sign(SECRET, body, 1000), 1000).is_ok());
+        assert!(
+            verify(
+                &secret("whsec_test"),
+                body,
+                &sign("whsec_test", body, 1000),
+                1000
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -241,7 +252,7 @@ mod tests {
         let forged = sign("whsec_someone_else", body, 1000);
 
         assert!(matches!(
-            verify(SECRET, body, &forged, 1000),
+            verify(&secret("whsec_test"), body, &forged, 1000),
             Err(Error::Signature)
         ));
     }
@@ -249,11 +260,11 @@ mod tests {
     #[test]
     fn a_body_changed_after_signing_does_not_verify() {
         let body = br#"{"type":"ping","data":{"object":{}}}"#;
-        let signature = sign(SECRET, body, 1000);
+        let signature = sign("whsec_test", body, 1000);
         let tampered = br#"{"type":"pong","data":{"object":{}}}"#;
 
         assert!(matches!(
-            verify(SECRET, tampered, &signature, 1000),
+            verify(&secret("whsec_test"), tampered, &signature, 1000),
             Err(Error::Signature)
         ));
     }
@@ -261,21 +272,35 @@ mod tests {
     #[test]
     fn a_captured_delivery_stops_being_worth_replaying() {
         let body = br#"{"type":"ping","data":{"object":{}}}"#;
-        let signature = sign(SECRET, body, 1000);
+        let signature = sign("whsec_test", body, 1000);
 
         // Inside the window, either side of it.
-        assert!(verify(SECRET, body, &signature, 1000 + MAX_SKEW).is_ok());
-        assert!(verify(SECRET, body, &signature, 1000 - MAX_SKEW).is_ok());
+        assert!(
+            verify(&secret("whsec_test"), body, &signature, 1000 + MAX_SKEW)
+                .is_ok()
+        );
+        assert!(
+            verify(&secret("whsec_test"), body, &signature, 1000 - MAX_SKEW)
+                .is_ok()
+        );
 
         // Outside it. The signature is still perfectly valid, which is the
         // point: only the clock stops this being replayable forever.
-        assert!(verify(SECRET, body, &signature, 1000 + MAX_SKEW + 1).is_err());
+        assert!(
+            verify(
+                &secret("whsec_test"),
+                body,
+                &signature,
+                1000 + MAX_SKEW + 1
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn one_matching_digest_is_enough_during_a_rotation() {
         let body = br#"{"type":"ping","data":{"object":{}}}"#;
-        let ours = sign(SECRET, body, 1000);
+        let ours = sign("whsec_test", body, 1000);
         let theirs = sign("whsec_old", body, 1000);
 
         // Stripe signs with both secrets while one is being rotated out, and
@@ -283,7 +308,7 @@ mod tests {
         let (_, digest) = theirs.split_once("v1=").unwrap();
         let both = format!("{ours},v1={digest}");
 
-        assert!(verify(SECRET, body, &both, 1000).is_ok());
+        assert!(verify(&secret("whsec_test"), body, &both, 1000).is_ok());
     }
 
     #[test]
@@ -292,7 +317,7 @@ mod tests {
 
         for header in ["", "t=1000", "v1=abcd", "nonsense", "t=soon,v1=abcd"] {
             assert!(
-                verify(SECRET, body, header, 1000).is_err(),
+                verify(&secret("whsec_test"), body, header, 1000).is_err(),
                 "{header} should not verify"
             );
         }

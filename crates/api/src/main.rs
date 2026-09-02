@@ -268,19 +268,23 @@ fn billing_providers(
 
     let plans = billing::Plans::from_yaml(&document)?;
 
-    let providers = billing::providers([billing::StripeProvider::with(
-        &config.stripe_secret_key,
-        &config.stripe_webhook_secret,
-        billing::Returns {
-            success: format!("{}/billing/thanks", config.app_url),
-            cancel: format!("{}/pricing", config.app_url),
+    let providers = billing::providers([billing::Stripe::register(
+        billing::StripeConfig {
+            // Wrapped at the boundary, and plain text nowhere past it: a
+            // `SecretString` cannot be printed by a `Debug` further in.
+            secret_key: config.stripe_secret_key.clone().into(),
+            webhook_secret: config.stripe_webhook_secret.clone().into(),
+            returns: billing::Returns {
+                success: format!("{}/billing/thanks", config.app_url),
+                cancel: format!("{}/pricing", config.app_url),
+            },
+            // Three attempts, backing off. A checkout that fails because
+            // stripe hiccuped is a reader who thinks the site is broken, and
+            // every attempt shares one idempotency key so retrying cannot
+            // double-charge.
+            strategy: billing::RequestStrategy::ExponentialBackoff(3),
         },
-    )
-    // Three attempts, backing off. A checkout that fails because stripe
-    // hiccuped is a reader who thinks the site is broken, and every
-    // attempt shares one idempotency key so retrying cannot double-charge.
-    .strategy(billing::RequestStrategy::ExponentialBackoff(3))
-    .register()?])?;
+    )?])?;
 
     Ok(api::Billing {
         providers,

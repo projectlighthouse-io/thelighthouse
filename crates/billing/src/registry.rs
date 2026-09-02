@@ -8,7 +8,7 @@
 //! ```text
 //! // boot, after configuration and before the router
 //! let billing = billing::providers([
-//!     StripeProvider::with(&secret_key, &webhook_secret).register()?,
+//!     Stripe::register(config)?,
 //! ])?;
 //!
 //! // per request

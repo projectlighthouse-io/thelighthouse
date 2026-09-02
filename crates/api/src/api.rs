@@ -61,15 +61,17 @@ plans:
     interval: year
 ";
 
-        let providers = billing::providers([billing::StripeProvider::with(
-            "sk_test",
-            "whsec_test",
-            billing::Returns {
-                success: "https://lighthouse.test/paid".to_owned(),
-                cancel: "https://lighthouse.test/pricing".to_owned(),
+        let providers = billing::providers([billing::Stripe::register(
+            billing::StripeConfig {
+                secret_key: "sk_test".into(),
+                webhook_secret: "whsec_test".into(),
+                returns: billing::Returns {
+                    success: "https://lighthouse.test/paid".to_owned(),
+                    cancel: "https://lighthouse.test/pricing".to_owned(),
+                },
+                strategy: billing::RequestStrategy::Once,
             },
         )
-        .register()
         .unwrap()])
         .unwrap();
 

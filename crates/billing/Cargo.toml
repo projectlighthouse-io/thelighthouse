@@ -22,6 +22,11 @@ reqwest = { version = "0.12", default-features = false, features = [
     "charset",
     "rustls-tls-webpki-roots",
 ] }
+# Secrets that cannot be printed. `SecretString`'s `Debug` is `[REDACTED]` and
+# its `Drop` zeroes the memory, so redaction is a property of the type rather
+# than of somebody remembering to hand-write a `Debug` impl for every struct a
+# key passes through.
+secrecy = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # `time` alone. Backing off between attempts is the only thing here that needs

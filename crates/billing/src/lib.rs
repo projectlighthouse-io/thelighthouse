@@ -9,9 +9,12 @@
 //! ```text
 //! // boot: once, where the rest of the configuration is read
 //! let billing = billing::providers([
-//!     StripeProvider::with(&secret_key, &webhook_secret)
-//!         .strategy(RequestStrategy::ExponentialBackoff(3))
-//!         .register()?,
+//!     Stripe::register(StripeConfig {
+//!         secret_key,
+//!         webhook_secret,
+//!         returns: Returns { success, cancel },
+//!         strategy: RequestStrategy::ExponentialBackoff(3),
+//!     })?,
 //! ])?;
 //!
 //! // a reader wants to subscribe
@@ -80,7 +83,7 @@ mod request;
 mod subscription;
 
 pub use checkout::{Customer, Handoff};
-pub use drivers::stripe::{Returns, Stripe, StripeProvider};
+pub use drivers::stripe::{Returns, Stripe, StripeConfig};
 pub use error::Error;
 pub use event::Event;
 pub use gateway::Gateway;

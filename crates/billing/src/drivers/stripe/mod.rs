@@ -9,6 +9,7 @@ mod webhook;
 mod wire;
 
 use reqwest::Method;
+use secrecy::SecretString;
 
 use self::client::{Client, field};
 use crate::{
@@ -41,11 +42,38 @@ pub struct Returns {
     pub cancel: String,
 }
 
+/// Everything the driver needs to take money.
+///
+/// A struct rather than a parameter list, and with no `Default`, deliberately.
+/// Two adjacent `String` parameters is a call where transposing the api key
+/// and the webhook secret compiles — and then fails much later as "every
+/// delivery is refused" rather than as a type error. Naming all four fields at
+/// the literal makes both mistakes unwriteable, and a `Default` to spread over
+/// would hand back the ability to omit one silently.
+///
+/// Both secrets are [`SecretString`], so `Debug` prints `[REDACTED]` and the
+/// memory is zeroed on drop. That makes not-logging-the-key a property of the
+/// type rather than of every struct it passes through remembering to hand-write
+/// a `Debug`.
+#[derive(Debug)]
+pub struct StripeConfig {
+    /// The api key. `sk_live_…` or `sk_test_…`.
+    pub secret_key: SecretString,
+    /// The signing secret for *this* webhook endpoint — the `whsec_…` shown
+    /// when the endpoint is created. Not the api key, and different per
+    /// endpoint, so staging and production do not share one.
+    pub webhook_secret: SecretString,
+    /// Where checkout sends the browser afterwards.
+    pub returns: Returns,
+    /// How hard to try each request.
+    pub strategy: RequestStrategy,
+}
+
 /// Stripe, as a [`Gateway`].
 #[derive(Debug)]
 pub struct Stripe {
     client: Client,
-    webhook_secret: String,
+    webhook_secret: SecretString,
     returns: Returns,
 }
 
@@ -56,21 +84,29 @@ impl Stripe {
     ///
     /// [`Error::Unreachable`] if an http client cannot be built at all, which
     /// is a broken tls configuration rather than anything to do with Stripe.
-    pub fn new(
-        secret_key: impl Into<String>,
-        webhook_secret: impl Into<String>,
-        returns: Returns,
-        strategy: RequestStrategy,
-    ) -> Result<Self, Error> {
+    pub fn new(config: StripeConfig) -> Result<Self, Error> {
         Ok(Self {
-            client: Client::new(secret_key, strategy)?,
-            webhook_secret: webhook_secret.into(),
-            returns,
+            client: Client::new(config.secret_key, config.strategy)?,
+            webhook_secret: config.webhook_secret,
+            returns: config.returns,
         })
     }
 
+    /// The same driver, named, ready for [`providers`](crate::providers).
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Unreachable`] if an http client cannot be built.
+    pub fn register(config: StripeConfig) -> Result<Registration, Error> {
+        Ok(Registration::new(NAME, Self::new(config)?))
+    }
+
     /// The secret webhook deliveries are signed with.
-    pub(crate) fn webhook_secret(&self) -> &str {
+    ///
+    /// Exposed here and used immediately by the hmac. That is the whole point
+    /// of the wrapper: the plain string exists for one expression rather than
+    /// for the lifetime of a struct that something might print.
+    pub(crate) fn webhook_secret(&self) -> &SecretString {
         &self.webhook_secret
     }
 
@@ -302,80 +338,6 @@ impl Gateway for Stripe {
     }
 }
 
-/// Stripe's half of the registration list.
-///
-/// ```text
-/// let billing = billing::providers([
-///     StripeProvider::with(&secret_key, &webhook_secret, returns)
-///         .strategy(RequestStrategy::ExponentialBackoff(3))
-///         .register()?,
-/// ])?;
-/// ```
-#[derive(Clone)]
-pub struct StripeProvider {
-    secret_key: String,
-    webhook_secret: String,
-    returns: Returns,
-    strategy: RequestStrategy,
-}
-
-/// Hand written, so a configuration dump cannot print either secret.
-impl std::fmt::Debug for StripeProvider {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("StripeProvider")
-            .field("secret_key", &"<redacted>")
-            .field("webhook_secret", &"<redacted>")
-            .field("returns", &self.returns)
-            .field("strategy", &self.strategy)
-            .finish()
-    }
-}
-
-impl StripeProvider {
-    /// Name the credentials and where checkout comes back to.
-    ///
-    /// `webhook_secret` is the endpoint's signing secret — the `whsec_…` shown
-    /// when the webhook endpoint is created, which is not the api key and is
-    /// per endpoint.
-    #[must_use]
-    pub fn with(
-        secret_key: impl Into<String>,
-        webhook_secret: impl Into<String>,
-        returns: Returns,
-    ) -> Self {
-        Self {
-            secret_key: secret_key.into(),
-            webhook_secret: webhook_secret.into(),
-            returns,
-            strategy: RequestStrategy::default(),
-        }
-    }
-
-    /// How hard to try each request. Defaults to sending it once.
-    #[must_use]
-    pub fn strategy(mut self, strategy: RequestStrategy) -> Self {
-        self.strategy = strategy;
-        self
-    }
-
-    /// Build the driver and name it, ready for
-    /// [`providers`](crate::providers).
-    ///
-    /// # Errors
-    ///
-    /// [`Error::Unreachable`] if an http client cannot be built.
-    pub fn register(self) -> Result<Registration, Error> {
-        let driver = Stripe::new(
-            self.secret_key,
-            self.webhook_secret,
-            self.returns,
-            self.strategy,
-        )?;
-
-        Ok(Registration::new(NAME, driver))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use wiremock::{
@@ -393,18 +355,22 @@ mod tests {
         "metadata": { "plan": "yearly", "reference": "41" }
     }"#;
 
-    fn driver(server: &MockServer, strategy: RequestStrategy) -> Stripe {
-        Stripe::new(
-            "sk_test",
-            "whsec_test",
-            Returns {
+    fn config(strategy: RequestStrategy) -> StripeConfig {
+        StripeConfig {
+            secret_key: "sk_test".into(),
+            webhook_secret: "whsec_test".into(),
+            returns: Returns {
                 success: "https://example.com/paid".to_owned(),
                 cancel: "https://example.com/pricing".to_owned(),
             },
             strategy,
-        )
-        .unwrap()
-        .with_base(server.uri())
+        }
+    }
+
+    fn driver(server: &MockServer, strategy: RequestStrategy) -> Stripe {
+        Stripe::new(config(strategy))
+            .unwrap()
+            .with_base(server.uri())
     }
 
     fn plan() -> Plan {
@@ -725,34 +691,30 @@ mod tests {
 
     #[test]
     fn the_driver_registers_under_its_own_name() {
-        let registration = StripeProvider::with(
-            "sk_test",
-            "whsec_test",
-            Returns {
-                success: "https://example.com/paid".to_owned(),
-                cancel: "https://example.com/pricing".to_owned(),
-            },
-        )
-        .strategy(RequestStrategy::ExponentialBackoff(3))
-        .register()
-        .unwrap();
+        let registration =
+            Stripe::register(config(RequestStrategy::ExponentialBackoff(3)))
+                .unwrap();
 
         assert_eq!(registration.name(), NAME);
     }
 
     #[test]
     fn neither_secret_survives_a_debug_dump() {
-        let provider = StripeProvider::with(
-            "sk_live_actual_secret",
-            "whsec_actual_secret",
-            Returns {
-                success: String::new(),
-                cancel: String::new(),
-            },
-        );
+        // Guaranteed by `SecretString` rather than by a hand-written `Debug`,
+        // which is the point of using it: this holds for every struct the key
+        // is ever put inside, including ones written later.
+        let real = || StripeConfig {
+            secret_key: "sk_live_actual_secret".into(),
+            webhook_secret: "whsec_actual_secret".into(),
+            ..config(RequestStrategy::Once)
+        };
 
-        let dumped = format!("{provider:?}");
-        assert!(!dumped.contains("sk_live_actual_secret"));
-        assert!(!dumped.contains("whsec_actual_secret"));
+        let settings = real();
+        let driver = Stripe::new(real()).unwrap();
+
+        for dumped in [format!("{settings:?}"), format!("{driver:?}")] {
+            assert!(!dumped.contains("sk_live_actual_secret"), "{dumped}");
+            assert!(!dumped.contains("whsec_actual_secret"), "{dumped}");
+        }
     }
 }
