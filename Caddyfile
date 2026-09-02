@@ -165,6 +165,35 @@
 		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
+	# The paid half of a lesson, fetched by the browser on a signed-in page.
+	#
+	# Only this suffix, not `/api/books*`: the listing, the book page and the
+	# free half are read by nuxt's own server, which talks to the api directly
+	# and never comes through here. This one cannot — a signed-in page is
+	# rendered in the browser, so the request carrying the session cookie is
+	# the browser's.
+	#
+	# The api decides whether to answer it. This rule only says the path is
+	# reachable, and reaching it without an entitlement is a 404 either way.
+	handle /api/books/*/lessons/*/paid {
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
+	}
+
+	# What is for sale, and what a reader is paying for.
+	#
+	# Two very different things behind one prefix, both the api's to gate:
+	# `/api/billing/plans` is the same answer for everyone and is held at the
+	# edge, and everything else under it is behind the session cookie and a
+	# CSRF token, answered `no-store`. This rule only says the path is
+	# reachable — see `payments::routes`.
+	#
+	# The webhook is deliberately *not* here. It is `/webhooks/*`, below,
+	# because a payment provider has no session and authenticates by signing
+	# what it sends.
+	handle /api/billing* {
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
+	}
+
 	# The provider's return leg, and the one URL here that was not ours to pick:
 	# it is registered with Google and GitHub, and is the path the laravel app
 	# already serves. Keeping it means the cutover is a DNS change rather than a
