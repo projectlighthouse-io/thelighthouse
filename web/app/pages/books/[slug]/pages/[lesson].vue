@@ -635,9 +635,12 @@ useJsonLd('crumbs', () => ({
 
     <!-- No aside: this lesson has nothing to put in the third column. -->
     <div class="reader-layout reader-layout--no-aside">
-      <aside v-if="toc.length" class="reader-toc">
-        <div class="reader-toc__label">On this page</div>
-        <nav class="reader-toc__list">
+      <!-- The aside stays in the dom even with nothing to list: it is the
+           first cell of `.reader-layout`'s `232px minmax(0, 796px) 184px`
+           grid, and removing it slides the article into the 232px column. -->
+      <aside class="reader-toc">
+        <div v-if="toc.length" class="reader-toc__label">On this page</div>
+        <nav v-if="toc.length" class="reader-toc__list">
           <a
             v-for="item in toc"
             :key="item.id"
