@@ -65,10 +65,12 @@
 //! - `subscription` — a subscription as the provider currently sees it.
 //! - `registry` — registering the drivers at boot, and looking one up.
 //! - `request` — how hard to try, and how not to charge twice.
+//! - [`drivers`] — the providers that ship in the box.
 //! - `event` — what a provider told us happened.
 //! - `error` — the one error type that crosses the boundary.
 
 mod checkout;
+pub mod drivers;
 mod error;
 mod event;
 mod gateway;
@@ -78,6 +80,7 @@ mod request;
 mod subscription;
 
 pub use checkout::{Customer, Handoff};
+pub use drivers::stripe::{Returns, Stripe, StripeProvider};
 pub use error::Error;
 pub use event::Event;
 pub use gateway::Gateway;

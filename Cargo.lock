@@ -195,10 +195,16 @@ dependencies = [
  "async-trait",
  "chrono",
  "getrandom 0.3.4",
+ "hmac",
+ "reqwest",
  "serde",
+ "serde_json",
  "serde_norway",
+ "sha2",
+ "subtle",
  "thiserror",
  "tokio",
+ "wiremock",
 ]
 
 [[package]]

@@ -191,6 +191,7 @@ mod tests {
     fn canned() -> Subscription {
         Subscription {
             reference: "sub_stub".to_owned(),
+            account: None,
             plan: None,
             status: crate::subscription::Status::Canceled,
             period_ends_at: None,

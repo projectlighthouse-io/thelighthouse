@@ -15,7 +15,19 @@ workspace = true
 # instead. This writes that form; the alternative is hand-rolling
 # `Pin<Box<dyn Future<Output = _> + Send + '_>>` on every method and every impl.
 async-trait = "0.1"
+# webpki roots rather than the system store: an alpine runtime image would
+# otherwise need ca-certificates installed for tls to work at all.
+reqwest = { version = "0.12", default-features = false, features = [
+    "http2",
+    "charset",
+    "rustls-tls-webpki-roots",
+] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# `time` alone. Backing off between attempts is the only thing here that needs
+# a runtime, and pulling in the rest of tokio to sleep would make every
+# consumer of this crate carry a scheduler they may not use.
+tokio = { version = "1", default-features = false, features = ["time"] }
 # `serde_norway`, not `serde_yaml` — the latter is archived and its published
 # versions warn on use.
 serde_norway = "0.9"
@@ -27,7 +39,15 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 # keys, where the key being unguessable is not the point — the key being
 # unique across concurrent operations is.
 getrandom = { version = "0.3", features = ["std"] }
+# Webhook signatures. The same primitives the rest of this workspace verifies
+# signed requests with.
+hmac = "0.12"
+sha2 = "0.10"
+subtle = "2"
 thiserror = "2"
 
 [dev-dependencies]
+# A real local http server, so the driver's tests assert the requests that go
+# out rather than trusting that they were built correctly.
+wiremock = "0.6"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

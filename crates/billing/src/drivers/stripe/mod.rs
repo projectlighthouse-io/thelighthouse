@@ -1,0 +1,754 @@
+//! The Stripe driver.
+//!
+//! Six endpoints and a signature check. Everything Stripe can do that this
+//! crate does not is absent rather than wrapped, which is why this is a few
+//! hundred lines instead of a generated client.
+
+mod client;
+mod webhook;
+mod wire;
+
+use reqwest::Method;
+
+use self::client::{Client, field};
+use crate::{
+    checkout::{Customer, Handoff},
+    error::Error,
+    event::Event,
+    gateway::Gateway,
+    plan::Plan,
+    registry::Registration,
+    request::RequestStrategy,
+    subscription::{Cancel, Subscription},
+};
+
+/// The name this driver registers under, and the one a route parameter and a
+/// stored row will carry.
+pub const NAME: &str = "stripe";
+
+/// Where Stripe sends the browser when checkout finishes.
+///
+/// Driver configuration rather than a parameter on every call: there is one
+/// checkout flow, and threading two urls through the trait to serve it would
+/// be an interface built for a caller that does not exist. When a second flow
+/// needs to come back somewhere else, this becomes a parameter — the change is
+/// local to this file and the trait.
+#[derive(Clone, Debug)]
+pub struct Returns {
+    /// Where a reader who paid ends up.
+    pub success: String,
+    /// Where a reader who backed out ends up.
+    pub cancel: String,
+}
+
+/// Stripe, as a [`Gateway`].
+#[derive(Debug)]
+pub struct Stripe {
+    client: Client,
+    webhook_secret: String,
+    returns: Returns,
+}
+
+impl Stripe {
+    /// Build the driver.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Unreachable`] if an http client cannot be built at all, which
+    /// is a broken tls configuration rather than anything to do with Stripe.
+    pub fn new(
+        secret_key: impl Into<String>,
+        webhook_secret: impl Into<String>,
+        returns: Returns,
+        strategy: RequestStrategy,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            client: Client::new(secret_key, strategy)?,
+            webhook_secret: webhook_secret.into(),
+            returns,
+        })
+    }
+
+    /// The secret webhook deliveries are signed with.
+    pub(crate) fn webhook_secret(&self) -> &str {
+        &self.webhook_secret
+    }
+
+    /// Point the driver at another host. For tests.
+    #[cfg(test)]
+    pub(crate) fn with_base(mut self, base: impl Into<String>) -> Self {
+        self.client = self.client.with_base(base);
+        self
+    }
+
+    /// The customer to bill: the one we already have, or a new one.
+    ///
+    /// Reusing the existing id is what keeps a reader's payment history in one
+    /// place. Without it, every checkout mints another customer and the
+    /// account's history is split across all of them.
+    pub(crate) async fn customer(
+        &self,
+        who: &Customer<'_>,
+    ) -> Result<String, Error> {
+        if let Some(existing) = who.existing {
+            return Ok(existing.to_owned());
+        }
+
+        let created: wire::Customer = self
+            .client
+            .send(
+                Method::POST,
+                "/v1/customers",
+                &[
+                    field("email", who.email),
+                    field(
+                        format!("metadata[{}]", wire::REFERENCE_KEY),
+                        who.reference,
+                    ),
+                ],
+            )
+            .await?;
+
+        Ok(created.id)
+    }
+
+    /// Open a hosted checkout session for a plan.
+    pub(crate) async fn checkout(
+        &self,
+        to: &Plan,
+        customer: &str,
+        reference: &str,
+    ) -> Result<Handoff, Error> {
+        let session: wire::Session = self
+            .client
+            .send(
+                Method::POST,
+                "/v1/checkout/sessions",
+                &[
+                    field("mode", "subscription"),
+                    field("customer", customer),
+                    field("line_items[0][price]", to.price.clone()),
+                    field("line_items[0][quantity]", "1"),
+                    field("success_url", self.returns.success.clone()),
+                    field("cancel_url", self.returns.cancel.clone()),
+                    field("client_reference_id", reference),
+                    // Written here and read back on every subscription and
+                    // every webhook. It is what lets a delivery about
+                    // `sub_123` find the account and the plan without a
+                    // lookup table on our side.
+                    field(
+                        format!(
+                            "subscription_data[metadata][{}]",
+                            wire::PLAN_KEY
+                        ),
+                        to.id.as_str(),
+                    ),
+                    field(
+                        format!(
+                            "subscription_data[metadata][{}]",
+                            wire::REFERENCE_KEY
+                        ),
+                        reference,
+                    ),
+                ],
+            )
+            .await?;
+
+        // `url` is null for a session that is no longer active. There is
+        // nowhere to send the reader, and pretending otherwise would be a
+        // redirect to an empty string.
+        session
+            .url
+            .map(|url| Handoff { url })
+            .ok_or(Error::Refused {
+                status: 200,
+                code: "session_not_payable".to_owned(),
+                message: "the checkout session came back with no url"
+                    .to_owned(),
+            })
+    }
+
+    /// Read a subscription back.
+    pub(crate) async fn subscription(
+        &self,
+        reference: &str,
+    ) -> Result<wire::Sub, Error> {
+        self.client
+            .send(Method::GET, &format!("/v1/subscriptions/{reference}"), &[])
+            .await
+    }
+
+    /// Change a subscription, and return it as it now stands.
+    pub(crate) async fn update(
+        &self,
+        reference: &str,
+        fields: &[(String, String)],
+    ) -> Result<Subscription, Error> {
+        let updated: wire::Sub = self
+            .client
+            .send(
+                Method::POST,
+                &format!("/v1/subscriptions/{reference}"),
+                fields,
+            )
+            .await?;
+
+        Ok(updated.into())
+    }
+
+    /// End a subscription now, forfeiting the rest of the paid period.
+    pub(crate) async fn end(
+        &self,
+        reference: &str,
+    ) -> Result<Subscription, Error> {
+        let ended: wire::Sub = self
+            .client
+            .send(
+                Method::DELETE,
+                &format!("/v1/subscriptions/{reference}"),
+                &[],
+            )
+            .await?;
+
+        Ok(ended.into())
+    }
+
+    /// Move a subscription onto another plan.
+    ///
+    /// Two calls, because Stripe changes a price by naming the *item* holding
+    /// it, and the item id is only knowable by reading the subscription first.
+    ///
+    /// No proration: the reader is moved onto the new plan and charged for it
+    /// at the next renewal rather than handed an immediate partial invoice.
+    pub(crate) async fn move_to(
+        &self,
+        reference: &str,
+        to: &Plan,
+    ) -> Result<Subscription, Error> {
+        let current = self.subscription(reference).await?;
+
+        let item = current.item().ok_or_else(|| Error::Refused {
+            status: 409,
+            code: "no_item_to_move".to_owned(),
+            message: "the subscription has no item whose price could change"
+                .to_owned(),
+        })?;
+
+        self.update(
+            reference,
+            &[
+                field("items[0][id]", item),
+                field("items[0][price]", to.price.clone()),
+                field("proration_behavior", "none"),
+                // The stored plan has to move with the price, or every later
+                // read reports the plan the reader used to be on.
+                field(format!("metadata[{}]", wire::PLAN_KEY), to.id.as_str()),
+            ],
+        )
+        .await
+    }
+}
+
+#[async_trait::async_trait]
+impl Gateway for Stripe {
+    async fn subscribe(
+        &self,
+        to: &Plan,
+        who: &Customer<'_>,
+    ) -> Result<Handoff, Error> {
+        let customer = self.customer(who).await?;
+
+        self.checkout(to, &customer, who.reference).await
+    }
+
+    async fn cancel(
+        &self,
+        subscription: &str,
+        when: Cancel,
+    ) -> Result<Subscription, Error> {
+        match when {
+            // Not a deletion: the subscription stays live and stops renewing,
+            // which is what leaves the reader the period they paid for.
+            Cancel::AtPeriodEnd => {
+                self.update(
+                    subscription,
+                    &[field("cancel_at_period_end", "true")],
+                )
+                .await
+            }
+            Cancel::Now => self.end(subscription).await,
+        }
+    }
+
+    async fn resume(&self, subscription: &str) -> Result<Subscription, Error> {
+        self.update(subscription, &[field("cancel_at_period_end", "false")])
+            .await
+    }
+
+    async fn swap(
+        &self,
+        subscription: &str,
+        to: &Plan,
+    ) -> Result<Subscription, Error> {
+        self.move_to(subscription, to).await
+    }
+
+    fn settle(&self, body: &[u8], signature: &str) -> Result<Event, Error> {
+        webhook::settle(self.webhook_secret(), body, signature)
+    }
+}
+
+/// Stripe's half of the registration list.
+///
+/// ```text
+/// let billing = billing::providers([
+///     StripeProvider::with(&secret_key, &webhook_secret, returns)
+///         .strategy(RequestStrategy::ExponentialBackoff(3))
+///         .register()?,
+/// ])?;
+/// ```
+#[derive(Clone)]
+pub struct StripeProvider {
+    secret_key: String,
+    webhook_secret: String,
+    returns: Returns,
+    strategy: RequestStrategy,
+}
+
+/// Hand written, so a configuration dump cannot print either secret.
+impl std::fmt::Debug for StripeProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StripeProvider")
+            .field("secret_key", &"<redacted>")
+            .field("webhook_secret", &"<redacted>")
+            .field("returns", &self.returns)
+            .field("strategy", &self.strategy)
+            .finish()
+    }
+}
+
+impl StripeProvider {
+    /// Name the credentials and where checkout comes back to.
+    ///
+    /// `webhook_secret` is the endpoint's signing secret — the `whsec_…` shown
+    /// when the webhook endpoint is created, which is not the api key and is
+    /// per endpoint.
+    #[must_use]
+    pub fn with(
+        secret_key: impl Into<String>,
+        webhook_secret: impl Into<String>,
+        returns: Returns,
+    ) -> Self {
+        Self {
+            secret_key: secret_key.into(),
+            webhook_secret: webhook_secret.into(),
+            returns,
+            strategy: RequestStrategy::default(),
+        }
+    }
+
+    /// How hard to try each request. Defaults to sending it once.
+    #[must_use]
+    pub fn strategy(mut self, strategy: RequestStrategy) -> Self {
+        self.strategy = strategy;
+        self
+    }
+
+    /// Build the driver and name it, ready for
+    /// [`providers`](crate::providers).
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Unreachable`] if an http client cannot be built.
+    pub fn register(self) -> Result<Registration, Error> {
+        let driver = Stripe::new(
+            self.secret_key,
+            self.webhook_secret,
+            self.returns,
+            self.strategy,
+        )?;
+
+        Ok(Registration::new(NAME, driver))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{body_string_contains, method, path},
+    };
+
+    use super::*;
+    use crate::subscription::Status;
+
+    const SUBSCRIPTION: &str = r#"{
+        "id": "sub_1",
+        "status": "active",
+        "items": { "data": [{ "id": "si_1", "current_period_end": 1682288167 }] },
+        "metadata": { "plan": "yearly", "reference": "41" }
+    }"#;
+
+    fn driver(server: &MockServer, strategy: RequestStrategy) -> Stripe {
+        Stripe::new(
+            "sk_test",
+            "whsec_test",
+            Returns {
+                success: "https://example.com/paid".to_owned(),
+                cancel: "https://example.com/pricing".to_owned(),
+            },
+            strategy,
+        )
+        .unwrap()
+        .with_base(server.uri())
+    }
+
+    fn plan() -> Plan {
+        Plan {
+            id: "yearly".into(),
+            price: "price_yearly".to_owned(),
+            interval: crate::plan::Interval::Year,
+        }
+    }
+
+    fn reader(existing: Option<&'static str>) -> Customer<'static> {
+        Customer {
+            reference: "41",
+            email: "reader@example.com",
+            existing,
+        }
+    }
+
+    #[tokio::test]
+    async fn checking_out_sends_the_plan_the_account_and_where_to_come_back_to()
+    {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/checkout/sessions"))
+            // The assertions that matter are on the request, not the reply: a
+            // driver that builds the wrong body still gets a canned 200.
+            .and(body_string_contains("mode=subscription"))
+            .and(body_string_contains(
+                "line_items%5B0%5D%5Bprice%5D=price_yearly",
+            ))
+            .and(body_string_contains("customer=cus_existing"))
+            .and(body_string_contains("client_reference_id=41"))
+            .and(body_string_contains(
+                "subscription_data%5Bmetadata%5D%5Bplan%5D=yearly",
+            ))
+            .and(body_string_contains(
+                "subscription_data%5Bmetadata%5D%5Breference%5D=41",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                r#"{"url":"https://checkout.stripe.com/c/pay/cs_1"}"#,
+            ))
+            .mount(&server)
+            .await;
+
+        let handoff = driver(&server, RequestStrategy::Once)
+            .subscribe(&plan(), &reader(Some("cus_existing")))
+            .await
+            .unwrap();
+
+        assert_eq!(handoff.url, "https://checkout.stripe.com/c/pay/cs_1");
+    }
+
+    #[tokio::test]
+    async fn a_reader_with_no_customer_yet_gets_one_before_checkout() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/customers"))
+            .and(body_string_contains("email=reader%40example.com"))
+            .and(body_string_contains("metadata%5Breference%5D=41"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(r#"{"id":"cus_new"}"#),
+            )
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/checkout/sessions"))
+            .and(body_string_contains("customer=cus_new"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                r#"{"url":"https://checkout.stripe.com/c/pay/cs_1"}"#,
+            ))
+            .mount(&server)
+            .await;
+
+        assert!(
+            driver(&server, RequestStrategy::Once)
+                .subscribe(&plan(), &reader(None))
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_reader_who_already_has_a_customer_does_not_get_a_second_one() {
+        // Two customers for one account is a payment history split in half.
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/checkout/sessions"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                r#"{"url":"https://checkout.stripe.com/c/pay/cs_1"}"#,
+            ))
+            .mount(&server)
+            .await;
+
+        driver(&server, RequestStrategy::Once)
+            .subscribe(&plan(), &reader(Some("cus_existing")))
+            .await
+            .unwrap();
+
+        let sent = server.received_requests().await.unwrap();
+        assert_eq!(sent.len(), 1);
+        assert!(!sent.first().unwrap().url.path().contains("customers"));
+    }
+
+    #[tokio::test]
+    async fn cancelling_at_period_end_stops_renewal_without_deleting_anything()
+    {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/subscriptions/sub_1"))
+            .and(body_string_contains("cancel_at_period_end=true"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(SUBSCRIPTION),
+            )
+            .mount(&server)
+            .await;
+
+        let subscription = driver(&server, RequestStrategy::Once)
+            .cancel("sub_1", Cancel::AtPeriodEnd)
+            .await
+            .unwrap();
+
+        assert_eq!(subscription.status, Status::Active);
+        assert_eq!(subscription.account.as_deref(), Some("41"));
+    }
+
+    #[tokio::test]
+    async fn cancelling_now_deletes_it() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/v1/subscriptions/sub_1"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(SUBSCRIPTION),
+            )
+            .mount(&server)
+            .await;
+
+        assert!(
+            driver(&server, RequestStrategy::Once)
+                .cancel("sub_1", Cancel::Now)
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn resuming_clears_the_pending_cancellation() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/subscriptions/sub_1"))
+            .and(body_string_contains("cancel_at_period_end=false"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(SUBSCRIPTION),
+            )
+            .mount(&server)
+            .await;
+
+        assert!(
+            driver(&server, RequestStrategy::Once)
+                .resume("sub_1")
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn swapping_names_the_item_and_moves_the_stored_plan_with_the_price()
+    {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/subscriptions/sub_1"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(SUBSCRIPTION),
+            )
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/subscriptions/sub_1"))
+            // The item id can only come from the read above — Stripe changes a
+            // price by naming the item that holds it.
+            .and(body_string_contains("items%5B0%5D%5Bid%5D=si_1"))
+            .and(body_string_contains(
+                "items%5B0%5D%5Bprice%5D=price_monthly",
+            ))
+            .and(body_string_contains("proration_behavior=none"))
+            // Without this the reader is on the new price and every later read
+            // still reports the old plan.
+            .and(body_string_contains("metadata%5Bplan%5D=monthly"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(SUBSCRIPTION),
+            )
+            .mount(&server)
+            .await;
+
+        let monthly = Plan {
+            id: "monthly".into(),
+            price: "price_monthly".to_owned(),
+            interval: crate::plan::Interval::Month,
+        };
+
+        assert!(
+            driver(&server, RequestStrategy::Once)
+                .swap("sub_1", &monthly)
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_retried_request_carries_one_key_across_every_attempt() {
+        // The failure this guards: a key minted per attempt turns a retry loop
+        // into one subscription per timeout.
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/subscriptions/sub_1"))
+            .respond_with(ResponseTemplate::new(503))
+            .up_to_n_times(2)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/subscriptions/sub_1"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(SUBSCRIPTION),
+            )
+            .mount(&server)
+            .await;
+
+        driver(&server, RequestStrategy::Retry(3))
+            .resume("sub_1")
+            .await
+            .unwrap();
+
+        let sent = server.received_requests().await.unwrap();
+        assert_eq!(sent.len(), 3);
+
+        let mut keys: Vec<_> = sent
+            .iter()
+            .map(|request| {
+                request
+                    .headers
+                    .get("idempotency-key")
+                    .expect("every attempt must carry one")
+                    .to_str()
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect();
+
+        keys.dedup();
+        assert_eq!(keys.len(), 1, "the three attempts used {keys:?}");
+    }
+
+    #[tokio::test]
+    async fn a_declined_card_is_an_answer_and_is_not_asked_again() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/subscriptions/sub_1"))
+            .respond_with(ResponseTemplate::new(402).set_body_string(
+                r#"{"error":{"type":"card_error","code":"card_declined","message":"Your card was declined."}}"#,
+            ))
+            .mount(&server)
+            .await;
+
+        let failure = driver(&server, RequestStrategy::Retry(3))
+            .resume("sub_1")
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            failure,
+            Error::Refused { status: 402, ref code, .. } if code == "card_declined"
+        ));
+        assert!(!failure.retryable());
+        assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn every_request_pins_the_api_version() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/subscriptions/sub_1"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(SUBSCRIPTION),
+            )
+            .mount(&server)
+            .await;
+
+        driver(&server, RequestStrategy::Once)
+            .subscription("sub_1")
+            .await
+            .unwrap();
+
+        let sent = server.received_requests().await.unwrap();
+        assert_eq!(
+            sent.first()
+                .unwrap()
+                .headers
+                .get("stripe-version")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            client::API_VERSION
+        );
+    }
+
+    #[test]
+    fn the_driver_registers_under_its_own_name() {
+        let registration = StripeProvider::with(
+            "sk_test",
+            "whsec_test",
+            Returns {
+                success: "https://example.com/paid".to_owned(),
+                cancel: "https://example.com/pricing".to_owned(),
+            },
+        )
+        .strategy(RequestStrategy::ExponentialBackoff(3))
+        .register()
+        .unwrap();
+
+        assert_eq!(registration.name(), NAME);
+    }
+
+    #[test]
+    fn neither_secret_survives_a_debug_dump() {
+        let provider = StripeProvider::with(
+            "sk_live_actual_secret",
+            "whsec_actual_secret",
+            Returns {
+                success: String::new(),
+                cancel: String::new(),
+            },
+        );
+
+        let dumped = format!("{provider:?}");
+        assert!(!dumped.contains("sk_live_actual_secret"));
+        assert!(!dumped.contains("whsec_actual_secret"));
+    }
+}

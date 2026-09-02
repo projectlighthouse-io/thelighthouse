@@ -15,6 +15,18 @@ pub struct Subscription {
     /// The provider's own identifier, kept so we can talk about this
     /// subscription again.
     pub reference: String,
+    /// The application's own reference for whose subscription this is, as it
+    /// was sent into checkout.
+    ///
+    /// Here because webhook deliveries have no guaranteed order: the event
+    /// announcing a new subscription can arrive before the one announcing the
+    /// checkout that created it. Without this, the first delivery names a
+    /// subscription with no way to tell which account it belongs to, and the
+    /// only recovery is to drop it and hope the other one lands.
+    ///
+    /// `None` for a subscription created outside this crate — in a dashboard,
+    /// or by an older integration.
+    pub account: Option<String>,
     /// Which plan it is on, when the provider said.
     ///
     /// `None` when the answer cannot be mapped back to a configured plan —
