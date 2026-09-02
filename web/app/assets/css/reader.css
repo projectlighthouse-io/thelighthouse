@@ -135,11 +135,26 @@
  * dropping the 184px track there would leave those pages with their aside
  * stacked underneath.
  *
- * Only the base width needs saying: below 1120px the layout is already two
- * columns and the aside is already hidden.
+ * **Three tracks, not two, even though only two are filled.** With a left
+ * track alone the sidebar and the article were centred *as a pair*, which put
+ * the prose half a sidebar right of the page's centre line. An empty track of
+ * the same width on the right balances it, so the article is centred and the
+ * contents list hangs to its left.
+ *
+ * **Only the side tracks flex.** The measure is fixed, so a viewport too
+ * narrow for the full 1404px takes it out of the margins rather than out of
+ * the prose — the article stays 796px and stays centred, and the contents
+ * list gets narrower. Making all three `minmax` instead cost the article
+ * ~130px at a 1280px viewport, which is the width this has to be right at.
+ *
+ * Below 1120px the media query further down replaces this outright with the
+ * two-column layout and hides the aside.
  */
 .reader-layout--no-aside {
-    grid-template-columns: 232px minmax(0, 796px);
+    /* 232 + 72 + 796 + 72 + 232 = 1404. The base 1280 was sized for two
+       tracks and would shrink the article to pay for the third. */
+    grid-template-columns: minmax(0, 232px) 796px minmax(0, 232px);
+    max-width: 1404px;
 }
 
 @media (max-width: 1120px) {
