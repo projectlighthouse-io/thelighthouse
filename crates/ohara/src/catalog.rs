@@ -113,7 +113,7 @@ impl Snapshot {
     /// a chapter lists that is not on disk. A folder on disk that no chapter
     /// lists is *not* an error — that is an unpublished draft. Two books or
     /// two lessons claiming the same id is also an error, for the reason
-    /// [`unique_ids`] gives.
+    /// `unique_ids` gives.
     pub fn load(content: &Content, drafts: Drafts) -> Result<Self, Error> {
         let mut books = HashMap::new();
         let mut order = Vec::new();

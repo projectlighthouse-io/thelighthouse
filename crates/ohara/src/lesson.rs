@@ -31,9 +31,10 @@ pub struct Lesson {
     ///
     /// Unique across every book, not just within one: `lessons.id` is a
     /// primary key. A uuid makes that nearly free rather than something to
-    /// keep track of by hand, but [`Snapshot::load`] still refuses a repo that
-    /// reuses one — the way a duplicate happens here is a folder copied to
-    /// start the next lesson, and copying carries the uuid along.
+    /// keep track of by hand, but [`crate::catalog::Snapshot::load`] still
+    /// refuses a repo that reuses one — the way a duplicate happens here is a
+    /// folder copied to start the next lesson, and copying carries the uuid
+    /// along.
     ///
     /// `None` for a lesson that has not been given one yet, for the same
     /// reason [`super::book::Book::id`] is optional.
@@ -62,8 +63,8 @@ pub struct Lesson {
     ///
     /// **Required, and required to carry `en`.** A lesson with no body is not a
     /// lesson, and English is the fallback every other language resolves
-    /// through — see [`Self::body_file`]. Both are checked in
-    /// [`Self::validate`], so neither can be discovered at read time.
+    /// through — see [`Self::body_file`]. Both are checked in `validate`, so
+    /// neither can be discovered at read time.
     ///
     /// A map rather than a list of pairs: two entries for one language are then
     /// impossible to write down, instead of being a duplicate that some
@@ -81,7 +82,7 @@ pub struct Lesson {
 impl Lesson {
     /// The file to read for `locale`, falling back to English.
     ///
-    /// Infallible because [`Self::validate`] has already refused a lesson with
+    /// Infallible because `validate` has already refused a lesson with
     /// no `en` entry. A reader whose language is not translated yet gets the
     /// English prose, which is what `docs/rebuild.md` specifies — never a 404.
     #[must_use]
