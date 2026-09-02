@@ -45,21 +45,41 @@ const owned = computed<Book[]>(() => {
 
 <template>
   <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-    <!-- Only for a reader who owns something. A reader who has bought nothing
-         is not told they have an empty shelf; there is simply nothing here to
-         pick up, and the pricing page is where the invitation belongs. -->
-    <template v-if="owned.length">
-      <h1 class="mb-2 font-serif text-3xl tracking-tight text-ink sm:text-4xl">My books</h1>
-      <p class="text-mono-body mb-10">
-        <template v-if="access?.track">
-          everything on the {{ access.track }} track. pick up where you left off.
-        </template>
-        <template v-else>pick up where you left off.</template>
-      </p>
+    <h1 class="mb-2 font-serif text-3xl tracking-tight text-ink sm:text-4xl">My books</h1>
+    <p class="text-mono-body mb-10">
+      <template v-if="access?.track">
+        everything on the {{ access.track }} track. pick up where you left off.
+      </template>
+      <template v-else-if="owned.length">pick up where you left off.</template>
+      <template v-else>the books you buy show up here.</template>
+    </p>
 
-      <div class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-        <BookCard v-for="book in owned" :key="book.slug" :book="book" />
+    <div v-if="owned.length" class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+      <BookCard v-for="book in owned" :key="book.slug" :book="book" />
+    </div>
+
+    <!-- A reader who has bought nothing. Not an error and not an empty grid —
+         every book has free lessons, so the shelf is a real place to send
+         them, and the tracks are what they would be buying. -->
+    <div v-else class="border-pencil-light rounded-md bg-panel py-16 text-center">
+      <p class="text-sm text-quiet">You have not bought a track yet.</p>
+      <p class="mt-2 text-sm text-quiet">
+        Every book's first lessons are free to read.
+      </p>
+      <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <NuxtLink
+          to="/pricing"
+          class="rounded-md bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-ink-hover"
+        >
+          See the tracks
+        </NuxtLink>
+        <NuxtLink
+          to="/books"
+          class="border-stroke rounded-md border bg-panel px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-paper-warm"
+        >
+          Browse the shelf
+        </NuxtLink>
       </div>
-    </template>
+    </div>
   </div>
 </template>
