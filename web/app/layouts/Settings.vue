@@ -13,6 +13,7 @@ const links: SettingsLink[] = [
   { to: '/settings/tokens', label: 'api tokens' },
   { to: '/settings/two-factor', label: 'two-factor' },
   { to: '/settings/newsletter', label: 'newsletter' },
+  { to: '/settings/billing', label: 'billing' },
 ]
 </script>
 

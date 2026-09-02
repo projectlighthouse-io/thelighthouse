@@ -71,6 +71,20 @@ export default defineNuxtConfig({
   // per request — prerender them and serve files. What is left on the server is
   // only what depends on a session, or on content that changes without a build.
   routeRules: {
+    // Prerendered HTML is a file on disk, but without a cache header every
+    // browser and CDN falls back to its own heuristic — which for a page with
+    // no Expires and no max-age usually means refetching every time.
+    //
+    // max-age=0 keeps the browser honest (it revalidates, and gets a 304), while
+    // s-maxage lets a shared cache serve it outright. stale-while-revalidate
+    // means a deploy does not cause a latency spike: the CDN keeps serving the
+    // old copy while it fetches the new one.
+    '/**': {
+      headers: {
+        'cache-control': 'public, max-age=0, s-maxage=600, stale-while-revalidate=86400',
+      },
+    },
+
     '/': { prerender: true },
 
     // *Not* prerendered, unlike everything else public. Books come from ohara,
@@ -108,10 +122,12 @@ export default defineNuxtConfig({
     // Session-dependent, so prerendering them would bake one user's view into a
     // file. They are noindex anyway, and rendering them on the client keeps the
     // server out of it entirely.
-    '/dashboard': { ssr: false },
-    '/notes': { ssr: false },
-    '/profile': { ssr: false },
-    '/settings/**': { ssr: false },
+    // no-store, not just private: these render per session, and the /** rule
+    // above would otherwise hand a shared cache permission to keep them
+    '/dashboard': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
+    '/notes': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
+    '/profile': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
+    '/settings/**': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
 
     // Hashed filenames, so they can never go stale.
     '/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
@@ -122,6 +138,15 @@ export default defineNuxtConfig({
       '@': appDir,
       '#server': serverDir,
     },
+
+    // No devProxy. Caddy fronts development too — `make up` in the thelighthouse
+    // repo — so `/api/*` and the OAuth callbacks reach the rust api the same way
+    // they do in production, and this app is reached at :8000 rather than :3000.
+    //
+    // A proxy here would be a second way in, and then the shape you tested would
+    // be whichever you happened to start. The session cookie is the thing that
+    // suffers: it crosses different boundaries under each, which is exactly the
+    // bug that does not reproduce locally.
 
     // brotli + gzip beside every public asset, so the CDN serves the compressed
     // copy instead of compressing on the fly

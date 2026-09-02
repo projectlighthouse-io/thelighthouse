@@ -29,6 +29,30 @@
   transform: translateY(-4px);
 }
 
+/* fade — enter only */
+
+/* For routes that also swap the layout, where the pair above stutters: `out-in`
+   means the old page finishes leaving before the new one starts, and in that
+   handover nothing is mounted, so the background flashes through.
+
+   Removing the leave transition removes the gap. Vue sees no transition on the
+   way out and completes that half immediately, so the incoming page starts
+   fading the moment the click lands — one fade, nothing in between. */
+
+.fade-enter-active {
+  transition: opacity 260ms ease;
+}
+
+.fade-enter-from {
+  opacity: 0;
+}
+
+/* Stated, not omitted: with no rule here a future edit to `.page-leave-active`
+   could start applying, and the gap would come back with no obvious cause. */
+.fade-leave-active {
+  transition: none;
+}
+
 /* layout */
 
 /* Layouts swap far less often — only between the site chrome, the settings
@@ -55,6 +79,7 @@
 @media (prefers-reduced-motion: reduce) {
   .page-enter-active,
   .page-leave-active,
+  .fade-enter-active,
   .layout-enter-active,
   .layout-leave-active {
     transition: none !important;
