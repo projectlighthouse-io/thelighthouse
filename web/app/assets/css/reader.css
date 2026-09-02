@@ -255,6 +255,18 @@
     top: 104px;
 }
 
+/* The contents list sits in the middle of its gutter rather than against the
+   outer edge of it.
+ *
+ * `justify-self` on the grid item, so the block shrinks to the width of its
+ * longest heading and is centred in the track — the entries stay left aligned
+ * against their rule, which is what keeps them readable as a list. Only the
+ * lesson layout: the syntax pages fill their aside and have nothing to centre.
+ */
+.reader-layout--no-aside .reader-toc {
+    justify-self: center;
+}
+
 .reader-toc__label {
     font-family: var(--reader-mono);
     font-size: 10.5px;
