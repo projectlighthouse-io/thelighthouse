@@ -218,6 +218,7 @@ mod tests {
             id: "voyage_yearly".into(),
             price: "handle".to_owned(),
             interval: crate::plan::Interval::Year,
+            money: None,
         }
     }
 

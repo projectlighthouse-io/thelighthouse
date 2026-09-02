@@ -1,0 +1,50 @@
+# What the catalogue costs. This file is the truth; stripe is made to agree.
+#
+#   lighthouse-prices status   what stripe has, and where it differs
+#   lighthouse-prices apply    make stripe match, then write billing.yaml
+#
+# `id` is the plan's name and the stripe lookup key it is held under. The track
+# is everything before the last underscore and the billing period is everything
+# after it, so `rust_yearly` sells the rust track, yearly. Nothing else has to
+# be told which is which.
+#
+# Which books a track contains is NOT here. That is the `tracks:` map in each
+# book.yaml, so a book joins a track in the content repo and no price moves.
+#
+# `amount` is in minor units — 4900 is $49.00. Changing one is a new stripe
+# price with the lookup key transferred onto it, which `apply` does for you.
+
+currency: usd
+
+plans:
+  - id: foundation_yearly
+    amount: 4900
+    name: Foundation — OS, Networking, DSA
+
+  - id: foundation_lifetime
+    amount: 14900
+    name: Foundation, forever
+
+  - id: go_yearly
+    amount: 6900
+    name: Go — the Go books and Foundation
+
+  - id: go_lifetime
+    amount: 19900
+    name: Go, forever
+
+  - id: rust_yearly
+    amount: 6900
+    name: Rust — the Rust books and Foundation
+
+  - id: rust_lifetime
+    amount: 19900
+    name: Rust, forever
+
+  - id: all_yearly
+    amount: 9900
+    name: Everything — every book
+
+  - id: all_lifetime
+    amount: 29900
+    name: Everything, forever

@@ -1,0 +1,27 @@
+[package]
+name = "lighthouse-prices"
+version = "0.1.0"
+edition = "2024"
+description = "Reconciles what the catalogue costs against what stripe holds. Run deliberately, never by the server."
+
+[lints]
+workspace = true
+
+[dependencies]
+# The declaration is read with the same yaml parser the rest of the workspace
+# uses, so a file that parses here parses there.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_norway = "0.9"
+# Same tls story as everywhere else: webpki roots, because the runtime image is
+# alpine. This binary does not ship in it, but sharing the configuration means
+# one thing to get right.
+reqwest = { version = "0.12", default-features = false, features = [
+    "http2",
+    "charset",
+    "rustls-tls-webpki-roots",
+] }
+# Secrets that cannot be printed, as in every other crate here.
+secrecy = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+dotenvy = "0.15"

@@ -1,6 +1,7 @@
 //! What a reader is paying for, and how they start or stop paying.
 //!
 //! ```text
+//!   GET  /api/billing/plans
 //!   GET  /api/billing/membership
 //!   POST /api/billing/{provider}/checkout
 //!   POST /api/billing/{provider}/cancel
@@ -90,9 +91,16 @@ pub(crate) fn routes(state: &AppState) -> Router<AppState> {
         .route_layer(from_fn_with_state(state.clone(), throttle))
         .route_layer(from_fn(require_csrf));
 
-    reads
+    let gated = reads
         .merge(writes)
-        .route_layer(from_fn_with_state(state.clone(), require_reader))
+        .route_layer(from_fn_with_state(state.clone(), require_reader));
+
+    // Outside the reader gate: what things cost is the same for everybody, and
+    // putting it behind a session would make the pricing page uncacheable and
+    // invisible to anyone not signed in.
+    gated.merge(
+        Router::new().route("/api/billing/plans", get(handler::catalogue)),
+    )
 }
 
 /// Where providers report what happened.

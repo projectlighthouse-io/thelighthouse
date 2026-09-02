@@ -437,6 +437,7 @@ mod tests {
             id: "yearly".into(),
             price: "price_yearly".to_owned(),
             interval: crate::plan::Interval::Year,
+            money: None,
         }
     }
 
@@ -692,6 +693,7 @@ mod tests {
             id: "monthly".into(),
             price: "price_monthly".to_owned(),
             interval: crate::plan::Interval::Month,
+            money: None,
         };
 
         assert!(

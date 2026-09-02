@@ -92,6 +92,41 @@ async fn every_reader_route_needs_a_reader() {
 }
 
 #[tokio::test]
+async fn what_things_cost_is_public_and_cacheable() {
+    // The pricing page has to render for somebody who is not signed in, and
+    // the answer is the same for everyone, so the edge may hold it.
+    let response = send(
+        Request::builder()
+            .uri("/api/billing/plans")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(cache_control(&response).contains("s-maxage"));
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let plans: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    // A json pointer, so a missing field names itself rather than panicking
+    // somewhere later as a null comparison.
+    let at = |path: &str| {
+        plans
+            .pointer(path)
+            .unwrap_or_else(|| panic!("no {path} in {plans}"))
+            .clone()
+    };
+
+    // `Billing::sample` sells one yearly plan.
+    assert_eq!(at("/0/plan"), "yearly");
+    assert_eq!(at("/0/track"), "yearly");
+    assert_eq!(at("/0/recurring"), true);
+}
+
+#[tokio::test]
 async fn the_webhook_is_outside_the_reader_gate() {
     // A provider has no session and no CSRF token. If this ever answers 401
     // the endpoint has been put behind a gate no provider can pass, and every

@@ -89,13 +89,35 @@ pub struct Plan {
     pub id: PlanId,
     /// The provider's handle for what to charge — a Stripe price id today.
     ///
-    /// Opaque here. This crate never parses it, compares it to anything, or
-    /// derives an amount from it; it copies it into a request. That is what
-    /// lets the amount live at the provider, where changing it is a dashboard
-    /// edit rather than a deploy.
+    /// Opaque here. This crate never parses it or derives an amount from it;
+    /// it copies it into a request. It is generated rather than hand-written:
+    /// see `lighthouse-prices`, which reconciles the declared amounts against
+    /// the provider and writes the handles it gets back.
     pub price: String,
     /// How often it is charged for.
     pub interval: Interval,
+    /// What it costs, for anything that has to show a price.
+    ///
+    /// Optional because a plan is sellable without it — checkout sends the
+    /// handle and the provider charges what it holds. A page that cannot find
+    /// an amount shows no amount, which is better than showing a wrong one.
+    #[serde(default)]
+    pub money: Option<Money>,
+}
+
+/// What a plan costs.
+///
+/// Declared, not read back. The declaration is the truth and the provider is
+/// made to agree with it — which means a page can say what something costs
+/// without a round trip, and the number it says is the number that was
+/// deliberately chosen rather than whatever a dashboard currently holds.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Money {
+    /// Minor units — 4900 is $49.00. The unit every provider stores.
+    pub amount: i64,
+    /// ISO 4217, lowercase, as providers write it.
+    pub currency: String,
 }
 
 /// Every plan this deployment sells.

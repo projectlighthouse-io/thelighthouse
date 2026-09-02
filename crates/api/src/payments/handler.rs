@@ -35,6 +35,34 @@ fn driver_named<'s>(
     state.billing.providers.driver(provider)
 }
 
+/// Everything on sale, and what it costs.
+///
+/// Public and cacheable: it is the same answer for everyone, and it is the
+/// pricing page's whole content. Nothing about a reader is consulted, which is
+/// what lets the edge hold it.
+///
+/// The track is given alongside the plan so the page can group the two ways of
+/// buying one thing without splitting the name itself — the api already knows
+/// the rule, and a frontend re-deriving it is a second place to get it wrong.
+pub(crate) async fn catalogue(State(state): State<AppState>) -> Response {
+    let plans: Vec<_> = state
+        .billing
+        .plans
+        .all()
+        .map(|plan| {
+            serde_json::json!({
+                "plan": plan.id.as_str(),
+                "track": track::of(plan.id.as_str()),
+                "recurring": plan.interval.recurs(),
+                "amount": plan.money.as_ref().map(|money| money.amount),
+                "currency": plan.money.as_ref().map(|money| &money.currency),
+            })
+        })
+        .collect();
+
+    json(StatusCode::OK, plans, CachePolicy::public_content())
+}
+
 /// What this reader is currently paying for.
 ///
 /// 204 rather than 404 for a reader with nothing: having no subscription is a

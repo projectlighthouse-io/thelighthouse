@@ -6,6 +6,7 @@ members = [
     "crates/content",
     "crates/loginwith",
     "crates/migrate",
+    "crates/prices",
     "crates/ohara",
 ]
 
