@@ -37,6 +37,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use hmac::{Hmac, Mac};
+use secrecy::{ExposeSecret, SecretString};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
@@ -133,11 +134,13 @@ fn unix_seconds() -> Option<i64> {
         .ok()
 }
 
-fn matches(secret: &str, payload: &[u8], provided: &str) -> bool {
+fn matches(secret: &SecretString, payload: &[u8], provided: &str) -> bool {
     let Some(provided) = hex_decode(provided) else {
         return false;
     };
-    let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) else {
+    let Ok(mut mac) =
+        HmacSha256::new_from_slice(secret.expose_secret().as_bytes())
+    else {
         return false;
     };
     mac.update(payload);
@@ -164,12 +167,19 @@ fn hex_decode(text: &str) -> Option<Vec<u8>> {
 /// modules need it to reach their own handlers at all — every signed route is
 /// a 404 without one.
 #[cfg(test)]
-pub(crate) fn sign(secret: &str, method: &str, path: &str, at: i64) -> String {
+pub(crate) fn sign(
+    secret: &SecretString,
+    method: &str,
+    path: &str,
+    at: i64,
+) -> String {
     use std::fmt::Write as _;
 
     let payload = format!("{at}.{method}.{path}");
 
-    let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) else {
+    let Ok(mut mac) =
+        HmacSha256::new_from_slice(secret.expose_secret().as_bytes())
+    else {
         return String::new();
     };
     mac.update(payload.as_bytes());
@@ -189,16 +199,22 @@ mod tests {
 
     const NOW: i64 = 1_800_000_000;
 
+    /// The tests deal in string literals; the code deals in wrapped secrets.
+    fn secret(key: &str) -> SecretString {
+        key.into()
+    }
+
     /// The one assertion that is about the *other* implementations rather than
     /// this one: the payload luxctl builds, spelled out, so a change to the
     /// format above fails here instead of in production against a CLI nobody
     /// can redeploy.
     #[test]
     fn the_payload_is_timestamp_then_method_then_path() {
-        let signature = sign("dev-secret-0", "GET", "/api/v1/ping", NOW);
+        let signature =
+            sign(&secret("dev-secret-0"), "GET", "/api/v1/ping", NOW);
 
         assert!(matches(
-            "dev-secret-0",
+            &secret("dev-secret-0"),
             b"1800000000.GET./api/v1/ping",
             &signature
         ));
@@ -206,18 +222,19 @@ mod tests {
 
     #[test]
     fn rejects_a_wrong_signature() {
-        assert!(!matches("secret", b"payload", "00"));
-        assert!(!matches("secret", b"payload", "not-hex"));
-        assert!(!matches("secret", b"payload", ""));
+        assert!(!matches(&secret("secret"), b"payload", "00"));
+        assert!(!matches(&secret("secret"), b"payload", "not-hex"));
+        assert!(!matches(&secret("secret"), b"payload", ""));
         // Odd length, so it does not divide into pairs.
-        assert!(!matches("secret", b"payload", "abc"));
+        assert!(!matches(&secret("secret"), b"payload", "abc"));
     }
 
     #[test]
     fn a_signature_is_bound_to_its_method_and_its_path() {
-        let signature = sign("secret", "GET", "/api/v1/projects", NOW);
-        let for_payload =
-            |payload: String| matches("secret", payload.as_bytes(), &signature);
+        let signature = sign(&secret("secret"), "GET", "/api/v1/projects", NOW);
+        let for_payload = |payload: String| {
+            matches(&secret("secret"), payload.as_bytes(), &signature)
+        };
 
         assert!(for_payload(format!("{NOW}.GET./api/v1/projects")));
         // Same secret, same second, a different request.
@@ -226,7 +243,7 @@ mod tests {
         assert!(!for_payload(format!("{}.GET./api/v1/projects", NOW + 1)));
         // The right request, the wrong secret.
         assert!(!matches(
-            "other",
+            &secret("other"),
             format!("{NOW}.GET./api/v1/projects").as_bytes(),
             &signature
         ));

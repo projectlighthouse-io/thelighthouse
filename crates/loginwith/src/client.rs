@@ -6,6 +6,7 @@
 
 use std::fmt;
 
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
 use crate::{
@@ -41,14 +42,22 @@ pub struct Client {
     provider: Provider,
     /// The provider's `client_id`, named for what it is here rather than for
     /// the wire field it becomes.
-    id: String,
-    secret: String,
+    ///
+    /// Wrapped like the secret, though it is not one: a client id is public by
+    /// construction — it travels in the authorize URL the browser follows. The
+    /// wrapper buys log hygiene, not confidentiality, and costs one
+    /// `expose_secret` at each of the two places it goes on the wire.
+    id: SecretString,
+    secret: SecretString,
     redirect_url: String,
     endpoints: Endpoints,
     http: reqwest::Client,
 }
 
-/// Hand written. The derived one would put the client secret into any log line
+/// Hand written for the non-secret fields only. The credentials are
+/// [`SecretString`], so they redact themselves whatever prints them.
+///
+/// Was: hand written because the derived one would put the client secret into any log line
 /// that formats the client with `{:?}`.
 impl fmt::Debug for Client {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -71,8 +80,8 @@ impl Client {
     /// build problem rather than a runtime one.
     pub fn new(
         provider: Provider,
-        id: impl Into<String>,
-        secret: impl Into<String>,
+        id: SecretString,
+        secret: SecretString,
         redirect_url: impl Into<String>,
     ) -> Result<Self, Error> {
         Self::with_endpoints(
@@ -91,8 +100,8 @@ impl Client {
     /// Socialite does this with a subclass that overrides `getTokenUrl()`.
     pub(crate) fn with_endpoints(
         provider: Provider,
-        id: impl Into<String>,
-        secret: impl Into<String>,
+        id: SecretString,
+        secret: SecretString,
         redirect_url: impl Into<String>,
         endpoints: Endpoints,
     ) -> Result<Self, Error> {
@@ -106,8 +115,8 @@ impl Client {
 
         Ok(Self {
             provider,
-            id: id.into(),
-            secret: secret.into(),
+            id,
+            secret,
             redirect_url: redirect_url.into(),
             endpoints,
             http,
@@ -132,7 +141,7 @@ impl Client {
     #[must_use]
     pub fn authorize_url(&self, state: &str) -> String {
         let query = form_urlencoded::Serializer::new(String::new())
-            .append_pair("client_id", &self.id)
+            .append_pair("client_id", self.id.expose_secret())
             .append_pair("redirect_uri", &self.redirect_url)
             .append_pair("scope", self.provider.scopes())
             .append_pair("response_type", "code")
@@ -174,8 +183,8 @@ impl Client {
             .header(reqwest::header::ACCEPT, "application/json")
             .form(&[
                 ("grant_type", "authorization_code"),
-                ("client_id", self.id.as_str()),
-                ("client_secret", self.secret.as_str()),
+                ("client_id", self.id.expose_secret()),
+                ("client_secret", self.secret.expose_secret()),
                 ("code", code),
                 ("redirect_uri", self.redirect_url.as_str()),
             ])
@@ -250,8 +259,8 @@ mod tests {
     fn client(provider: Provider) -> Client {
         Client::new(
             provider,
-            "client-id",
-            "shh",
+            "client-id".into(),
+            "shh".into(),
             "https://lighthouse.test/api/auth/callback",
         )
         .unwrap()

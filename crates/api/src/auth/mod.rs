@@ -128,13 +128,13 @@ mod tests {
         let config = crate::config::Config::sample();
         let socials = loginwith::providers([
             GithubProvider::with(
-                "gh-id",
-                "gh-secret",
+                "gh-id".into(),
+                "gh-secret".into(),
                 config.callback_url("github"),
             ),
             GoogleProvider::with(
-                "goo-id",
-                "goo-secret",
+                "goo-id".into(),
+                "goo-secret".into(),
                 config.callback_url("google"),
             ),
         ])

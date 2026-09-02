@@ -17,6 +17,11 @@ reqwest = { version = "0.12", default-features = false, features = [
     "charset",
     "rustls-tls-webpki-roots",
 ] }
+# Secrets that cannot be printed. `SecretString`'s `Debug` is `[REDACTED]` and
+# its `Drop` zeroes the memory, so redaction is a property of the type rather
+# than of every struct a credential passes through remembering to hand-write a
+# `Debug` impl.
+secrecy = "0.10"
 serde = { version = "1", features = ["derive"] }
 form_urlencoded = "1"
 # std, so its error type implements std::error::Error and can be a `#[source]`.

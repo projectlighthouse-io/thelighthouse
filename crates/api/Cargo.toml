@@ -58,6 +58,10 @@ uuid = { version = "1", features = ["serde"] }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 # The session payload and the oauth cookie's redirect. Both go in a cookie
 # value, where a raw `,` or `;` would end the value early.
+# Every credential in `Config` is a `SecretString`: `Debug` is `[REDACTED]` and
+# the memory is zeroed on drop, so a key added later is redacted without
+# anybody remembering to extend a hand-written impl.
+secrecy = "0.10"
 base64 = "0.22"
 # Escaping the failure message into /login?error=... Already in the tree via
 # loginwith, so this adds nothing to the build.

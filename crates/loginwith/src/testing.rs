@@ -25,8 +25,8 @@ pub(crate) const TOKEN: &str = "access-token";
 pub(crate) fn client_for(provider: Provider, server: &MockServer) -> Client {
     Client::with_endpoints(
         provider,
-        ID,
-        SECRET,
+        ID.into(),
+        SECRET.into(),
         REDIRECT,
         Endpoints {
             token: format!("{}/token", server.uri()),

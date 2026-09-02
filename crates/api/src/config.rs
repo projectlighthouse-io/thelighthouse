@@ -8,19 +8,23 @@
 //! `RUST_LOG` and `LOG_FORMAT` are deliberately not here — `telemetry::init`
 //! runs before this does, because a config failure has to be loggable.
 
-use std::fmt;
+use secrecy::SecretString;
 
-#[derive(Clone)]
+/// Every credential is a [`SecretString`], so `Debug` is derived rather than
+/// hand-written: they print as `[REDACTED]` and their memory is zeroed on
+/// drop. Redaction is a property of the field's type, which means a key added
+/// later is covered without anybody remembering to add a line to an impl.
+#[derive(Clone, Debug)]
 pub(crate) struct Config {
     /// Shared with luxctl. Required, so a deployment cannot come up with the
     /// signed routes reachable but unverified.
-    pub(crate) luxctl_secret: String,
+    pub(crate) luxctl_secret: SecretString,
     /// Loopback port the api binds.
     pub(crate) api_port: u16,
     /// Postgres connection string. The rebuild runs against the schema the
     /// laravel app already owns, so during the crossover this points at the
     /// same database that stack is using.
-    pub(crate) database_url: String,
+    pub(crate) database_url: SecretString,
     /// The site's own origin, e.g. `https://projectlighthouse.io`. Two things
     /// derive from it rather than being configured separately and drifting: the
     /// OAuth callback URLs, and whether cookies are marked `Secure`.
@@ -35,11 +39,11 @@ pub(crate) struct Config {
     /// Stripe's api key. Required: a deployment that came up with the billing
     /// routes mounted but unusable would only find out from a reader who tried
     /// to pay.
-    pub(crate) stripe_secret_key: String,
+    pub(crate) stripe_secret_key: SecretString,
     /// The signing secret for *this deployment's* webhook endpoint — the
     /// `whsec_…` shown when the endpoint is created. Not the api key, and
     /// different per endpoint, so staging and production do not share one.
-    pub(crate) stripe_webhook_secret: String,
+    pub(crate) stripe_webhook_secret: SecretString,
     /// Books a subscription does *not* cover, by slug.
     ///
     /// Empty for "a subscription covers everything", which is true today.
@@ -59,34 +63,10 @@ pub(crate) struct Config {
     /// deploy time: which plans exist and what they map to at the provider is
     /// a deployment's business rather than this repository's.
     pub(crate) billing_plans: String,
-    pub(crate) github_id: String,
-    pub(crate) github_secret: String,
-    pub(crate) google_id: String,
-    pub(crate) google_secret: String,
-}
-
-/// Hand written. The derived one would put every secret here into any log line
-/// that formats the config with `{:?}`.
-impl fmt::Debug for Config {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Config")
-            .field("luxctl_secret", &"<redacted>")
-            .field("api_port", &self.api_port)
-            // Redacted: a connection string carries the password.
-            .field("database_url", &"<redacted>")
-            .field("app_url", &self.app_url)
-            .field("content_path", &self.content_path)
-            .field("drafts", &self.drafts)
-            .field("stripe_secret_key", &"<redacted>")
-            .field("stripe_webhook_secret", &"<redacted>")
-            .field("billing_plans", &self.billing_plans)
-            .field("subscription_excludes", &self.subscription_excludes)
-            .field("github_id", &self.github_id)
-            .field("github_secret", &"<redacted>")
-            .field("google_id", &self.google_id)
-            .field("google_secret", &"<redacted>")
-            .finish()
-    }
+    pub(crate) github_id: SecretString,
+    pub(crate) github_secret: SecretString,
+    pub(crate) google_id: SecretString,
+    pub(crate) google_secret: SecretString,
 }
 
 /// A comma-separated list, trimmed, with the empties dropped.
@@ -144,9 +124,9 @@ impl Config {
         })?;
 
         Ok(Self {
-            luxctl_secret: required("LUXCTL_SECRET")?,
+            luxctl_secret: required("LUXCTL_SECRET")?.into(),
             api_port,
-            database_url: required("DATABASE_URL")?,
+            database_url: required("DATABASE_URL")?.into(),
             // Trailing slash trimmed once, here, so every caller can join a path
             // onto it without producing `//github/callback` — which a provider
             // compares byte for byte against its registered callback and refuses.
@@ -154,16 +134,16 @@ impl Config {
             content_path: required("CONTENT_PATH")?,
             // Not `required`: unset means hidden, which is the safe answer.
             drafts: ohara::Drafts::from_env(get("SHOW_DRAFTS").as_deref()),
-            stripe_secret_key: required("STRIPE_SECRET_KEY")?,
-            stripe_webhook_secret: required("STRIPE_WEBHOOK_SECRET")?,
+            stripe_secret_key: required("STRIPE_SECRET_KEY")?.into(),
+            stripe_webhook_secret: required("STRIPE_WEBHOOK_SECRET")?.into(),
             billing_plans: required("BILLING_PLANS")?,
             // Required, and empty is a meaningful value: "a subscription
             // covers every book" is a real answer and the one true today.
             subscription_excludes: slugs(&required("SUBSCRIPTION_EXCLUDES")?),
-            github_id: required("GITHUB_CLIENT_ID")?,
-            github_secret: required("GITHUB_CLIENT_SECRET")?,
-            google_id: required("GOOGLE_CLIENT_ID")?,
-            google_secret: required("GOOGLE_CLIENT_SECRET")?,
+            github_id: required("GITHUB_CLIENT_ID")?.into(),
+            github_secret: required("GITHUB_CLIENT_SECRET")?.into(),
+            google_id: required("GOOGLE_CLIENT_ID")?.into(),
+            google_secret: required("GOOGLE_CLIENT_SECRET")?.into(),
         })
     }
 
@@ -191,26 +171,28 @@ impl Config {
     #[cfg(test)]
     pub(crate) fn sample() -> Self {
         Self {
-            luxctl_secret: "luxctl".to_owned(),
+            luxctl_secret: "luxctl".into(),
             api_port: 9000,
-            database_url: "postgres://localhost/lighthouse".to_owned(),
+            database_url: "postgres://localhost/lighthouse".into(),
             app_url: "https://lighthouse.test".to_owned(),
             content_path: "../ohara".to_owned(),
             drafts: ohara::Drafts::Hidden,
-            stripe_secret_key: "sk_test".to_owned(),
-            stripe_webhook_secret: "whsec_test".to_owned(),
+            stripe_secret_key: "sk_test".into(),
+            stripe_webhook_secret: "whsec_test".into(),
             billing_plans: "billing.sample.yaml".to_owned(),
             subscription_excludes: Vec::new(),
-            github_id: "gh-id".to_owned(),
-            github_secret: "gh-secret".to_owned(),
-            google_id: "goo-id".to_owned(),
-            google_secret: "goo-secret".to_owned(),
+            github_id: "gh-id".into(),
+            github_secret: "gh-secret".into(),
+            google_id: "goo-id".into(),
+            google_secret: "goo-secret".into(),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use secrecy::ExposeSecret as _;
+
     use super::*;
 
     /// Every key set to something valid. Tests override or drop one at a time,
@@ -285,7 +267,7 @@ mod tests {
         let config =
             Config::from_vars(vars(with("LUXCTL_SECRET", ""))).unwrap();
 
-        assert_eq!(config.luxctl_secret, "");
+        assert_eq!(config.luxctl_secret.expose_secret(), "");
         assert_eq!(config.api_port, 9000);
     }
 
@@ -326,17 +308,70 @@ mod tests {
         );
     }
 
+    /// Every key whose value must never reach a log line.
+    ///
+    /// Not just the ones with `SECRET` in the name: a connection string
+    /// carries a password, and a client id is an identifier of a private
+    /// application even though OAuth puts it in a url. Each is a
+    /// `SecretString` on `Config`, and this is what proves it — adding a
+    /// credential as a plain `String` fails here.
+    const CREDENTIALS: &[&str] = &[
+        "LUXCTL_SECRET",
+        "DATABASE_URL",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+    ];
+
     #[test]
-    fn debug_prints_no_secret_at_all() {
+    fn debug_prints_no_credential_at_all() {
         let mut pairs = complete();
         for (key, value) in &mut pairs {
-            if key.contains("SECRET") {
+            if CREDENTIALS.contains(key) {
                 *value = format!("hunter2-{key}");
             }
         }
 
         let dumped = format!("{:?}", Config::from_vars(vars(pairs)).unwrap());
 
-        assert!(!dumped.contains("hunter2"), "a secret reached a log line");
+        assert!(
+            !dumped.contains("hunter2"),
+            "a credential reached a log line: {dumped}"
+        );
+    }
+
+    #[test]
+    fn every_credential_is_covered_by_that_test() {
+        // The list above is hand-maintained, and a key added to `COMPLETE`
+        // without being classified would silently escape the check. Anything
+        // that is not a credential has to be named here on purpose.
+        const PUBLIC: &[&str] = &[
+            "API_PORT",
+            "APP_URL",
+            "CONTENT_PATH",
+            "BILLING_PLANS",
+            "SUBSCRIPTION_EXCLUDES",
+        ];
+
+        for (key, _) in COMPLETE {
+            assert!(
+                CREDENTIALS.contains(key) || PUBLIC.contains(key),
+                "{key} is neither a credential nor declared public"
+            );
+        }
+    }
+
+    #[test]
+    fn debug_still_says_something_useful() {
+        // Redaction that swallowed the whole struct would be a config dump
+        // nobody can debug with.
+        let dumped =
+            format!("{:?}", Config::from_vars(vars(complete())).unwrap());
+
+        assert!(dumped.contains("https://lighthouse.test"), "{dumped}");
+        assert!(dumped.contains("9000"), "{dumped}");
     }
 }

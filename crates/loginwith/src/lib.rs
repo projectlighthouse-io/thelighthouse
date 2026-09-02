@@ -10,8 +10,8 @@
 //! ```ignore
 //! // boot: after config, before the router
 //! let socials = loginwith::providers([
-//!     GithubProvider::with(&config.github_id, &config.github_secret, &config.github_redirect),
-//!     GoogleProvider::with(&config.google_id, &config.google_secret, &config.google_redirect),
+//!     GithubProvider::with(config.github_id.clone(), config.github_secret.clone(), redirect),
+//!     GoogleProvider::with(config.google_id.clone(), config.google_secret.clone(), redirect),
 //! ])?;
 //!
 //! // GET /auth/login/{provider}
@@ -38,6 +38,12 @@
 //! tokens, Google ID-token (JWT) verification, and any provider beyond these
 //! two. Socialite carries all of it; each one is dead weight until a caller
 //! asks.
+//!
+//! Credentials are [`secrecy::SecretString`] on the way in, so neither the id
+//! nor the secret can reach a log line through a `Debug` anywhere in this
+//! crate. The id is not really a secret — it travels in the authorize URL the
+//! browser follows — but wrapping both means there is no field here that has
+//! to be remembered as the unsafe one.
 //!
 //! The crate owns no session and no database. It takes a code and gives back a
 //! profile — deciding who that profile *is* belongs to the caller.

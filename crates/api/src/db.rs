@@ -20,6 +20,7 @@
 
 use std::time::Duration;
 
+use secrecy::{ExposeSecret, SecretString};
 use sqlx::{
     Executor as _,
     postgres::{PgPool, PgPoolOptions},
@@ -37,7 +38,7 @@ use sqlx::{
 /// Whatever the server said — unreachable host, wrong password, no such
 /// database. The message is worth printing verbatim; it is nearly always
 /// self-explanatory and guessing at it here would lose the detail.
-pub(crate) async fn connect(url: &str) -> Result<PgPool, sqlx::Error> {
+pub(crate) async fn connect(url: &SecretString) -> Result<PgPool, sqlx::Error> {
     PgPoolOptions::new()
         // The api is one process on one box fronted by one nuxt. Postgres pays
         // for idle connections in backend processes, so a small pool that is
@@ -49,7 +50,7 @@ pub(crate) async fn connect(url: &str) -> Result<PgPool, sqlx::Error> {
         // Postgres will not notice a client that vanished, so a pool held open
         // across a network blip can hand out sockets that are already dead.
         .test_before_acquire(true)
-        .connect(url)
+        .connect(url.expose_secret())
         .await
 }
 

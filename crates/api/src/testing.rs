@@ -72,7 +72,7 @@ fn signed_with(method: &str, uri: &str, body: Body) -> Request<Body> {
     Request::builder()
         .method(method)
         .uri(uri)
-        .header("x-luxctl-signature", sign(SECRET, method, path, at))
+        .header("x-luxctl-signature", sign(&SECRET.into(), method, path, at))
         .header("x-luxctl-timestamp", at.to_string())
         .body(body)
         .unwrap()

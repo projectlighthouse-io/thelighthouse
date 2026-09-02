@@ -8,15 +8,15 @@
 //! ```ignore
 //! // boot, after config and before the router
 //! let socials = loginwith::providers([
-//!     GithubProvider::with(&config.github_id, &config.github_secret, &config.github_redirect),
-//!     GoogleProvider::with(&config.google_id, &config.google_secret, &config.google_redirect),
+//!     GithubProvider::with(config.github_id.clone(), config.github_secret.clone(), redirect),
+//!     GoogleProvider::with(config.google_id.clone(), config.google_secret.clone(), redirect),
 //! ])?;
 //!
 //! // GET /auth/login/{provider}
 //! let driver = socials.driver(provider).ok_or_else(not_found)?;
 //! ```
 
-use std::fmt;
+use secrecy::SecretString;
 
 use crate::{client::Client, error::Error, provider::Provider};
 
@@ -24,37 +24,28 @@ use crate::{client::Client, error::Error, provider::Provider};
 ///
 /// Returned by [`GithubProvider::with`] and [`GoogleProvider::with`], and only
 /// useful as an argument to [`providers`].
-#[derive(Clone)]
+/// The credentials are [`SecretString`], so `Debug` can be derived: they
+/// print as `[REDACTED]` and their memory is zeroed on drop, which makes
+/// not-logging-them a property of the type rather than of this impl.
+#[derive(Debug)]
 pub struct Registration {
     provider: Provider,
-    id: String,
-    secret: String,
+    id: SecretString,
+    secret: SecretString,
     redirect_url: String,
-}
-
-/// Hand written, so a config dump cannot print the secret.
-impl fmt::Debug for Registration {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Registration")
-            .field("provider", &self.provider)
-            .field("id", &self.id)
-            .field("secret", &"<redacted>")
-            .field("redirect_url", &self.redirect_url)
-            .finish()
-    }
 }
 
 impl Registration {
     fn new(
         provider: Provider,
-        id: impl Into<String>,
-        secret: impl Into<String>,
+        id: SecretString,
+        secret: SecretString,
         redirect_url: impl Into<String>,
     ) -> Self {
         Self {
             provider,
-            id: id.into(),
-            secret: secret.into(),
+            id,
+            secret,
             redirect_url: redirect_url.into(),
         }
     }
@@ -69,8 +60,8 @@ impl GithubProvider {
     /// GitHub OAuth app — both send it again at the token exchange and compare.
     #[must_use]
     pub fn with(
-        id: impl Into<String>,
-        secret: impl Into<String>,
+        id: SecretString,
+        secret: SecretString,
         redirect_url: impl Into<String>,
     ) -> Registration {
         Registration::new(Provider::Github, id, secret, redirect_url)
@@ -86,8 +77,8 @@ impl GoogleProvider {
     /// OAuth client exactly.
     #[must_use]
     pub fn with(
-        id: impl Into<String>,
-        secret: impl Into<String>,
+        id: SecretString,
+        secret: SecretString,
         redirect_url: impl Into<String>,
     ) -> Registration {
         Registration::new(Provider::Google, id, secret, redirect_url)
@@ -174,13 +165,13 @@ mod tests {
     fn both() -> Providers {
         providers([
             GithubProvider::with(
-                "gh-id",
-                "gh-secret",
+                "gh-id".into(),
+                "gh-secret".into(),
                 "https://l.test/auth/github/callback",
             ),
             GoogleProvider::with(
-                "goo-id",
-                "goo-secret",
+                "goo-id".into(),
+                "goo-secret".into(),
                 "https://l.test/auth/google/callback",
             ),
         ])
@@ -222,8 +213,8 @@ mod tests {
         // The name is valid, the credentials were never supplied. Same 404 as
         // an unknown provider, rather than a panic on a missing key.
         let only_github = providers([GithubProvider::with(
-            "id",
-            "secret",
+            "id".into(),
+            "secret".into(),
             "https://l.test/cb",
         )])
         .unwrap();
@@ -235,8 +226,16 @@ mod tests {
     #[test]
     fn registering_a_provider_twice_is_a_boot_failure() {
         let error = providers([
-            GithubProvider::with("first", "secret", "https://l.test/cb"),
-            GithubProvider::with("second", "secret", "https://l.test/cb"),
+            GithubProvider::with(
+                "first".into(),
+                "secret".into(),
+                "https://l.test/cb",
+            ),
+            GithubProvider::with(
+                "second".into(),
+                "secret".into(),
+                "https://l.test/cb",
+            ),
         ])
         .unwrap_err();
 
@@ -261,8 +260,11 @@ mod tests {
 
     #[test]
     fn debug_does_not_print_a_secret() {
-        let registration =
-            GithubProvider::with("id", "hunter2", "https://l.test/cb");
+        let registration = GithubProvider::with(
+            "id".into(),
+            "hunter2".into(),
+            "https://l.test/cb",
+        );
 
         assert!(!format!("{registration:?}").contains("hunter2"));
         assert!(!format!("{:?}", both()).contains("gh-secret"));

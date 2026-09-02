@@ -36,6 +36,7 @@ use std::{
 use loginwith::{GithubProvider, GoogleProvider, Providers, Registration};
 
 use config::Config;
+use secrecy::ExposeSecret as _;
 
 /// Returning an error rather than panicking: a failure to bind should print
 /// something a human can act on and exit non-zero, not dump a backtrace. The
@@ -228,18 +229,18 @@ fn reload_on_hangup(_catalog: Arc<ohara::catalog::Catalog>) {}
 /// `Config` — the choice not to configure one has to be written down as an
 /// empty value, not left out.
 fn social_providers(config: &Config) -> Result<Providers, loginwith::Error> {
-    let github = (!config.github_id.is_empty()).then(|| {
+    let github = (!config.github_id.expose_secret().is_empty()).then(|| {
         GithubProvider::with(
-            &config.github_id,
-            &config.github_secret,
+            config.github_id.clone(),
+            config.github_secret.clone(),
             config.callback_url("github"),
         )
     });
 
-    let google = (!config.google_id.is_empty()).then(|| {
+    let google = (!config.google_id.expose_secret().is_empty()).then(|| {
         GoogleProvider::with(
-            &config.google_id,
-            &config.google_secret,
+            config.google_id.clone(),
+            config.google_secret.clone(),
             config.callback_url("google"),
         )
     });
@@ -272,8 +273,8 @@ fn billing_providers(
         billing::StripeConfig {
             // Wrapped at the boundary, and plain text nowhere past it: a
             // `SecretString` cannot be printed by a `Debug` further in.
-            secret_key: config.stripe_secret_key.clone().into(),
-            webhook_secret: config.stripe_webhook_secret.clone().into(),
+            secret_key: config.stripe_secret_key.clone(),
+            webhook_secret: config.stripe_webhook_secret.clone(),
             returns: billing::Returns {
                 success: format!("{}/billing/thanks", config.app_url),
                 cancel: format!("{}/pricing", config.app_url),
