@@ -55,13 +55,13 @@
 //! `loginwith::client::Client` — and moving something between modules is not a
 //! breaking change.
 //!
-//! - [`registry`] — registering the providers at boot and looking one up.
-//! - [`provider`] — which two providers exist, and their endpoints and scopes.
-//! - [`client`] — the flow: authorize URL, state check, token exchange.
-//! - [`github`], [`google`] — one module per provider's wire format and the
+//! - `registry` — registering the providers at boot and looking one up.
+//! - `provider` — which two providers exist, and their endpoints and scopes.
+//! - `client` — the flow: authorize URL, state check, token exchange.
+//! - `github`, `google` — one module per provider's wire format and the
 //!   mapping from it onto [`SocialUser`].
-//! - [`state`] — minting the CSRF state and comparing it.
-//! - [`user`], [`error`] — the two types that cross the crate boundary.
+//! - `state` — minting the CSRF state and comparing it.
+//! - `user`, `error` — the two types that cross the crate boundary.
 
 mod client;
 mod error;
