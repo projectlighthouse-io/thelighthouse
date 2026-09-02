@@ -55,29 +55,19 @@ mod handler;
 mod tests;
 mod view;
 
-use axum::{Router, middleware::from_fn_with_state, routing::get};
+use axum::{Router, routing::get};
 
-use crate::{api::AppState, middleware::reader::require_reader};
+use crate::api::AppState;
 
 /// Absolute paths, so this merges alongside the signed routes rather than
 /// nesting under the same `/api` prefix.
 ///
-/// **Only the paid half is gated.** The other three are the same for everyone,
-/// so a session would buy nothing and `require_reader` would only make them
-/// uncacheable. The paid route needs a reader before entitlement can even be
-/// asked about, so it carries the layer on its own.
-pub(crate) fn routes(state: &AppState) -> Router<AppState> {
-    let public = Router::new()
+/// **No route here is gated.** All four serve anybody: the lesson route reads
+/// the session cookie itself when the lesson withholds something, because it
+/// has to answer for anonymous readers too — see `handler::lesson`.
+pub(crate) fn routes() -> Router<AppState> {
+    Router::new()
         .route("/api/books", get(handler::list))
         .route("/api/books/{book}", get(handler::show))
-        .route("/api/books/{book}/lessons/{lesson}", get(handler::lesson));
-
-    let entitled = Router::new()
-        .route(
-            "/api/books/{book}/lessons/{lesson}/paid",
-            get(handler::paid),
-        )
-        .route_layer(from_fn_with_state(state.clone(), require_reader));
-
-    public.merge(entitled)
+        .route("/api/books/{book}/lessons/{lesson}", get(handler::lesson))
 }

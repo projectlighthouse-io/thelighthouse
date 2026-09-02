@@ -1,4 +1,4 @@
-//! Resolves the session cookie to a reader, or refuses.
+//! Resolves the session cookie to a reader — refusing, or shrugging.
 
 use axum::{
     extract::{Request, State},
@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use crate::{api::AppState, auth, cookie, session};
+use crate::{api::AppState, auth, cookie, session, session::Session};
 
 /// Rejects anything without a live session, and puts the resolved one in
 /// request extensions.
@@ -41,4 +41,19 @@ pub(crate) async fn require_reader(
     request.extensions_mut().insert(session);
 
     next.run(request).await
+}
+
+/// The reader behind the session cookie, if there is one.
+///
+/// The shrugging half of [`require_reader`], for a route that serves everybody
+/// but serves a reader more. There is no layer for it because there is nothing
+/// to refuse: a handler that wants this wants the `Option`, and hiding that in
+/// an extension would let a route quietly stop checking it.
+pub(crate) async fn optional(
+    state: &AppState,
+    headers: &axum::http::HeaderMap,
+) -> Option<Session> {
+    let id = cookie::read(headers, auth::SESSION_COOKIE)?;
+
+    session::load(&state.db, id).await
 }

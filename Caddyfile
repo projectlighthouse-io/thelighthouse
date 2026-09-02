@@ -165,17 +165,15 @@
 		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
-	# The paid half of a lesson, fetched by the browser on a signed-in page.
+	# A lesson, fetched by the browser so the api can see the session cookie.
 	#
-	# Only this suffix, not `/api/books*`: the listing, the book page and the
-	# free half are read by nuxt's own server, which talks to the api directly
-	# and never comes through here. This one cannot — a signed-in page is
-	# rendered in the browser, so the request carrying the session cookie is
-	# the browser's.
+	# Nuxt renders this page server side without a cookie, and that document is
+	# held at the edge for everyone — so the server-rendered copy is always the
+	# locked one. A reader who has bought the book asks again from the browser,
+	# and the api answers the same url with the whole lesson and `no-store`.
 	#
-	# The api decides whether to answer it. This rule only says the path is
-	# reachable, and reaching it without an entitlement is a 404 either way.
-	handle /api/books/*/lessons/*/paid {
+	# One url, two answers, and only the anonymous one is ever cached.
+	handle /api/books/*/lessons/* {
 		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 

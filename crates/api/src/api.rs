@@ -156,7 +156,7 @@ pub(crate) fn app(
         // The website's own project endpoints, which carry no signature — a
         // browser cannot make one. See `projects::page_routes`.
         .merge(projects::page_routes(&state))
-        .merge(books::routes(&state))
+        .merge(books::routes())
         .merge(notes::routes(&state))
         .merge(bookmarks::routes(&state))
         .merge(payments::routes(&state))

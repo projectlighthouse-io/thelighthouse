@@ -189,23 +189,27 @@ async fn a_lesson_says_where_it_sits_in_the_book() {
 }
 
 #[tokio::test]
-async fn the_contents_list_covers_the_free_half_only() {
+async fn the_contents_list_covers_the_whole_lesson() {
+    // Reverses an earlier rule that the list stopped at the paywall. A reader
+    // deciding whether to buy is better served by the section titles than by
+    // their absence; the prose behind them is still withheld.
     let lesson = json("/api/books/fixture-book/lessons/split-lesson").await;
     let toc = at(&lesson, "/toc").as_array().unwrap().clone();
 
-    // One heading above the marker, two below it.
-    assert_eq!(toc.len(), 1, "{toc:?}");
+    assert_eq!(toc.len(), 3, "{toc:?}");
     assert_eq!(at(&lesson, "/toc/0/text"), "A Free Section");
-    assert_eq!(at(&lesson, "/toc/0/id"), "a-free-section");
+    assert_eq!(at(&lesson, "/toc/1/text"), "A Paid Section");
+    assert_eq!(at(&lesson, "/toc/2/text"), "Another Paid Section");
 
-    // A count, never the titles: "2 more sections" is a reason to buy, and
-    // "A Paid Section" is a spoiler. Neither paid heading may appear anywhere
-    // in this response.
+    // Which of them this reader can actually reach. Anonymous, so only the
+    // first — and the page needs the flag to avoid linking at an anchor that
+    // is not in the document it was given.
+    assert_eq!(at(&lesson, "/toc/0/locked"), false);
+    assert_eq!(at(&lesson, "/toc/1/locked"), true);
+    assert_eq!(at(&lesson, "/toc/2/locked"), true);
+
     assert_eq!(at(&lesson, "/remaining_sections"), 2);
-
-    let whole = serde_json::to_string(&lesson).unwrap();
-    assert!(!whole.contains("A Paid Section"), "{whole}");
-    assert!(!whole.contains("Another Paid Section"), "{whole}");
+    assert_eq!(at(&lesson, "/unlocked"), false);
 }
 
 #[tokio::test]
@@ -213,7 +217,8 @@ async fn the_free_half_never_carries_the_paid_half() {
     let response = get("/api/books/fixture-book/lessons/split-lesson").await;
 
     // Shared, and therefore holdable by a cache — which is exactly why the
-    // check below matters.
+    // check below matters. An anonymous reader gets the free half only, and
+    // that answer is the one a cache is allowed to keep.
     assert!(cache_control(&response).contains("s-maxage"));
 
     let lesson = json("/api/books/fixture-book/lessons/split-lesson").await;
@@ -232,14 +237,22 @@ async fn a_lesson_with_no_paywall_says_nothing_is_withheld() {
 }
 
 #[tokio::test]
-async fn the_paid_half_needs_a_reader_before_anything_else() {
-    // 401 and not 404: the browser already knows this url exists, because the
-    // free half told it there was more.
-    assert_eq!(
-        get("/api/books/fixture-book/lessons/split-lesson/paid")
-            .await
-            .status(),
-        StatusCode::UNAUTHORIZED
+async fn a_withheld_lesson_is_cached_briefly_rather_than_for_long() {
+    // Still the same bytes for every unentitled reader, so still shareable —
+    // but a reader who buys should not keep being served the locked copy, so
+    // the window is much shorter than a lesson that withholds nothing.
+    let withheld = get("/api/books/fixture-book/lessons/split-lesson").await;
+    let open = get("/api/books/fixture-book/lessons/free-lesson").await;
+
+    assert!(
+        cache_control(&withheld).contains("s-maxage=60"),
+        "{:?}",
+        cache_control(&withheld)
+    );
+    assert!(
+        cache_control(&open).contains("s-maxage=300"),
+        "{:?}",
+        cache_control(&open)
     );
 }
 

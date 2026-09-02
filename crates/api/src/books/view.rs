@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use ohara::{
-    body::{self, Body, Heading},
+    body::{self, Body},
     catalog::{BookEntry, LessonEntry},
     price::Price,
 };
@@ -151,16 +151,32 @@ pub(crate) struct LessonView<'b> {
     sort_order: i32,
     /// The free half, as html.
     html: String,
-    /// The free half's `##` headings. Only the free half — a contents list of
-    /// sections a reader cannot open would leak the shape of what they have
-    /// not bought.
-    toc: Vec<Heading>,
+    /// The whole lesson's `##` headings, whether or not this reader may read
+    /// them, each marked `locked` when they may not.
+    ///
+    /// This reverses an earlier rule that the list showed the free half only,
+    /// on the grounds that section titles gave away what somebody had not
+    /// bought. They do, and that is now the point: a contents list that stops
+    /// a third of the way down tells a reader nothing about what the rest of
+    /// the lesson holds, and the titles are a better argument for buying it
+    /// than their absence was.
+    ///
+    /// The prose itself is still withheld. Only the headings cross.
+    toc: Vec<TocEntry>,
     read_minutes: usize,
     /// Whether anything is being withheld. What the "read the rest" call to
     /// action keys off, and false for a lesson with no paywall at all.
     has_paid_part: bool,
-    /// How many `##` sections are behind the paywall. A count, never a list:
-    /// "4 more sections" is a reason to buy, their titles are a spoiler.
+    /// Whether this reader is being served the whole lesson.
+    ///
+    /// `has_paid_part` says the lesson withholds something; this says whether
+    /// it is withheld from *them*. The page needs both: one decides whether
+    /// there is a paywall to draw, the other whether this reader is behind it.
+    unlocked: bool,
+    /// How many `##` sections are behind the paywall.
+    ///
+    /// Kept even though `toc` now names them: the call to action says "4 more
+    /// sections" without the page having to count locked entries itself.
     remaining_sections: usize,
     /// Which lesson of the book this is, counting published ones only.
     position: usize,
@@ -177,7 +193,32 @@ impl<'b> LessonView<'b> {
         book: &'b BookEntry,
         entry: &'b LessonEntry,
         prose: &Body,
+        unlocked: bool,
     ) -> Self {
+        // The contents list describes the whole lesson, whoever is reading —
+        // a reader who has not bought it still gets to see what is in it.
+        // Anchorized over both halves at once, so the ids are the ids the
+        // rendered document uses when it carries both.
+        let whole = prose.paid.as_deref().map_or_else(
+            || prose.free.clone(),
+            |paid| format!("{}\n\n{paid}", prose.free),
+        );
+
+        // Which entries the reader cannot reach. The free half comes first, so
+        // everything past its heading count belongs to the paid half — and
+        // when the lesson is unlocked, nothing is locked.
+        let free_headings = body::headings(&prose.free).len();
+
+        let toc: Vec<TocEntry> = body::headings(&whole)
+            .into_iter()
+            .enumerate()
+            .map(|(at, heading)| TocEntry {
+                locked: !unlocked && at >= free_headings,
+                id: heading.id,
+                text: heading.text,
+            })
+            .collect();
+
         let (previous, next) = book.neighbours(&entry.lesson.slug);
         let ordered: Vec<&LessonEntry> = book.lessons().collect();
         let position = ordered
@@ -199,10 +240,15 @@ impl<'b> LessonView<'b> {
             description: entry.lesson.description.as_deref(),
             chapter_id: entry.chapter_id,
             sort_order: entry.sort_order,
-            html: body::render(&prose.free),
-            toc: body::headings(&prose.free),
+            html: if unlocked {
+                body::render(&whole)
+            } else {
+                body::render(&prose.free)
+            },
+            toc,
             read_minutes: body::read_minutes(&prose.free),
             has_paid_part: prose.has_paid_part(),
+            unlocked,
             remaining_sections,
             position,
             total: ordered.len(),
@@ -262,21 +308,16 @@ impl<'b> LessonRef<'b> {
 
 /// The paid half, and nothing else.
 ///
-/// Its own tiny shape rather than a second copy of [`LessonView`]: the reader
-/// already has everything else, and repeating it here would be a second place
-/// for the title to be wrong.
+/// One contents entry, and whether the reader can reach it.
+///
+/// The list covers the whole lesson even when the body does not, so a reader
+/// who has not bought it can still see what it contains. `locked` is what
+/// stops the page linking to an anchor that is not in the document.
 #[derive(Debug, Serialize)]
-pub(crate) struct PaidView {
-    pub(crate) html: String,
-    /// The paid half's own headings, in document order.
-    ///
-    /// Here because the contents list is built from the free half and would
-    /// otherwise stop where the paywall used to be — a reader who paid would
-    /// see the whole lesson and a sidebar covering the first third of it.
-    ///
-    /// Anchorized over the paid half alone, which matches the html above: the
-    /// two halves are rendered separately, so each one's ids are its own.
-    pub(crate) toc: Vec<Heading>,
+pub(crate) struct TocEntry {
+    pub(crate) id: String,
+    pub(crate) text: String,
+    pub(crate) locked: bool,
 }
 
 /// What a crawler reads.

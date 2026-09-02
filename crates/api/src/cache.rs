@@ -47,6 +47,19 @@ pub(crate) enum CachePolicy {
 
 impl CachePolicy {
     /// A free lesson, a book listing — the same bytes for anyone.
+    /// Content whose shape depends on entitlement, for a reader who has none.
+    ///
+    /// The same bytes for every unentitled reader, so it is still shareable —
+    /// but a reader who buys mid-window keeps seeing the locked copy until it
+    /// expires, so the window is short. The *entitled* answer is never this:
+    /// it carries paid prose and is [`CachePolicy::NoStore`].
+    pub(crate) const fn withheld_content() -> Self {
+        Self::Shared {
+            max_age: 60,
+            stale_while_revalidate: 300,
+        }
+    }
+
     pub(crate) const fn public_content() -> Self {
         Self::Shared {
             max_age: 300,

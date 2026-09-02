@@ -2,23 +2,22 @@
 
 use axum::response::Response;
 use axum::{
-    Extension,
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
 };
 use serde::Deserialize;
 
 use super::{
     entitlement::{Access, access},
-    view::{BookDetail, BookSummary, LessonView, PaidView},
+    view::{BookDetail, BookSummary, LessonView},
 };
-use ohara::{Locale, body};
+use ohara::Locale;
 
 use crate::{
     api::AppState,
     cache::CachePolicy,
+    middleware,
     response::{self, not_found},
-    session::Session,
 };
 
 /// What narrows [`list`]. Absent means the whole shelf.
@@ -94,6 +93,7 @@ pub(crate) async fn show(
 /// rather than a branch inside this one.
 pub(crate) async fn lesson(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path((book, lesson)): Path<(String, String)>,
 ) -> Response {
     let snapshot = state.catalog.current();
@@ -113,59 +113,51 @@ pub(crate) async fn lesson(
         }
     };
 
-    response::json(
-        StatusCode::OK,
-        LessonView::of(book_entry, lesson_entry, &prose),
-        CachePolicy::public_content(),
+    // A lesson that withholds nothing is the same answer for everybody, and
+    // asking who is reading would only make it uncacheable.
+    if !prose.has_paid_part() {
+        return response::json(
+            StatusCode::OK,
+            LessonView::of(book_entry, lesson_entry, &prose, true),
+            CachePolicy::public_content(),
+        );
+    }
+
+    // Optional, because this route serves anonymous readers too — they get the
+    // free half and the contents list, which is the whole point of it being
+    // one url.
+    let reader = middleware::reader::optional(&state, &headers).await;
+
+    let unlocked = match access(
+        &state.db,
+        reader.as_ref().map(|session| session.user_id),
+        book_entry,
     )
-}
-
-/// A lesson's paid half, for a reader entitled to it.
-///
-/// `NoStore`, and behind `require_reader`. 404 rather than 403 when a reader is
-/// not entitled: whether the lesson has a paid half at all is not something an
-/// unentitled reader needs confirmed, and the free half already said whether
-/// there is more to buy.
-pub(crate) async fn paid(
-    State(state): State<AppState>,
-    // Behind `require_reader`, which put this here — see `books::routes`.
-    Extension(session): Extension<Session>,
-    Path((book, lesson)): Path<(String, String)>,
-) -> Response {
-    let snapshot = state.catalog.current();
-
-    let Some(book_entry) = snapshot.book(&book) else {
-        return not_found();
-    };
-
-    match access(&state.db, Some(session.user_id), book_entry).await {
-        Ok(Access::Full) => {}
-        Ok(Access::FreeOnly) => return not_found(),
+    .await
+    {
+        Ok(access) => access == Access::Full,
         Err(cause) => {
+            // Not swallowed into "locked": a database that cannot be reached
+            // means *we do not know*, and showing a paywall to somebody who
+            // paid is the failure that generates a support ticket.
             tracing::error!(%book, %cause, "failed to check entitlement");
             return response::server_error();
         }
-    }
-
-    let prose = match state.catalog.body(&book, &lesson, Locale::default()) {
-        Ok(Some(prose)) => prose,
-        Ok(None) => return not_found(),
-        Err(cause) => {
-            tracing::error!(%book, %lesson, %cause, "failed to read lesson");
-            return response::server_error();
-        }
-    };
-
-    let Some(paid) = prose.paid.filter(|half| !half.is_empty()) else {
-        return not_found();
     };
 
     response::json(
         StatusCode::OK,
-        PaidView {
-            html: body::render(&paid),
-            toc: body::headings(&paid),
+        LessonView::of(book_entry, lesson_entry, &prose, unlocked),
+        if unlocked {
+            // Carries the paid prose. A shared cache keys on the url alone, so
+            // any positive lifetime here would hand this to the next anonymous
+            // reader — see `books::mod`.
+            CachePolicy::NoStore
+        } else {
+            // The same bytes for every unentitled reader, so still shareable,
+            // but briefly: a reader who buys should not keep seeing the locked
+            // copy for long.
+            CachePolicy::withheld_content()
         },
-        CachePolicy::NoStore,
     )
 }
