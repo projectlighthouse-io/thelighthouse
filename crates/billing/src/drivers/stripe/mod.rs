@@ -293,6 +293,10 @@ impl Gateway for Stripe {
         self.move_to(subscription, to).await
     }
 
+    fn signature_header(&self) -> &'static str {
+        "stripe-signature"
+    }
+
     fn settle(&self, body: &[u8], signature: &str) -> Result<Event, Error> {
         webhook::settle(self.webhook_secret(), body, signature)
     }

@@ -91,6 +91,14 @@ pub trait Gateway: std::fmt::Debug + Send + Sync {
         to: &Plan,
     ) -> Result<Subscription, Error>;
 
+    /// The request header this provider puts its delivery signature in.
+    ///
+    /// Here rather than in the caller because it is the provider's choice, and
+    /// an endpoint that hardcoded `Stripe-Signature` would be an endpoint that
+    /// only ever serves one provider — which is the coupling the rest of this
+    /// trait exists to avoid.
+    fn signature_header(&self) -> &'static str;
+
     /// Verify a webhook delivery and say what it means.
     ///
     /// **Not `async`, and that is deliberate.** This is a hash and a parse with

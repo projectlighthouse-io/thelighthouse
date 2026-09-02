@@ -177,6 +177,10 @@ mod tests {
             Ok(canned())
         }
 
+        fn signature_header(&self) -> &'static str {
+            "x-elsewhere-signature"
+        }
+
         fn settle(
             &self,
             _body: &[u8],
