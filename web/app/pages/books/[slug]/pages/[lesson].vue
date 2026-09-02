@@ -49,6 +49,52 @@ const book = computed(() => data.value?.book)
 const lesson = computed(() => data.value?.lesson)
 
 /**
+ * The half of the lesson a reader has to have bought.
+ *
+ * **Fetched in the browser, never during SSR.** This document is the same
+ * bytes for everyone and is held at the edge; rendering the paid half into it
+ * would put one reader's entitlement in a shared cache. So the page ships
+ * locked for everybody and unlocks itself afterwards, which is also why the
+ * api answers this url `no-store`.
+ *
+ * A 404 is the ordinary answer for a reader who has not bought it, so it is
+ * not logged or shown — the paywall below is what it looks like.
+ */
+const paidHtml = ref<string | null>(null)
+
+async function unlock(): Promise<void> {
+  paidHtml.value = null
+
+  if (!lesson.value?.locked) return
+
+  await resolveReader()
+  if (!isSignedIn.value) return
+
+  try {
+    const { html } = await $fetch<{ html: string }>(
+      `/api/books/${bookSlug.value}/lessons/${lessonSlug.value}/paid`,
+    )
+    paidHtml.value = html
+  }
+  catch {
+    // Not entitled, or the api is unreachable. Either way the reader sees the
+    // free half and the paywall, which is the honest thing to show.
+    paidHtml.value = null
+  }
+}
+
+/**
+ * The whole body the reader may see, free half first.
+ *
+ * One string rather than two elements so highlights and notes, whose offsets
+ * are counted through the rendered text, span the join instead of restarting
+ * at it.
+ */
+const readable = computed(
+  () => (data.value?.html ?? '') + (paidHtml.value ?? ''),
+)
+
+/**
  * Which contents entry is highlighted: the section actually being read.
  *
  * Scroll position, not the url. The hash only says where the reader jumped
@@ -450,6 +496,11 @@ const loadAnnotations = async (): Promise<void> => {
 
 onMounted(loadAnnotations)
 
+// After the free half is in the DOM, and again whenever the reader moves to
+// another lesson or their session resolves.
+onMounted(unlock)
+watch([lessonSlug, isSignedIn], unlock)
+
 /**
  * Prev and next stay on this route, so the component is reused and none of the
  * above runs again on its own. The marks belong to the lesson that is gone.
@@ -460,7 +511,7 @@ onMounted(loadAnnotations)
  * old lesson's text puts every highlight in the wrong place — and it is not a
  * crash, so it would only ever be noticed by looking.
  */
-watch(() => data.value?.html, async () => {
+watch(readable, async () => {
   unpaintAll()
   openNote.value = null
   await loadAnnotations()
@@ -571,11 +622,11 @@ useJsonLd('crumbs', () => ({
 
         <div class="reader-prose" style="margin-top: 44px">
           <!-- eslint-disable-next-line vue/no-v-html -- authored markdown, rendered server side -->
-          <div class="lesson-content" data-lesson-content v-html="data.html" />
+          <div class="lesson-content" data-lesson-content v-html="readable" />
         </div>
 
         <div
-          v-if="lesson.locked"
+          v-if="lesson.locked && !paidHtml"
           class="paywalled mt-12 rounded-md border-2 border-dashed border-rule bg-paper p-8 text-center"
         >
           <p class="font-mono text-xs tracking-[0.2em] uppercase text-teal">keep reading</p>
