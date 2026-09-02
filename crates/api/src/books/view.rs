@@ -268,6 +268,15 @@ impl<'b> LessonRef<'b> {
 #[derive(Debug, Serialize)]
 pub(crate) struct PaidView {
     pub(crate) html: String,
+    /// The paid half's own headings, in document order.
+    ///
+    /// Here because the contents list is built from the free half and would
+    /// otherwise stop where the paywall used to be — a reader who paid would
+    /// see the whole lesson and a sidebar covering the first third of it.
+    ///
+    /// Anchorized over the paid half alone, which matches the html above: the
+    /// two halves are rendered separately, so each one's ids are its own.
+    pub(crate) toc: Vec<Heading>,
 }
 
 /// What a crawler reads.

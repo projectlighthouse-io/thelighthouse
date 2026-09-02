@@ -164,6 +164,7 @@ pub(crate) async fn paid(
         StatusCode::OK,
         PaidView {
             html: body::render(&paid),
+            toc: body::headings(&paid),
         },
         CachePolicy::NoStore,
     )
