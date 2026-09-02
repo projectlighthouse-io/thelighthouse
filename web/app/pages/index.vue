@@ -17,6 +17,22 @@ useJsonLd('faq', {
   })),
 })
 
+
+// The same listing the books and projects pages render, so the home bands
+// cannot drift from them — which they did, silently, for as long as each read
+// its own copy. The books band read a hand-kept array and was two books and
+// every track behind before this.
+const { data: allBooks } = await useAsyncData('home-books', () =>
+  $fetch<Book[]>('/_api/books'))
+
+const books = computed<Book[]>(() => allBooks.value ?? [])
+
+// After `books`, and that is load bearing. `useJsonLd` registers a
+// `watchEffect` that runs the moment it is called, so a getter reading a
+// `const` declared further down throws on that first run — the head entry is
+// then never created, and unhead disposes an undefined entry when the page
+// unmounts. The visible symptoms were an unmount error on every navigation
+// away from the home page, and no shelf markup in the html at all.
 useJsonLd('shelf', () => ({
   '@type': 'ItemList',
   'name': 'Books',
@@ -27,16 +43,6 @@ useJsonLd('shelf', () => ({
     'name': b.title,
   })),
 }))
-
-
-// The same listing the books and projects pages render, so the home bands
-// cannot drift from them — which they did, silently, for as long as each read
-// its own copy. The books band read a hand-kept array and was two books and
-// every track behind before this.
-const { data: allBooks } = await useAsyncData('home-books', () =>
-  $fetch<Book[]>('/_api/books'))
-
-const books = computed<Book[]>(() => allBooks.value ?? [])
 
 const { data: allProjects } = await useAsyncData('home-projects', () =>
   $fetch<Project[]>('/_api/projects'))
