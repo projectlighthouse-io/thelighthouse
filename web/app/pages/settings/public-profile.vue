@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { csrfHeader } from '@/composables/UseReader'
 
-definePageMeta({ layout: 'settings', middleware: 'auth' })
+definePageMeta({ layout: 'default', middleware: 'auth' })
 
 useSeo({
   title: 'Public profile — projectlighthouse',
@@ -108,7 +108,7 @@ async function save() {
 </script>
 
 <template>
-  <div>
+  <SettingsShell>
     <h2 class="font-serif text-2xl text-ink">Public profile</h2>
     <p class="text-mono-body mt-2">What other learners see.</p>
 
@@ -221,5 +221,5 @@ async function save() {
         <span v-if="problem" class="text-sm text-red-700">{{ problem }}</span>
       </div>
     </form>
-  </div>
+  </SettingsShell>
 </template>

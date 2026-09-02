@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'settings', middleware: 'auth' })
+definePageMeta({ layout: 'default', middleware: 'auth' })
 
 useSeo({
   title: 'Newsletter preferences — projectlighthouse',
@@ -9,7 +9,7 @@ useSeo({
 </script>
 
 <template>
-  <div>
+  <SettingsShell>
     <h2 class="font-serif text-2xl text-ink">Newsletter preferences</h2>
     <p class="text-mono-body mt-2">One email when something worth reading ships. No drip campaigns.</p>
 
@@ -35,5 +35,5 @@ useSeo({
         Save preferences
       </button>
     </form>
-  </div>
+  </SettingsShell>
 </template>

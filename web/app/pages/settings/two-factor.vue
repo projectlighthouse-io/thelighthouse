@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'settings', middleware: 'auth' })
+definePageMeta({ layout: 'default', middleware: 'auth' })
 
 useSeo({
   title: 'Two-factor — projectlighthouse',
@@ -9,7 +9,7 @@ useSeo({
 </script>
 
 <template>
-  <div>
+  <SettingsShell>
     <h2 class="font-serif text-2xl text-ink">Two-factor authentication</h2>
     <p class="text-mono-body mt-2">
       An extra step at sign-in, from an authenticator app on your phone.
@@ -34,5 +34,5 @@ useSeo({
       Recovery codes are generated when you enable this. Store them somewhere that is not your
       phone.
     </p>
-  </div>
+  </SettingsShell>
 </template>

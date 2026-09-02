@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'settings', middleware: 'auth' })
+definePageMeta({ layout: 'default', middleware: 'auth' })
 
 useSeo({
   title: 'Profile — projectlighthouse',
@@ -23,7 +23,7 @@ const or = (value: string | null | undefined): string => value || '—'
 </script>
 
 <template>
-  <div>
+  <SettingsShell>
     <h2 class="font-serif text-2xl text-ink">Profile</h2>
     <p class="text-mono-body mt-2">Your name and email come from the provider you signed in with.</p>
 
@@ -47,5 +47,5 @@ const or = (value: string | null | undefined): string => value || '—'
       What other learners see is on
       <NuxtLink to="/settings/public-profile" class="underline">public profile</NuxtLink>.
     </p>
-  </div>
+  </SettingsShell>
 </template>

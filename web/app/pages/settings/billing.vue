@@ -7,7 +7,7 @@
  * so it is not a row on a settings page waiting for a button.
  */
 
-definePageMeta({ layout: 'settings', middleware: 'auth' })
+definePageMeta({ layout: 'default', middleware: 'auth' })
 
 useSeo({
   title: 'Billing — projectlighthouse',
@@ -39,7 +39,7 @@ function on(date: string | null): string {
 </script>
 
 <template>
-  <div>
+  <SettingsShell>
     <h2 class="font-serif text-2xl text-ink">Billing</h2>
     <p class="text-mono-body mt-2">
       What you are paying for. Books you bought outright are not listed here —
@@ -105,5 +105,5 @@ function on(date: string | null): string {
         {{ on(membership.period_ends_at) }}.
       </p>
     </div>
-  </div>
+  </SettingsShell>
 </template>

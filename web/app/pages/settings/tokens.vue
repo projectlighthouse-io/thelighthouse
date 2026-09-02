@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { csrfHeader } from '@/composables/UseReader'
 
-definePageMeta({ layout: 'settings', middleware: 'auth' })
+definePageMeta({ layout: 'default', middleware: 'auth' })
 
 useSeo({
   title: 'API tokens — projectlighthouse',
@@ -120,7 +120,7 @@ const when = (at: string | null): string =>
 </script>
 
 <template>
-  <div>
+  <SettingsShell>
     <h2 class="font-serif text-2xl text-ink">API tokens</h2>
     <p class="text-mono-body mt-2">
       luxctl authenticates with a bearer token. Create one, copy it once, keep it somewhere safe.
@@ -199,5 +199,5 @@ const when = (at: string | null): string =>
     <p class="mt-6 text-sm text-quiet">
       A token is shown once at creation and never again. If you lose it, revoke it and make another.
     </p>
-  </div>
+  </SettingsShell>
 </template>
