@@ -60,10 +60,22 @@ const lesson = computed(() => data.value?.lesson)
  * A 404 is the ordinary answer for a reader who has not bought it, so it is
  * not logged or shown — the paywall below is what it looks like.
  */
-interface Heading { id: string, text: string }
+interface Heading { id: string, text: string, locked: boolean }
 
-const paidHtml = ref<string | null>(null)
-const paidToc = ref<Heading[]>([])
+/**
+ * The whole lesson, once the api has been asked as *this reader*.
+ *
+ * Nuxt renders this page on the server with no session cookie, and that
+ * document is held at the edge for everyone — so the server-rendered copy is
+ * always the locked one. A reader who has bought the book asks the same url
+ * again from the browser, where the cookie goes, and the api answers with the
+ * whole lesson and `no-store`.
+ *
+ * The extra request is the price of the document being cacheable, not of the
+ * api having two urls. It has one.
+ */
+const unlockedHtml = ref<string | null>(null)
+const unlockedToc = ref<Heading[] | null>(null)
 
 /**
  * The whole contents list: the free half's headings, then the paid half's.
@@ -72,11 +84,20 @@ const paidToc = ref<Heading[]>([])
  * free half — so without this a reader who paid gets the whole lesson and a
  * contents list that stops a third of the way down it.
  */
-const toc = computed(() => [...(data.value?.toc ?? []), ...paidToc.value])
+/**
+ * The contents list, which covers the whole lesson either way.
+ *
+ * The api sends every heading and marks the ones this reader cannot reach, so
+ * a locked lesson still shows what is in it — only the anchors change, because
+ * a locked section has no element to scroll to.
+ */
+const toc = computed<Heading[]>(
+  () => unlockedToc.value ?? data.value?.toc ?? [],
+)
 
 async function unlock(): Promise<void> {
-  paidHtml.value = null
-  paidToc.value = []
+  unlockedHtml.value = null
+  unlockedToc.value = null
 
   if (!lesson.value?.locked) return
 
@@ -84,17 +105,22 @@ async function unlock(): Promise<void> {
   if (!isSignedIn.value) return
 
   try {
-    const paid = await $fetch<{ html: string, toc: Heading[] }>(
-      `/api/books/${bookSlug.value}/lessons/${lessonSlug.value}/paid`,
-    )
-    paidHtml.value = paid.html
-    paidToc.value = paid.toc ?? []
+    const full = await $fetch<{
+      html: string
+      toc: Heading[]
+      unlocked: boolean
+    }>(`/api/books/${bookSlug.value}/lessons/${lessonSlug.value}`)
+
+    if (!full.unlocked) return
+
+    unlockedHtml.value = full.html
+    unlockedToc.value = full.toc ?? []
   }
   catch {
-    // Not entitled, or the api is unreachable. Either way the reader sees the
+    // Not entitled, or the api is unreachable. Either way the reader keeps the
     // free half and the paywall, which is the honest thing to show.
-    paidHtml.value = null
-    paidToc.value = []
+    unlockedHtml.value = null
+    unlockedToc.value = null
   }
 }
 
@@ -105,9 +131,8 @@ async function unlock(): Promise<void> {
  * are counted through the rendered text, span the join instead of restarting
  * at it.
  */
-const readable = computed(
-  () => (data.value?.html ?? '') + (paidHtml.value ?? ''),
-)
+/** The body this reader may see: the whole lesson, or the free half. */
+const readable = computed(() => unlockedHtml.value ?? data.value?.html ?? '')
 
 /**
  * Which contents entry is highlighted: the section actually being read.
@@ -641,15 +666,16 @@ useJsonLd('crumbs', () => ({
       <aside class="reader-toc">
         <div v-if="toc.length" class="reader-toc__label">On this page</div>
         <nav v-if="toc.length" class="reader-toc__list">
-          <a
+          <component
+            :is="item.locked ? 'span' : 'a'"
             v-for="item in toc"
             :key="item.id"
             class="reader-toc__item"
-            :class="{ 'is-active': item.id === activeId }"
-            :href="`#${item.id}`"
+            :class="{ 'is-active': item.id === activeId, 'is-locked': item.locked }"
+            :href="item.locked ? undefined : `#${item.id}`"
           >
             {{ item.text }}
-          </a>
+          </component>
         </nav>
       </aside>
 
@@ -663,7 +689,7 @@ useJsonLd('crumbs', () => ({
         </div>
 
         <div
-          v-if="lesson.locked && !paidHtml"
+          v-if="lesson.locked && !unlockedHtml"
           class="paywalled mt-12 rounded-md border-2 border-dashed border-rule bg-paper p-8 text-center"
         >
           <p class="font-mono text-xs tracking-[0.2em] uppercase text-teal">keep reading</p>

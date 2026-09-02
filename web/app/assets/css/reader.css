@@ -249,6 +249,13 @@
     margin-bottom: 16px;
 }
 
+/* A section this reader has not bought. Still listed — the titles are what
+   the paywall is arguing for — but it scrolls nowhere, so it is not a link. */
+.reader-toc__item.is-locked {
+    opacity: 0.45;
+    cursor: default;
+}
+
 .reader-toc__list {
     position: relative;
     display: flex;
