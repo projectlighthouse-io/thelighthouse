@@ -60,10 +60,23 @@ const lesson = computed(() => data.value?.lesson)
  * A 404 is the ordinary answer for a reader who has not bought it, so it is
  * not logged or shown — the paywall below is what it looks like.
  */
+interface Heading { id: string, text: string }
+
 const paidHtml = ref<string | null>(null)
+const paidToc = ref<Heading[]>([])
+
+/**
+ * The whole contents list: the free half's headings, then the paid half's.
+ *
+ * The sidebar is built from the lesson response, which only ever describes the
+ * free half — so without this a reader who paid gets the whole lesson and a
+ * contents list that stops a third of the way down it.
+ */
+const toc = computed(() => [...(data.value?.toc ?? []), ...paidToc.value])
 
 async function unlock(): Promise<void> {
   paidHtml.value = null
+  paidToc.value = []
 
   if (!lesson.value?.locked) return
 
@@ -71,15 +84,17 @@ async function unlock(): Promise<void> {
   if (!isSignedIn.value) return
 
   try {
-    const { html } = await $fetch<{ html: string }>(
+    const paid = await $fetch<{ html: string, toc: Heading[] }>(
       `/api/books/${bookSlug.value}/lessons/${lessonSlug.value}/paid`,
     )
-    paidHtml.value = html
+    paidHtml.value = paid.html
+    paidToc.value = paid.toc ?? []
   }
   catch {
     // Not entitled, or the api is unreachable. Either way the reader sees the
     // free half and the paywall, which is the honest thing to show.
     paidHtml.value = null
+    paidToc.value = []
   }
 }
 
@@ -128,8 +143,7 @@ const TOP_LINE = 116
  * measuring the rest.
  */
 const syncFromScroll = (): void => {
-  const toc = data.value?.toc ?? []
-  const last = toc.at(-1)
+  const last = toc.value.at(-1)
 
   if (!last) return
 
@@ -143,9 +157,9 @@ const syncFromScroll = (): void => {
     return
   }
 
-  let current = toc[0]?.id ?? ''
+  let current = toc.value[0]?.id ?? ''
 
-  for (const item of toc) {
+  for (const item of toc.value) {
     const heading = document.getElementById(item.id)
 
     if (!heading) continue
@@ -178,9 +192,9 @@ const onScroll = (): void => {
 /** The hash, but only when it names a section this lesson actually has. */
 const syncFromHash = (): void => {
   const id = decodeURIComponent(window.location.hash.slice(1))
-  const known = (data.value?.toc ?? []).some(item => item.id === id)
+  const known = toc.value.some(item => item.id === id)
 
-  activeId.value = known ? id : (data.value?.toc?.[0]?.id ?? '')
+  activeId.value = known ? id : (toc.value[0]?.id ?? '')
 }
 
 onMounted(() => {
@@ -211,7 +225,7 @@ onMounted(() => {
 // A different lesson has different headings, and the hash rarely survives the
 // move. Fall back to its first entry rather than keeping the old one lit.
 watch(() => data.value?.toc, async () => {
-  activeId.value = data.value?.toc?.[0]?.id ?? ''
+  activeId.value = toc.value[0]?.id ?? ''
 
   // After the new headings are in the dom — measuring before it would read the
   // outgoing lesson's.
@@ -605,7 +619,7 @@ useJsonLd('crumbs', () => ({
         <div class="reader-toc__label">On this page</div>
         <nav class="reader-toc__list">
           <a
-            v-for="item in data.toc"
+            v-for="item in toc"
             :key="item.id"
             class="reader-toc__item"
             :class="{ 'is-active': item.id === activeId }"
