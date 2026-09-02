@@ -28,8 +28,57 @@ use crate::{
     db,
     limit::RateLimit,
     middleware::{rate::limit_requests, signature::require_signature},
-    notes, projects, response, settings, telemetry,
+    notes, payments, projects, response, settings, telemetry,
 };
+
+/// Everything needed to take money: the drivers registered at boot, and the
+/// plans on sale.
+///
+/// One field on the state rather than two, because they are only ever used
+/// together — a driver with no plan to sell has nothing to do, and a plan with
+/// no driver cannot be bought.
+#[derive(Clone, Debug)]
+pub(crate) struct Billing {
+    /// Every provider this process can take money through, by name.
+    pub(crate) providers: billing::Providers,
+    /// Shared rather than cloned: the plan list is read on every checkout and
+    /// never changes after boot.
+    pub(crate) plans: Arc<billing::Plans>,
+}
+
+#[cfg(test)]
+impl Billing {
+    /// A registry with the Stripe driver in it, pointed at nothing.
+    ///
+    /// Enough to prove what is mounted and which gates it sits behind. A test
+    /// that needs the driver to answer stands a server up in front of it — see
+    /// the `billing` crate's own tests.
+    pub(crate) fn sample() -> Self {
+        const PLANS: &str = "
+plans:
+  - id: yearly
+    price: price_yearly
+    interval: year
+";
+
+        let providers = billing::providers([billing::StripeProvider::with(
+            "sk_test",
+            "whsec_test",
+            billing::Returns {
+                success: "https://lighthouse.test/paid".to_owned(),
+                cancel: "https://lighthouse.test/pricing".to_owned(),
+            },
+        )
+        .register()
+        .unwrap()])
+        .unwrap();
+
+        Self {
+            providers,
+            plans: Arc::new(billing::Plans::from_yaml(PLANS).unwrap()),
+        }
+    }
+}
 
 /// What every handler can reach. Cheap to clone — `PgPool` and `Providers` are
 /// both handles to something shared, and `Config` is a handful of strings.
@@ -51,6 +100,8 @@ pub(crate) struct AppState {
     /// inside this one, and a per-clone catalogue would leave most requests
     /// reading a copy nothing ever reloads.
     pub(crate) catalog: Arc<Catalog>,
+    /// How money is taken, and what is on sale.
+    pub(crate) billing: Billing,
 }
 
 pub(crate) fn app(
@@ -58,6 +109,7 @@ pub(crate) fn app(
     socials: Providers,
     db: PgPool,
     catalog: Arc<Catalog>,
+    billing: Billing,
 ) -> Router {
     let state = AppState {
         config,
@@ -67,6 +119,7 @@ pub(crate) fn app(
         requests: Arc::new(RateLimit::requests()),
         reloads: Arc::new(RateLimit::content_reloads()),
         catalog,
+        billing,
     };
 
     // luxctl's surface. Everything mounted here inherits the signature check,
@@ -101,11 +154,16 @@ pub(crate) fn app(
         .merge(books::routes(&state))
         .merge(notes::routes(&state))
         .merge(bookmarks::routes(&state))
+        .merge(payments::routes(&state))
         .merge(settings::routes(&state))
         // Deliberately outside the reader gate: an OAuth callback is a browser
         // navigation and cannot carry an HMAC or a session. Those routes
         // authenticate themselves — see `auth`.
         .merge(auth::routes(&state))
+        // Outside the reader gate for the same reason the OAuth callbacks
+        // are: a payment provider has no session and no CSRF token. It
+        // authenticates itself by signing what it sends.
+        .merge(payments::webhook_routes())
         .layer(from_fn_with_state(state.clone(), limit_requests));
 
     Router::new()

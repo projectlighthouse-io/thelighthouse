@@ -37,6 +37,7 @@ fn router() -> axum::Router {
         loginwith::providers(vec![]).unwrap(),
         db,
         std::sync::Arc::new(catalog()),
+        crate::api::Billing::sample(),
     )
 }
 

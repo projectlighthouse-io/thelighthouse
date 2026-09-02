@@ -159,7 +159,13 @@ mod tests {
             .unwrap(),
         );
 
-        crate::api::app(config, socials, db, catalog)
+        crate::api::app(
+            config,
+            socials,
+            db,
+            catalog,
+            crate::api::Billing::sample(),
+        )
     }
 
     async fn get(uri: &str, cookie_header: Option<&str>) -> Response {

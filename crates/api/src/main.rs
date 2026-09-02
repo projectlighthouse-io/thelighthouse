@@ -16,6 +16,7 @@ mod db;
 mod limit;
 mod middleware;
 mod notes;
+mod payments;
 mod projects;
 mod request;
 mod response;
@@ -97,13 +98,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Loopback, not 0.0.0.0. Caddy is the only public listener in the
     // container; binding wider would let anything on the host reach the api
     // without passing the signature check.
+    // Before the listener, like the social providers and for the same reason:
+    // a bad key or an unparseable plan file should be a named startup failure
+    // rather than a 500 the first time somebody tries to pay.
+    let billing = billing_providers(&config)?;
+
+    tracing::info!(
+        providers = ?billing.providers.names().collect::<Vec<_>>(),
+        plans = billing.plans.all().count(),
+        "billing ready"
+    );
+
     let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, config.api_port));
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
     tracing::info!(%addr, "api listening");
 
-    axum::serve(listener, api::app(config, socials, db, catalog))
+    axum::serve(listener, api::app(config, socials, db, catalog, billing))
         .with_graceful_shutdown(shutdown())
         .await?;
 
@@ -238,6 +250,42 @@ fn social_providers(config: &Config) -> Result<Providers, loginwith::Error> {
             .flatten()
             .collect::<Vec<Registration>>(),
     )
+}
+
+/// The payment providers, and the plans they sell.
+///
+/// The plan file is read here rather than embedded: what is on sale changes
+/// far more often than the code that sells it, and a price handle in a source
+/// file makes adding a plan a release. It is gitignored, so a clone runs
+/// against `crates/billing/billing.sample.yaml`.
+fn billing_providers(
+    config: &Config,
+) -> Result<api::Billing, Box<dyn std::error::Error>> {
+    let document =
+        std::fs::read_to_string(&config.billing_plans).map_err(|error| {
+            format!("cannot read {}: {error}", config.billing_plans)
+        })?;
+
+    let plans = billing::Plans::from_yaml(&document)?;
+
+    let providers = billing::providers([billing::StripeProvider::with(
+        &config.stripe_secret_key,
+        &config.stripe_webhook_secret,
+        billing::Returns {
+            success: format!("{}/billing/thanks", config.app_url),
+            cancel: format!("{}/pricing", config.app_url),
+        },
+    )
+    // Three attempts, backing off. A checkout that fails because stripe
+    // hiccuped is a reader who thinks the site is broken, and every
+    // attempt shares one idempotency key so retrying cannot double-charge.
+    .strategy(billing::RequestStrategy::ExponentialBackoff(3))
+    .register()?])?;
+
+    Ok(api::Billing {
+        providers,
+        plans: Arc::new(plans),
+    })
 }
 
 async fn shutdown() {

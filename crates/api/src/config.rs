@@ -32,6 +32,18 @@ pub(crate) struct Config {
     /// exactly `true` — see [`ohara::Drafts`] for why this one key is allowed
     /// to be absent when every other is required.
     pub(crate) drafts: ohara::Drafts,
+    /// Stripe's api key. Required: a deployment that came up with the billing
+    /// routes mounted but unusable would only find out from a reader who tried
+    /// to pay.
+    pub(crate) stripe_secret_key: String,
+    /// The signing secret for *this deployment's* webhook endpoint — the
+    /// `whsec_…` shown when the endpoint is created. Not the api key, and
+    /// different per endpoint, so staging and production do not share one.
+    pub(crate) stripe_webhook_secret: String,
+    /// Where the plans on sale are described. Gitignored, and injected at
+    /// deploy time: which plans exist and what they map to at the provider is
+    /// a deployment's business rather than this repository's.
+    pub(crate) billing_plans: String,
     pub(crate) github_id: String,
     pub(crate) github_secret: String,
     pub(crate) google_id: String,
@@ -50,6 +62,9 @@ impl fmt::Debug for Config {
             .field("app_url", &self.app_url)
             .field("content_path", &self.content_path)
             .field("drafts", &self.drafts)
+            .field("stripe_secret_key", &"<redacted>")
+            .field("stripe_webhook_secret", &"<redacted>")
+            .field("billing_plans", &self.billing_plans)
             .field("github_id", &self.github_id)
             .field("github_secret", &"<redacted>")
             .field("google_id", &self.google_id)
@@ -112,6 +127,9 @@ impl Config {
             content_path: required("CONTENT_PATH")?,
             // Not `required`: unset means hidden, which is the safe answer.
             drafts: ohara::Drafts::from_env(get("SHOW_DRAFTS").as_deref()),
+            stripe_secret_key: required("STRIPE_SECRET_KEY")?,
+            stripe_webhook_secret: required("STRIPE_WEBHOOK_SECRET")?,
+            billing_plans: required("BILLING_PLANS")?,
             github_id: required("GITHUB_CLIENT_ID")?,
             github_secret: required("GITHUB_CLIENT_SECRET")?,
             google_id: required("GOOGLE_CLIENT_ID")?,
@@ -149,6 +167,9 @@ impl Config {
             app_url: "https://lighthouse.test".to_owned(),
             content_path: "../ohara".to_owned(),
             drafts: ohara::Drafts::Hidden,
+            stripe_secret_key: "sk_test".to_owned(),
+            stripe_webhook_secret: "whsec_test".to_owned(),
+            billing_plans: "billing.sample.yaml".to_owned(),
             github_id: "gh-id".to_owned(),
             github_secret: "gh-secret".to_owned(),
             google_id: "goo-id".to_owned(),
@@ -172,6 +193,9 @@ mod tests {
         ),
         ("APP_URL", "https://lighthouse.test"),
         ("CONTENT_PATH", "../ohara"),
+        ("STRIPE_SECRET_KEY", "sk_test"),
+        ("STRIPE_WEBHOOK_SECRET", "whsec_test"),
+        ("BILLING_PLANS", "billing.sample.yaml"),
         ("GITHUB_CLIENT_ID", "gh-id"),
         ("GITHUB_CLIENT_SECRET", "gh-secret"),
         ("GOOGLE_CLIENT_ID", "goo-id"),

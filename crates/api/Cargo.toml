@@ -8,6 +8,9 @@ workspace = true
 
 [dependencies]
 loginwith = { path = "../loginwith" }
+# Takes the money. Knows the provider's wire format and nothing about readers,
+# sessions or postgres — `src/billing` owns the rows and the decisions.
+billing = { path = "../billing" }
 # Reads the content repo: yaml beside markdown, walked from `CONTENT_PATH`. Its
 # own crate because two binaries read it — this one serves it,
 # `lighthouse-content` writes its metadata into postgres.

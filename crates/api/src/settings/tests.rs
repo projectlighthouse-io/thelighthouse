@@ -28,7 +28,7 @@ fn router() -> axum::Router {
         .unwrap(),
     );
 
-    crate::api::app(config, socials, db, catalog)
+    crate::api::app(config, socials, db, catalog, crate::api::Billing::sample())
 }
 
 async fn send(method: &str, uri: &str) -> Response {
