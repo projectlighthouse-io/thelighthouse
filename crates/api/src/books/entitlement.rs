@@ -27,8 +27,8 @@ pub(crate) enum Access {
 ///
 /// 1. **An entitlement row** naming it. That is a purchase, and it does not
 ///    expire unless it was granted with an end date.
-/// 2. **A live subscription**, unless this book is one the subscription does
-///    not cover — `config.subscription_excludes`.
+/// 2. **A live subscription**, when this book is on the track that
+///    subscription is for.
 ///
 /// The second cannot be folded into the first by writing rows at purchase
 /// time. A subscription has to cover books published after it was bought, and
@@ -58,7 +58,6 @@ pub(crate) async fn access(
     db: &PgPool,
     reader: Option<i64>,
     book: &BookEntry,
-    excluded: &[String],
 ) -> Result<Access, sqlx::Error> {
     let Some(user_id) = reader else {
         return Ok(Access::FreeOnly);
@@ -70,7 +69,7 @@ pub(crate) async fn access(
         return Ok(Access::Full);
     }
 
-    if covered(db, user_id, &book.book.slug, excluded).await? {
+    if covered(db, user_id, book).await? {
         return Ok(Access::Full);
     }
 
@@ -79,10 +78,10 @@ pub(crate) async fn access(
 
 /// Whether a live subscription covers this book.
 ///
-/// The exclusion is checked first, and on the slug rather than on anything in
-/// the content: whether a book is sold outside the subscription is a
-/// commercial decision, and `book.yaml` is read by things that have no
-/// business knowing what is for sale.
+/// A subscription is to a *track*, so this asks whether the book is on that
+/// track — which the content already says, in `book.yaml`'s `tracks:` map.
+/// There is no list of what a plan includes to keep in step with the
+/// catalogue, and so no way for the two to disagree.
 ///
 /// Only a membership that grants access counts. One in grace — a payment
 /// failed and the provider is retrying — does not, which is the rule the
@@ -90,16 +89,20 @@ pub(crate) async fn access(
 async fn covered(
     db: &PgPool,
     user_id: i64,
-    slug: &str,
-    excluded: &[String],
+    book: &BookEntry,
 ) -> Result<bool, sqlx::Error> {
-    if excluded.iter().any(|excluded| excluded == slug) {
+    let Some(membership) = crate::payments::live(db, user_id).await? else {
+        return Ok(false);
+    };
+
+    if !membership.grants_access() {
         return Ok(false);
     }
 
-    Ok(crate::payments::live(db, user_id)
-        .await?
-        .is_some_and(|membership| membership.grants_access()))
+    Ok(crate::payments::covers(
+        crate::payments::of_plan(&membership.plan.as_str().into()),
+        &book.book,
+    ))
 }
 
 /// Whether this reader holds a live entitlement to this book.
@@ -149,10 +152,7 @@ mod tests {
             sqlx::postgres::PgPool::connect_lazy("postgres://localhost/unused")
                 .unwrap();
 
-        assert_eq!(
-            access(&db, None, book, &[]).await.unwrap(),
-            Access::FreeOnly
-        );
+        assert_eq!(access(&db, None, book).await.unwrap(), Access::FreeOnly);
     }
 
     #[tokio::test]
@@ -169,27 +169,6 @@ mod tests {
                 .unwrap();
 
         assert!(book.book.price.is_free(), "the fixture must be free");
-        assert_eq!(
-            access(&db, None, book, &[]).await.unwrap(),
-            Access::FreeOnly
-        );
-    }
-
-    #[tokio::test]
-    async fn a_book_the_subscription_excludes_is_never_covered_by_one() {
-        // The revenue-critical direction: a book sold separately must not come
-        // free with a subscription. Answered from the slug alone, before any
-        // query, which is why this needs no database — and why an excluded
-        // book cannot be opened by a membership row being wrong.
-        let db =
-            sqlx::postgres::PgPool::connect_lazy("postgres://localhost/unused")
-                .unwrap();
-
-        let excluded = vec!["horizon-book".to_owned()];
-
-        assert!(
-            !covered(&db, 1, "horizon-book", &excluded).await.unwrap(),
-            "an excluded book was covered by a subscription"
-        );
+        assert_eq!(access(&db, None, book).await.unwrap(), Access::FreeOnly);
     }
 }

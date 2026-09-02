@@ -14,6 +14,7 @@
 //!   handler.rs     one function per route, and no sql
 //!   payload.rs     what a reader sends, and whether it is acceptable
 //!   store.rs       every query, and the only thing that talks to postgres
+//!   track.rs       which books a plan sells
 //!   membership.rs  a membership, as a row and as json
 //!   refusal.rs     why a write was refused, and its wire code
 //! ```
@@ -48,6 +49,7 @@ mod refusal;
 mod store;
 #[cfg(test)]
 mod tests;
+mod track;
 
 use axum::{
     Router,
@@ -68,6 +70,7 @@ use crate::{
 /// keeps owning its table: one caller elsewhere means one function here, not a
 /// second module writing queries against `memberships`.
 pub(crate) use store::live;
+pub(crate) use track::{covers, of_plan, validate};
 
 /// The reader-facing routes. Absolute paths, so these merge alongside the
 /// others rather than nesting under one prefix.

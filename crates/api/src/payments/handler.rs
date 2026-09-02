@@ -16,7 +16,7 @@ use super::{
     membership::Membership,
     payload::{Cancellation, ChosenPlan},
     refusal::{Refusal, refuse},
-    store,
+    store, track,
 };
 use crate::{
     api::AppState,
@@ -74,14 +74,20 @@ pub(crate) async fn checkout(
 
     // Checked before the provider is asked, so a double-click cannot become a
     // second subscription in the window before the first webhook lands.
-    match store::live(&state.db, session.user_id).await {
-        Ok(Some(membership)) if membership.grants_access() => {
-            return refuse(Refusal::AlreadySubscribed);
-        }
-        Ok(_) => {}
-        Err(error) => {
-            tracing::error!(%error, "failed to read a membership");
-            return response::server_error();
+    //
+    // Only for a recurring plan: buying a track outright is not something a
+    // subscription should stand in the way of, and the two can be held at
+    // once — a reader subscribed to Rust may still buy Foundation forever.
+    if plan.interval.recurs() {
+        match store::live(&state.db, session.user_id).await {
+            Ok(Some(membership)) if membership.grants_access() => {
+                return refuse(Refusal::AlreadySubscribed);
+            }
+            Ok(_) => {}
+            Err(error) => {
+                tracing::error!(%error, "failed to read a membership");
+                return response::server_error();
+            }
         }
     }
 
@@ -100,17 +106,22 @@ pub(crate) async fn checkout(
 
     let reference = session.user_id.to_string();
 
-    match driver
-        .subscribe(
-            plan,
-            &Customer {
-                reference: &reference,
-                email: &email,
-                existing: existing.as_deref(),
-            },
-        )
-        .await
-    {
+    let who = Customer {
+        reference: &reference,
+        email: &email,
+        existing: existing.as_deref(),
+    };
+
+    // The plan's own interval decides which kind of checkout this is. One
+    // route rather than two, because from the reader's side it is the same
+    // act — they picked a thing and they are going to pay for it.
+    let opened = if plan.interval.recurs() {
+        driver.subscribe(plan, &who).await
+    } else {
+        driver.purchase(plan, &who).await
+    };
+
+    match opened {
         Ok(handoff) => json(
             StatusCode::OK,
             serde_json::json!({ "url": handoff.url }),
@@ -353,17 +364,34 @@ async fn apply(
         Event::CheckoutCompleted {
             customer,
             reference,
-            ..
+            plan,
+            subscription,
         } => {
             let Some(user_id) = reader(&reference) else {
                 tracing::warn!(reference, "a checkout named no reader we know");
                 return Ok(());
             };
 
-            // The subscription row is not written here. The event announcing
-            // the subscription carries its dates and status; this one carries
-            // the customer, which is the thing that would otherwise be lost.
-            store::remember_customer(&state.db, user_id, &customer).await
+            store::remember_customer(&state.db, user_id, &customer).await?;
+
+            // A subscription checkout stops here: the event announcing the
+            // subscription carries its dates and status, and writing a row
+            // from this one would be guessing at both.
+            if subscription.is_some() {
+                return Ok(());
+            }
+
+            // A purchase has no such follow-up. This delivery is the only
+            // notice that money moved, so the books are granted here or never.
+            let Some(plan) = plan else {
+                tracing::error!(
+                    reference,
+                    "a purchase completed naming no plan; nothing was granted"
+                );
+                return Ok(());
+            };
+
+            grant_track(state, user_id, &plan).await
         }
         Event::Started(subscription)
         | Event::Changed(subscription)
@@ -389,6 +417,43 @@ async fn apply(
         }
         Event::Ignored => Ok(()),
     }
+}
+
+/// Turn a paid-for track into the rows that open its books.
+///
+/// **Expanded at purchase, not consulted at read time.** One row per book
+/// means the entitlement check stays a single lookup, and it means a book
+/// leaving a track later cannot take away something somebody already bought.
+/// That is the trade rebuild.md records: a bundle exists in the checkout path
+/// and never in the read path.
+async fn grant_track(
+    state: &AppState,
+    user_id: i64,
+    plan: &PlanId,
+) -> Result<(), sqlx::Error> {
+    let track = track::of_plan(plan);
+    let books = track::books(&state.catalog.current(), track);
+
+    if books.is_empty() {
+        // Nothing to grant means the reader paid for a track that no longer
+        // names any book with an id. Loud, because the money has been taken.
+        tracing::error!(
+            %plan, track, user_id,
+            "a purchase granted nothing; the track has no books with ids"
+        );
+        return Ok(());
+    }
+
+    let granted = store::grant(&state.db, user_id, &books).await?;
+
+    tracing::info!(
+        %plan, track, user_id,
+        books = books.len(),
+        granted,
+        "granted a track"
+    );
+
+    Ok(())
 }
 
 /// Whose subscription this is.

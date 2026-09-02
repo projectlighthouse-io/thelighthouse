@@ -104,6 +104,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // rather than a 500 the first time somebody tries to pay.
     let billing = billing_providers(&config)?;
 
+    // After the catalogue, because it is the catalogue that says which tracks
+    // exist. A plan selling a track no book is on charges a reader and grants
+    // them nothing, and the first report of it would be theirs.
+    payments::validate(&billing.plans, &catalog.current())?;
+
     tracing::info!(
         providers = ?billing.providers.names().collect::<Vec<_>>(),
         plans = billing.plans.all().count(),

@@ -138,14 +138,7 @@ pub(crate) async fn paid(
         return not_found();
     };
 
-    match access(
-        &state.db,
-        Some(session.user_id),
-        book_entry,
-        &state.config.subscription_excludes,
-    )
-    .await
-    {
+    match access(&state.db, Some(session.user_id), book_entry).await {
         Ok(Access::Full) => {}
         Ok(Access::FreeOnly) => return not_found(),
         Err(cause) => {

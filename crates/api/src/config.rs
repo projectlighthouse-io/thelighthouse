@@ -44,21 +44,6 @@ pub(crate) struct Config {
     /// `whsec_…` shown when the endpoint is created. Not the api key, and
     /// different per endpoint, so staging and production do not share one.
     pub(crate) stripe_webhook_secret: SecretString,
-    /// Books a subscription does *not* cover, by slug.
-    ///
-    /// Empty for "a subscription covers everything", which is true today.
-    ///
-    /// Here rather than in the plan file because it is not a billing question:
-    /// the `billing` crate deliberately knows nothing about books, and what a
-    /// plan unlocks is this application's to decide. Here rather than in
-    /// `book.yaml` because it is a commercial decision about a book, not a
-    /// fact about its content, and the content repo is read by things that
-    /// have no business knowing what is for sale.
-    ///
-    /// **A book sold outside the subscription must be listed here.** Nothing
-    /// checks that for you: a new one that is not listed is covered, which is
-    /// the failure that gives it away for free.
-    pub(crate) subscription_excludes: Vec<String>,
     /// Where the plans on sale are described. Gitignored, and injected at
     /// deploy time: which plans exist and what they map to at the provider is
     /// a deployment's business rather than this repository's.
@@ -67,17 +52,6 @@ pub(crate) struct Config {
     pub(crate) github_secret: SecretString,
     pub(crate) google_id: SecretString,
     pub(crate) google_secret: SecretString,
-}
-
-/// A comma-separated list, trimmed, with the empties dropped.
-///
-/// So `SUBSCRIPTION_EXCLUDES=` is no books rather than one book named "".
-fn slugs(list: &str) -> Vec<String> {
-    list.split(',')
-        .map(str::trim)
-        .filter(|slug| !slug.is_empty())
-        .map(str::to_owned)
-        .collect()
 }
 
 impl Config {
@@ -137,9 +111,6 @@ impl Config {
             stripe_secret_key: required("STRIPE_SECRET_KEY")?.into(),
             stripe_webhook_secret: required("STRIPE_WEBHOOK_SECRET")?.into(),
             billing_plans: required("BILLING_PLANS")?,
-            // Required, and empty is a meaningful value: "a subscription
-            // covers every book" is a real answer and the one true today.
-            subscription_excludes: slugs(&required("SUBSCRIPTION_EXCLUDES")?),
             github_id: required("GITHUB_CLIENT_ID")?.into(),
             github_secret: required("GITHUB_CLIENT_SECRET")?.into(),
             google_id: required("GOOGLE_CLIENT_ID")?.into(),
@@ -180,7 +151,6 @@ impl Config {
             stripe_secret_key: "sk_test".into(),
             stripe_webhook_secret: "whsec_test".into(),
             billing_plans: "billing.sample.yaml".to_owned(),
-            subscription_excludes: Vec::new(),
             github_id: "gh-id".into(),
             github_secret: "gh-secret".into(),
             google_id: "goo-id".into(),
@@ -209,7 +179,6 @@ mod tests {
         ("STRIPE_SECRET_KEY", "sk_test"),
         ("STRIPE_WEBHOOK_SECRET", "whsec_test"),
         ("BILLING_PLANS", "billing.sample.yaml"),
-        ("SUBSCRIPTION_EXCLUDES", ""),
         ("GITHUB_CLIENT_ID", "gh-id"),
         ("GITHUB_CLIENT_SECRET", "gh-secret"),
         ("GOOGLE_CLIENT_ID", "goo-id"),
@@ -348,13 +317,8 @@ mod tests {
         // The list above is hand-maintained, and a key added to `COMPLETE`
         // without being classified would silently escape the check. Anything
         // that is not a credential has to be named here on purpose.
-        const PUBLIC: &[&str] = &[
-            "API_PORT",
-            "APP_URL",
-            "CONTENT_PATH",
-            "BILLING_PLANS",
-            "SUBSCRIPTION_EXCLUDES",
-        ];
+        const PUBLIC: &[&str] =
+            &["API_PORT", "APP_URL", "CONTENT_PATH", "BILLING_PLANS"];
 
         for (key, _) in COMPLETE {
             assert!(

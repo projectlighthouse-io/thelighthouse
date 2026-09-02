@@ -108,6 +108,42 @@ pub(crate) async fn reader_of(
     Ok(found.map(|(id,)| id))
 }
 
+/// Grant a reader every book in a bundle, forever.
+///
+/// One statement rather than one per book: a purchase that granted four books
+/// and failed on the fifth would leave a reader holding a bundle they paid for
+/// in full. `unnest` makes the whole grant one row-set, so it lands or it does
+/// not.
+///
+/// `ON CONFLICT DO NOTHING` because owning a book twice is not a state to
+/// represent — a reader who buys the Rust track after already owning one of
+/// its books keeps the row they had, which may well be an outright purchase
+/// with its own history.
+pub(crate) async fn grant(
+    db: &PgPool,
+    user_id: i64,
+    books: &[uuid::Uuid],
+) -> Result<u64, sqlx::Error> {
+    if books.is_empty() {
+        return Ok(0);
+    }
+
+    let done = sqlx::query(
+        "INSERT INTO entitlements (user_id, book_id, source, granted_at) \
+         SELECT $1, book_id, $2, now() FROM unnest($3::uuid[]) AS book_id \
+         ON CONFLICT (user_id, book_id) DO NOTHING",
+    )
+    .bind(user_id)
+    // `1` is the bundle source from the entitlements migration: got it as part
+    // of something larger, rather than bought on its own or granted.
+    .bind(1_i16)
+    .bind(books)
+    .execute(db)
+    .await?;
+
+    Ok(done.rows_affected())
+}
+
 /// Write what the provider says a subscription now is.
 ///
 /// **An upsert on `(provider, provider_ref)`, which is what makes this safe to
