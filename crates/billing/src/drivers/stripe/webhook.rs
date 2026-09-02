@@ -179,6 +179,10 @@ fn read(body: &[u8]) -> Result<Event, Error> {
                     Ok(Event::CheckoutCompleted {
                         customer,
                         reference,
+                        plan: session
+                            .metadata
+                            .get(wire::PLAN_KEY)
+                            .map(|name| name.clone().into()),
                         subscription: session.subscription,
                     })
                 }
@@ -331,6 +335,7 @@ mod tests {
                 "customer": "cus_1",
                 "client_reference_id": "41",
                 "subscription": "sub_1",
+                "metadata": { "plan": "yearly" },
                 "url": null
             }}
         }"#;
@@ -340,6 +345,7 @@ mod tests {
             Event::CheckoutCompleted {
                 customer: "cus_1".to_owned(),
                 reference: "41".to_owned(),
+                plan: Some("yearly".into()),
                 subscription: Some("sub_1".to_owned()),
             }
         );

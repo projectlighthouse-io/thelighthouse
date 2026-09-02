@@ -69,6 +69,32 @@ pub struct StripeConfig {
     pub strategy: RequestStrategy,
 }
 
+/// Which kind of checkout session to open.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Mode {
+    /// Recurring. Creates a subscription.
+    Subscription,
+    /// A single payment. Creates nothing to manage afterwards.
+    Payment,
+}
+
+impl Mode {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Subscription => "subscription",
+            Self::Payment => "payment",
+        }
+    }
+
+    /// The parameter stripe copies metadata from onto whatever it creates.
+    const fn data(self) -> &'static str {
+        match self {
+            Self::Subscription => "subscription_data",
+            Self::Payment => "payment_intent_data",
+        }
+    }
+}
+
 /// Stripe, as a [`Gateway`].
 #[derive(Debug)]
 pub struct Stripe {
@@ -149,11 +175,22 @@ impl Stripe {
     }
 
     /// Open a hosted checkout session for a plan.
+    ///
+    /// `mode` is what makes this a subscription or a single payment, and it
+    /// decides where the metadata has to go: stripe copies
+    /// `subscription_data[metadata]` onto the subscription it creates, and
+    /// `payment_intent_data[metadata]` onto the payment intent. Neither exists
+    /// in the other mode, so sending the wrong one silently drops it — and the
+    /// metadata is how a delivery finds the account it belongs to.
+    ///
+    /// The session's own `metadata` carries the plan in both modes, because a
+    /// one-time purchase has no subscription to read it back from later.
     pub(crate) async fn checkout(
         &self,
         to: &Plan,
         customer: &str,
         reference: &str,
+        mode: Mode,
     ) -> Result<Handoff, Error> {
         let session: wire::Session = self
             .client
@@ -161,7 +198,7 @@ impl Stripe {
                 Method::POST,
                 "/v1/checkout/sessions",
                 &[
-                    field("mode", "subscription"),
+                    field("mode", mode.as_str()),
                     field("customer", customer),
                     field("line_items[0][price]", to.price.clone()),
                     field("line_items[0][quantity]", "1"),
@@ -173,15 +210,25 @@ impl Stripe {
                     // `sub_123` find the account and the plan without a
                     // lookup table on our side.
                     field(
+                        format!("metadata[{}]", wire::PLAN_KEY),
+                        to.id.as_str(),
+                    ),
+                    field(
+                        format!("metadata[{}]", wire::REFERENCE_KEY),
+                        reference,
+                    ),
+                    field(
                         format!(
-                            "subscription_data[metadata][{}]",
+                            "{}[metadata][{}]",
+                            mode.data(),
                             wire::PLAN_KEY
                         ),
                         to.id.as_str(),
                     ),
                     field(
                         format!(
-                            "subscription_data[metadata][{}]",
+                            "{}[metadata][{}]",
+                            mode.data(),
                             wire::REFERENCE_KEY
                         ),
                         reference,
@@ -294,7 +341,19 @@ impl Gateway for Stripe {
     ) -> Result<Handoff, Error> {
         let customer = self.customer(who).await?;
 
-        self.checkout(to, &customer, who.reference).await
+        self.checkout(to, &customer, who.reference, Mode::Subscription)
+            .await
+    }
+
+    async fn purchase(
+        &self,
+        what: &Plan,
+        who: &Customer<'_>,
+    ) -> Result<Handoff, Error> {
+        let customer = self.customer(who).await?;
+
+        self.checkout(what, &customer, who.reference, Mode::Payment)
+            .await
     }
 
     async fn cancel(
@@ -422,6 +481,61 @@ mod tests {
             .unwrap();
 
         assert_eq!(handoff.url, "https://checkout.stripe.com/c/pay/cs_1");
+    }
+
+    #[tokio::test]
+    async fn buying_outright_is_a_payment_and_carries_the_plan() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/checkout/sessions"))
+            .and(body_string_contains("mode=payment"))
+            // The session's own metadata, which is the only place a one-time
+            // purchase records what it was for: there is no subscription
+            // afterwards to read it back off.
+            .and(body_string_contains("metadata%5Bplan%5D=yearly"))
+            // `payment_intent_data`, not `subscription_data`. The wrong one
+            // does not error — stripe drops it, and the delivery arrives with
+            // no way to tell whose payment it was.
+            .and(body_string_contains(
+                "payment_intent_data%5Bmetadata%5D%5Breference%5D=41",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                r#"{"url":"https://checkout.stripe.com/c/pay/cs_2"}"#,
+            ))
+            .mount(&server)
+            .await;
+
+        let handoff = driver(&server, RequestStrategy::Once)
+            .purchase(&plan(), &reader(Some("cus_existing")))
+            .await
+            .unwrap();
+
+        assert_eq!(handoff.url, "https://checkout.stripe.com/c/pay/cs_2");
+    }
+
+    #[tokio::test]
+    async fn subscribing_puts_its_metadata_where_a_subscription_reads_it() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/checkout/sessions"))
+            .and(body_string_contains("mode=subscription"))
+            .and(body_string_contains(
+                "subscription_data%5Bmetadata%5D%5Breference%5D=41",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                r#"{"url":"https://checkout.stripe.com/c/pay/cs_1"}"#,
+            ))
+            .mount(&server)
+            .await;
+
+        assert!(
+            driver(&server, RequestStrategy::Once)
+                .subscribe(&plan(), &reader(Some("cus_existing")))
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]

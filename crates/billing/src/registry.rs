@@ -154,6 +154,16 @@ mod tests {
             })
         }
 
+        async fn purchase(
+            &self,
+            _what: &Plan,
+            _who: &Customer<'_>,
+        ) -> Result<Handoff, Error> {
+            Ok(Handoff {
+                url: self.answer.to_owned(),
+            })
+        }
+
         async fn cancel(
             &self,
             _subscription: &str,

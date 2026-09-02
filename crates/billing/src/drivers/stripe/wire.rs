@@ -40,6 +40,8 @@ pub(crate) struct Customer {
 #[derive(Debug, Deserialize)]
 pub(crate) struct Session {
     pub(crate) url: Option<String>,
+    #[serde(default)]
+    pub(crate) metadata: BTreeMap<String, String>,
     pub(crate) customer: Option<String>,
     pub(crate) client_reference_id: Option<String>,
     pub(crate) subscription: Option<String>,

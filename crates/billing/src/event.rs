@@ -27,7 +27,15 @@ pub enum Event {
         customer: String,
         /// Our reference, as it was sent into checkout.
         reference: String,
+        /// What was bought, as it was sent into checkout.
+        ///
+        /// The only place a one-time purchase says what it was for: there is
+        /// no subscription afterwards to read it back off, so if this is lost
+        /// the payment cannot be turned into anything.
+        plan: Option<crate::plan::PlanId>,
         /// The subscription it created, when it created one.
+        ///
+        /// `None` for a one-time purchase, which is what tells the two apart.
         subscription: Option<String>,
     },
     /// A charge failed. The provider is likely retrying on its own schedule.

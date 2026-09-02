@@ -56,6 +56,26 @@ pub trait Gateway: std::fmt::Debug + Send + Sync {
         who: &Customer<'_>,
     ) -> Result<Handoff, Error>;
 
+    /// Buy something outright, and say where to send the browser to pay.
+    ///
+    /// The one-time counterpart to [`Gateway::subscribe`]. A separate verb
+    /// rather than a flag on that one because the two are different objects at
+    /// every provider — one renews and can be cancelled, the other is a single
+    /// payment with nothing to manage afterwards — and a boolean would put
+    /// that difference in the caller's head instead of in the type.
+    ///
+    /// What the purchase entitles somebody to is the caller's to decide; this
+    /// only takes the money and reports that it was taken.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Refused`] if the provider will not open a session.
+    async fn purchase(
+        &self,
+        what: &Plan,
+        who: &Customer<'_>,
+    ) -> Result<Handoff, Error>;
+
     /// Stop a subscription, at the end of the paid period or immediately.
     ///
     /// Returns it as it now stands rather than nothing, because the two
