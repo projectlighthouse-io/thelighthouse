@@ -335,6 +335,7 @@ pub(crate) async fn record(
         &snapshot,
         Some(holder.user_id),
         project,
+        &state.config.subscription_excludes,
     )
     .await
     {
@@ -634,12 +635,18 @@ async fn seen_by(
         return Ok(None);
     };
 
-    let access = entitlement::for_project(&state.db, snapshot, reader, project)
-        .await
-        .map_err(|cause| {
-            tracing::error!(%cause, "failed to check entitlement");
-            Box::new(response::server_error())
-        })?;
+    let access = entitlement::for_project(
+        &state.db,
+        snapshot,
+        reader,
+        project,
+        &state.config.subscription_excludes,
+    )
+    .await
+    .map_err(|cause| {
+        tracing::error!(%cause, "failed to check entitlement");
+        Box::new(response::server_error())
+    })?;
 
     let (_, board) = run_and_board(state, user_id, project_id).await?;
 
@@ -798,6 +805,7 @@ pub(crate) async fn progress(
         &snapshot,
         Some(session.user_id),
         entry,
+        &state.config.subscription_excludes,
     )
     .await
     {

@@ -36,6 +36,7 @@ pub(crate) async fn for_project(
     snapshot: &Snapshot,
     reader: Option<i64>,
     project: &ProjectEntry,
+    excluded: &[String],
 ) -> Result<Access, sqlx::Error> {
     let Some(slug) = project.project.related_book_slug.as_deref() else {
         return Ok(Access::Full);
@@ -49,7 +50,7 @@ pub(crate) async fn for_project(
         return Ok(Access::FreeOnly);
     };
 
-    access(db, reader, book).await
+    access(db, reader, book, excluded).await
 }
 
 /// Whether this particular task is behind that paywall.
@@ -99,7 +100,9 @@ mod tests {
 
         assert!(project.project.related_book_slug.is_none());
         assert_eq!(
-            for_project(&db, &snapshot, None, project).await.unwrap(),
+            for_project(&db, &snapshot, None, project, &[])
+                .await
+                .unwrap(),
             Access::Full
         );
     }
@@ -123,7 +126,9 @@ mod tests {
         );
         assert!(snapshot.book("no-such-book").is_none());
         assert_eq!(
-            for_project(&db, &snapshot, Some(1), project).await.unwrap(),
+            for_project(&db, &snapshot, Some(1), project, &[])
+                .await
+                .unwrap(),
             Access::FreeOnly
         );
         assert!(is_paid(

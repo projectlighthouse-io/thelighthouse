@@ -62,6 +62,13 @@ use crate::{
     },
 };
 
+/// Whether a reader is paying for anything, for `books::entitlement`.
+///
+/// Re-exported rather than reaching into `store` from outside, so this module
+/// keeps owning its table: one caller elsewhere means one function here, not a
+/// second module writing queries against `memberships`.
+pub(crate) use store::live;
+
 /// The reader-facing routes. Absolute paths, so these merge alongside the
 /// others rather than nesting under one prefix.
 ///

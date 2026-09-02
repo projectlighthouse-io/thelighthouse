@@ -23,6 +23,18 @@ pub(crate) enum Access {
 
 /// What this reader gets of this book.
 ///
+/// Two ways to hold a book, and either is enough:
+///
+/// 1. **An entitlement row** naming it. That is a purchase, and it does not
+///    expire unless it was granted with an end date.
+/// 2. **A live subscription**, unless this book is one the subscription does
+///    not cover — `config.subscription_excludes`.
+///
+/// The second cannot be folded into the first by writing rows at purchase
+/// time. A subscription has to cover books published after it was bought, and
+/// eagerly expanding it would grant exactly the catalogue that existed on the
+/// day somebody paid.
+///
 /// **Price is not consulted, deliberately.** What a book costs decides what
 /// happens at checkout; it does not decide what is readable. Whether a lesson
 /// withholds anything is stated in the content — the `<paid>` regions and
@@ -31,9 +43,10 @@ pub(crate) enum Access {
 /// subscribed to read, and that is a pricing decision that must not silently
 /// unlock prose.
 ///
-/// **A book with no id is [`Access::FreeOnly`].** The id is what an entitlement
-/// points at, so a book that has never been given one cannot be owned by
-/// anybody — there is no row that could name it.
+/// **A book with no id cannot be *bought*.** The id is what an entitlement
+/// points at, so a book that has never been given one has no row that could
+/// name it. A subscription still covers it: that check is on the slug, and
+/// needs no id at all.
 ///
 /// # Errors
 ///
@@ -45,16 +58,48 @@ pub(crate) async fn access(
     db: &PgPool,
     reader: Option<i64>,
     book: &BookEntry,
+    excluded: &[String],
 ) -> Result<Access, sqlx::Error> {
-    let (Some(user_id), Some(book_id)) = (reader, book.book.id) else {
+    let Some(user_id) = reader else {
         return Ok(Access::FreeOnly);
     };
 
-    if holds(db, user_id, book_id).await? {
-        Ok(Access::Full)
-    } else {
-        Ok(Access::FreeOnly)
+    if let Some(book_id) = book.book.id
+        && holds(db, user_id, book_id).await?
+    {
+        return Ok(Access::Full);
     }
+
+    if covered(db, user_id, &book.book.slug, excluded).await? {
+        return Ok(Access::Full);
+    }
+
+    Ok(Access::FreeOnly)
+}
+
+/// Whether a live subscription covers this book.
+///
+/// The exclusion is checked first, and on the slug rather than on anything in
+/// the content: whether a book is sold outside the subscription is a
+/// commercial decision, and `book.yaml` is read by things that have no
+/// business knowing what is for sale.
+///
+/// Only a membership that grants access counts. One in grace — a payment
+/// failed and the provider is retrying — does not, which is the rule the
+/// laravel app had and the one `Membership::grants_access` keeps.
+async fn covered(
+    db: &PgPool,
+    user_id: i64,
+    slug: &str,
+    excluded: &[String],
+) -> Result<bool, sqlx::Error> {
+    if excluded.iter().any(|excluded| excluded == slug) {
+        return Ok(false);
+    }
+
+    Ok(crate::payments::live(db, user_id)
+        .await?
+        .is_some_and(|membership| membership.grants_access()))
 }
 
 /// Whether this reader holds a live entitlement to this book.
@@ -104,7 +149,10 @@ mod tests {
             sqlx::postgres::PgPool::connect_lazy("postgres://localhost/unused")
                 .unwrap();
 
-        assert_eq!(access(&db, None, book).await.unwrap(), Access::FreeOnly);
+        assert_eq!(
+            access(&db, None, book, &[]).await.unwrap(),
+            Access::FreeOnly
+        );
     }
 
     #[tokio::test]
@@ -121,6 +169,27 @@ mod tests {
                 .unwrap();
 
         assert!(book.book.price.is_free(), "the fixture must be free");
-        assert_eq!(access(&db, None, book).await.unwrap(), Access::FreeOnly);
+        assert_eq!(
+            access(&db, None, book, &[]).await.unwrap(),
+            Access::FreeOnly
+        );
+    }
+
+    #[tokio::test]
+    async fn a_book_the_subscription_excludes_is_never_covered_by_one() {
+        // The revenue-critical direction: a book sold separately must not come
+        // free with a subscription. Answered from the slug alone, before any
+        // query, which is why this needs no database — and why an excluded
+        // book cannot be opened by a membership row being wrong.
+        let db =
+            sqlx::postgres::PgPool::connect_lazy("postgres://localhost/unused")
+                .unwrap();
+
+        let excluded = vec!["horizon-book".to_owned()];
+
+        assert!(
+            !covered(&db, 1, "horizon-book", &excluded).await.unwrap(),
+            "an excluded book was covered by a subscription"
+        );
     }
 }
