@@ -39,8 +39,8 @@ useJsonLd('about', {
             <h2>Books</h2>
             <p>
               Each book is a sequence of lessons meant to be read in order. Early lessons in every
-              book are free; the rest come with the voyage. Notes and highlights are yours and stay
-              private.
+              book are free; the rest come with the track that book is on. Notes and highlights are
+              yours and stay private.
             </p>
 
             <h2>Projects</h2>

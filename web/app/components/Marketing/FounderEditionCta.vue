@@ -1,19 +1,32 @@
 <script setup lang="ts">
+/**
+ * The catalogue, and a way into it.
+ *
+ * **No price here, deliberately.** Four tracks are sold at four different
+ * amounts, and a number in this component is a number that drifts from the one
+ * `/pricing` reads out of the api — invisibly, until somebody compares the two.
+ * The link goes to the page that knows.
+ *
+ * `badge` and `note` are empty by default. A promotion is a claim, and a claim
+ * belongs in the page that makes it rather than living on as a default nobody
+ * remembers is still switched on.
+ */
 withDefaults(
   defineProps<{
-    priceLabel?: string
-    savingsLabel?: string
+    badge?: string
+    note?: string
     bullets?: string[]
     pricingHref?: string
   }>(),
   {
-    priceLabel: '$49/year',
-    savingsLabel: '$119',
+    badge: '',
+    note: '',
+    // Counted from the catalogue, not remembered: 11 books, 255 lessons, and
+    // 16 projects of which 12 are challenges.
     bullets: () => [
-      '<strong class="font-semibold">9 books, 210+ lessons</strong> — go, rust, c, os, networking, dsa',
-      '3 build-your-own projects',
-      '2 book-based projects',
-      '9 cli challenges',
+      '<strong class="font-semibold">11 books, 255 lessons</strong> — go, rust, c, os, networking, dsa',
+      '4 build-your-own projects',
+      '12 cli challenges',
       'systems-first teaching — memory up, not framework down',
       'validate locally with luxctl, our open-source CLI',
       '<strong class="font-semibold">more on the way</strong>, regularly updating',
@@ -33,16 +46,13 @@ withDefaults(
           learn to build, <span class="italic text-night-dim">not just prompt</span>
         </p>
 
-        <div class="mb-8">
+        <div v-if="badge" class="mb-8">
           <div
             class="inline-flex items-center rounded-full border border-night-rule-soft bg-night p-1.5 shadow-sm"
           >
-            <span class="px-5 py-1.5 font-mono text-sm text-night-head">founders edition</span>
             <span
               class="rounded-full bg-gold px-5 py-1.5 font-mono text-sm font-semibold text-night"
-            >
-              save <span class="font-bold">{{ savingsLabel }}</span>
-            </span>
+            >{{ badge }}</span>
           </div>
         </div>
 
@@ -55,19 +65,19 @@ withDefaults(
             letter-spacing: -0.01em;
           "
         >
-          the whole voyage<span class="font-normal text-night-text">, for the price of one
-            textbook.</span>
+          pick a track<span class="font-normal text-night-text">, and learn it all the way
+            down.</span>
         </h2>
 
         <p class="mt-6 max-w-xl text-base leading-relaxed text-night-text sm:text-lg">
-          every voyage book, lab, and project — and every new voyage release.
-          <strong class="font-semibold text-teal-bright">{{ priceLabel }}</strong> at a
-          <strong
-            class="font-semibold text-teal-bright underline decoration-teal-bright/40 decoration-2 underline-offset-4"
-          >50% discount</strong>, billed once a year. cancel anytime.
+          foundation, go, rust, or everything — each with its books, projects and every
+          new release we ship to it.
+          <strong class="font-semibold text-teal-bright">subscribe yearly</strong>, or
+          <strong class="font-semibold text-teal-bright">buy a track outright</strong> and
+          keep it.
         </p>
-        <p class="mt-2 max-w-xl font-mono text-xs text-night-dim">
-          horizon (advanced track) priced separately.
+        <p v-if="note" class="mt-2 max-w-xl font-mono text-xs text-night-dim">
+          {{ note }}
         </p>
 
         <div class="mt-8 flex flex-wrap items-center gap-4">
@@ -82,7 +92,7 @@ withDefaults(
                 stroke-linejoin="round"
               />
             </svg>
-            Get Pro
+            See the tracks
           </NuxtLink>
           <NuxtLink
             :to="pricingHref"
