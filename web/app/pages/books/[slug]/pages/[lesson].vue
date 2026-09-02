@@ -249,6 +249,26 @@ watch(() => data.value?.toc, async () => {
  * repeatable — what is painted, and what to take off before painting again. */
 const { isSignedIn, resolve: resolveReader } = useReader()
 
+/**
+ * Whether the browser has taken over.
+ *
+ * `isSignedIn` reads a cookie, so it is false on the server and true on the
+ * first client render for a signed-in reader — and every branch keyed on it
+ * then hydrates against markup that says the opposite. This starts false on
+ * both sides and flips once mounted, so server and client agree and the
+ * signed-in view arrives a tick later instead of as a mismatch.
+ *
+ * The document is edge-cached and identical for everyone, which is the other
+ * reason the server must not render a reader-specific branch into it.
+ */
+const hydrated = ref(false)
+onMounted(() => {
+  hydrated.value = true
+})
+
+/** Signed in, as far as anything rendered is allowed to know. */
+const reading = computed(() => hydrated.value && isSignedIn.value)
+
 const scope = computed(() => ({
   book: bookSlug.value,
   lesson: lessonSlug.value,
@@ -615,7 +635,7 @@ useJsonLd('crumbs', () => ({
 
     <!-- No aside: this lesson has nothing to put in the third column. -->
     <div class="reader-layout reader-layout--no-aside">
-      <aside class="reader-toc">
+      <aside v-if="toc.length" class="reader-toc">
         <div class="reader-toc__label">On this page</div>
         <nav class="reader-toc__list">
           <a
@@ -692,8 +712,8 @@ useJsonLd('crumbs', () => ({
 
         <ReaderCommentsThread
           :notes="inReadingOrder"
-          :loading="!notesLoaded && isSignedIn"
-          :signed-in="isSignedIn"
+          :loading="!notesLoaded && reading"
+          :signed-in="reading"
           :submitting="postingComment"
           :submit-error="commentError"
           :editing-id="editingNoteId"
