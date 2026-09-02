@@ -1,27 +1,99 @@
 <script setup lang="ts">
 import { faqs } from '@/data/Faqs'
-import { plans } from '@/data/Plans'
+import { books } from '@/data/Books'
+import { tracks } from '@/data/Tracks'
+
+/** One purchasable plan, as `/api/billing/plans` reports it. */
+interface Offer {
+  plan: string
+  track: string
+  recurring: boolean
+  amount: number | null
+  currency: string | null
+}
 
 const description
-  = 'every voyage book and project — go, rust, dsa, os, networking, c — and every new voyage release we ship. cancel anytime.'
+  = 'four tracks — foundation, go, rust, or everything. subscribe yearly, or buy a track outright and keep it.'
 
-useSeo({
-  title: 'Pricing — projectlighthouse',
-  description,
+useSeo({ title: 'Pricing — projectlighthouse', description })
+
+/**
+ * What everything costs, from rust.
+ *
+ * Fetched rather than written here because the amount has exactly one home:
+ * the declaration `lighthouse-prices` reconciles against stripe. A number
+ * typed into this file is a number that drifts from what is actually charged,
+ * and the drift is invisible until somebody compares a receipt with this page.
+ *
+ * Allowed to fail. It is a public, edge-cached endpoint, so a build with no
+ * api behind it renders the tracks without amounts rather than failing, and
+ * fills them in on the client.
+ */
+const { data: offers, refresh } = await useFetch<Offer[]>('/api/billing/plans', {
+  key: 'billing-plans',
+  default: () => [],
+  onResponseError: () => {},
 })
+
+// The page is prerendered, and at build time there is usually no api behind
+// the same origin — so SSR hands over an empty list and hydration would leave
+// the prices as em dashes forever. Asking again on the client is what makes
+// the page correct in the build that has no api and still SEO-complete in the
+// one that does.
+onMounted(() => {
+  if (!offers.value?.length) refresh()
+})
+
+function offerFor(track: string, recurring: boolean): Offer | undefined {
+  return offers.value?.find(
+    offer => offer.track === track && offer.recurring === recurring,
+  )
+}
+
+/** `4900` reads as `$49`; a price nobody knows reads as nothing at all. */
+function priced(offer: Offer | undefined): string | null {
+  if (!offer?.amount) return null
+
+  const whole = offer.amount / 100
+
+  return `$${Number.isInteger(whole) ? whole : whole.toFixed(2)}`
+}
+
+function titleOf(slug: string): string {
+  return books.find(book => book.slug === slug)?.title ?? slug
+}
+
+const { checkout, busy, reason } = useBilling()
+const { chrome } = useAuth()
+
+/**
+ * Buying needs a session, because the api ties the purchase to an account.
+ * An anonymous reader signs in first and comes back here.
+ */
+async function buy(plan: string | undefined): Promise<void> {
+  if (!plan) return
+
+  if (chrome.value === 'anonymous') {
+    await navigateTo(`/login?redirect=${encodeURIComponent('/pricing')}`)
+
+    return
+  }
+
+  await checkout(plan)
+}
 
 useJsonLd('offers', {
   '@type': 'Product',
   'name': 'projectlighthouse',
   'description': 'Books and hands-on projects on systems programming.',
   'brand': { '@type': 'Brand', 'name': SITE.name },
-  'offers': plans
-    .filter(plan => plan.price !== '0')
-    .map(plan => ({
+  'offers': (offers.value ?? [])
+    .filter(offer => offer.amount !== null)
+    .map(offer => ({
       '@type': 'Offer',
-      'name': plan.name,
-      'price': plan.price,
-      'priceCurrency': 'USD',
+      'name': offer.plan,
+      'price': String((offer.amount ?? 0) / 100),
+      'priceCurrency': (offer.currency ?? 'usd').toUpperCase(),
       'url': `${SITE.url}/pricing`,
       'availability': 'https://schema.org/InStock',
     })),
@@ -43,18 +115,18 @@ useJsonLd('faq', {
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="mx-auto max-w-4xl text-center">
           <h1
-            class="font-editorial text-ink font-medium text-hero-lg leading-[1.05] tracking-editorial"
+            class="font-editorial text-ink text-hero-lg tracking-editorial font-medium leading-[1.05]"
           >
-            the whole voyage<span class="font-normal">,
-              <br class="hidden sm:block">for the price of one textbook.</span>
+            pick a track<span class="font-normal">,
+              <br class="hidden sm:block">not a subscription tier.</span>
           </h1>
 
           <p class="mx-auto mt-8 max-w-2xl text-base leading-relaxed text-quiet sm:text-lg">
-            every voyage book and project — go, rust, dsa, os, networking, c — and every new voyage
-            release we ship. cancel anytime.
+            four tracks. subscribe yearly and keep up with everything we ship to it, or buy
+            one outright and keep it for good.
           </p>
           <p class="mx-auto mt-3 max-w-2xl text-center font-mono text-xs text-faint">
-            horizon (advanced track) priced separately.
+            every track includes foundation.
           </p>
         </div>
       </div>
@@ -62,54 +134,64 @@ useJsonLd('faq', {
 
     <section id="pricing" class="pb-16">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="grid gap-8 lg:grid-cols-3">
+        <p v-if="reason" class="mb-6 text-center text-sm text-ink">{{ reason }}</p>
+
+        <div class="grid gap-8 lg:grid-cols-4">
           <div
-            v-for="plan in plans"
-            :key="plan.key"
+            v-for="track in tracks"
+            :key="track.key"
             class="relative flex flex-col rounded-xl bg-panel p-8"
-            :class="plan.featured ? 'border-pencil' : 'border-pencil-light'"
+            :class="track.featured ? 'border-pencil' : 'border-pencil-light'"
           >
             <div class="mb-6">
-              <h2 class="mb-4 text-xl font-semibold text-ink">{{ plan.name }}</h2>
-              <p class="font-mono text-sm text-quiet">{{ plan.blurb }}</p>
+              <h2 class="mb-4 text-xl font-semibold text-ink">{{ track.name }}</h2>
+              <p class="font-mono text-sm text-quiet">{{ track.blurb }}</p>
             </div>
 
             <div class="mb-6">
               <div class="flex items-baseline gap-1">
-                <span class="font-editorial text-4xl font-bold text-quiet">$</span>
-                <span class="font-editorial text-6xl font-bold text-ink">{{ plan.price }}</span>
-                <span class="text-quiet">{{ plan.period }}</span>
+                <span class="font-editorial text-5xl font-bold text-ink">
+                  {{ priced(offerFor(track.key, true)) ?? '—' }}
+                </span>
+                <span class="text-quiet">/ year</span>
               </div>
               <div class="mt-1">
-                <span class="text-xs text-quiet">{{ plan.note }}</span>
+                <span class="text-xs text-quiet">
+                  <template v-if="priced(offerFor(track.key, false))">
+                    or {{ priced(offerFor(track.key, false)) }} once, yours for good
+                  </template>
+                  <template v-else>&nbsp;</template>
+                </span>
               </div>
             </div>
 
-            <ul class="space-y-3 font-mono">
-              <li v-for="feature in plan.features" :key="feature" class="flex items-start gap-3">
-                <span class="mt-0.5 text-sm" :class="plan.featured ? 'text-ink' : 'text-quiet'">-</span>
-                <span class="text-sm" :class="plan.featured ? 'text-ink' : 'text-quiet'">
-                  {{ feature }}
-                </span>
+            <ul v-if="track.books.length" class="space-y-3 font-mono">
+              <li v-for="slug in track.books" :key="slug" class="flex items-start gap-3">
+                <span class="mt-0.5 text-sm text-quiet">-</span>
+                <span class="text-sm text-quiet">{{ titleOf(slug) }}</span>
               </li>
             </ul>
+            <p v-else class="font-mono text-sm text-quiet">
+              every book on every track, plus the ones on none.
+            </p>
 
-            <div class="mt-auto pt-12">
-              <NuxtLink
-                v-if="plan.featured"
-                to="/login"
-                class="block rounded-md bg-ink px-5 py-3 text-center text-base font-medium text-on-ink transition hover:bg-ink-hover"
+            <div class="mt-auto space-y-3 pt-12">
+              <button
+                type="button"
+                :disabled="busy || !offerFor(track.key, true)"
+                class="block w-full rounded-md bg-ink px-5 py-3 text-center text-base font-medium text-on-ink transition hover:bg-ink-hover disabled:opacity-50"
+                @click="buy(offerFor(track.key, true)?.plan)"
               >
-                {{ plan.cta }}
-              </NuxtLink>
-              <NuxtLink
-                v-else-if="plan.key === 'lifetime'"
-                to="/login"
-                class="block rounded-md border border-stroke bg-panel px-5 py-3 text-center text-base font-medium text-ink transition hover:bg-paper-warm"
+                {{ busy ? 'One moment…' : 'Subscribe' }}
+              </button>
+              <button
+                type="button"
+                :disabled="busy || !offerFor(track.key, false)"
+                class="border-stroke block w-full rounded-md border bg-panel px-5 py-3 text-center text-base font-medium text-ink transition hover:bg-paper-warm disabled:opacity-50"
+                @click="buy(offerFor(track.key, false)?.plan)"
               >
-                {{ plan.cta }}
-              </NuxtLink>
-              <div v-else class="text-center text-sm font-medium text-quiet">{{ plan.cta }}</div>
+                Buy outright
+              </button>
             </div>
           </div>
         </div>
