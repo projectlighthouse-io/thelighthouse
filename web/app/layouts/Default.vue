@@ -26,7 +26,7 @@ const footerLinks: NavLink[] = [
   { to: '/blog', label: 'blog' },
 ]
 
-const { reader, isSignedIn, initials, resolve } = useReader()
+const { isSignedIn, resolve } = useReader()
 
 // Client side, after hydration: the header is the only per-reader thing on an
 // otherwise identical page, and asking during SSR would make every page
@@ -84,27 +84,10 @@ const year = new Date().getFullYear()
                  what an anonymous visitor keeps — one cached document for
                  everyone, corrected in the browser for the signed in. -->
             <ClientOnly>
-              <NuxtLink
-                v-if="isSignedIn"
-                to="/profile"
-                class="flex items-center gap-2 rounded-md px-2 py-1.5 transition hover:bg-paper-warm"
-                :title="reader?.email"
-              >
-                <img
-                  v-if="reader?.avatar"
-                  :src="reader.avatar"
-                  alt=""
-                  class="size-7 rounded-full object-cover"
-                >
-                <!-- Drawn empty while the hint cookie says signed in and the
-                     session endpoint has not answered yet: the right shape
-                     immediately beats the right letters a round trip later. -->
-                <span
-                  v-else
-                  class="flex size-7 items-center justify-center rounded-full bg-ink font-mono text-xs text-on-ink"
-                >{{ initials }}</span>
-                <span class="hidden font-sans text-sm text-ink sm:inline">{{ reader?.name }}</span>
-              </NuxtLink>
+              <!-- A menu, not a link to /profile: sign out and the reader's own
+                   pages live behind it, and the header is the one place every
+                   page has room for them. -->
+              <ChromeUserMenu v-if="isSignedIn" />
 
               <ChromeJoinDropdown v-else />
 
