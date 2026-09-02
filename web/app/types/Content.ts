@@ -3,9 +3,22 @@ export interface Book {
   title: string
   description: string
   thumbnailUrl: string
+  /** Which tracks the book is on, and where it falls in each — `{go: 4}`. The
+   *  book's own yaml says this; nothing here infers it. Empty means untracked,
+   *  which is not the same as last. */
+  tracks: Record<string, number>
   pages: number
+  /**
+   * A price tag, or null when the book is free. Never a number: the money
+   * arithmetic stays in minor units on the rust side, and a float here is how
+   * a display value ends up being charged.
+   */
   price: string | null
-  inProgress: boolean
+  /** Where "start reading" goes. Null for a book with no published lessons. */
+  firstLesson?: string | null
+  /** The book page's slideshow, in reading order. Empty for a book with none.
+   *  Optional because the listing endpoint does not send it. */
+  images?: string[]
 }
 
 export interface HeroStat {
@@ -18,6 +31,78 @@ export interface Project {
   name: string
   shortDescription: string
   tasksCount: number
+  /** A challenge has no companion book: the tasks are the whole thing. Which
+   *  of the two tabs a project belongs in, decided in `project.yaml` rather
+   *  than by which list it was typed into. */
+  isChallenge: boolean
+}
+
+/** A task as a project's contents list renders it. */
+export interface ProjectTask {
+  slug: string
+  title: string
+  sortOrder: number
+  points: number
+  isFree: boolean
+}
+
+export interface ProjectFeature {
+  title: string
+  description: string
+  icon: string
+}
+
+/** One project's own page: everything the listing has, plus the pitch and the
+ *  tasks by name. */
+export interface ProjectPage extends Project {
+  headline: string
+  longDescription: string
+  difficulty: string
+  unlockMode: 'open' | 'sequential'
+  relatedBook: string | null
+  features: ProjectFeature[]
+  tasks: ProjectTask[]
+}
+
+/** One task's own page: the brief, and how to get around. */
+export interface TaskPage {
+  slug: string
+  title: string
+  sortOrder: number
+  points: number
+  isFree: boolean
+  html: string
+  position: number
+  total: number
+  project: { slug: string, name: string }
+  previous: { slug: string, title: string } | null
+  next: { slug: string, title: string } | null
+}
+
+/** Where a reader stands on one task, as the progress poll reports it. */
+export interface TaskProgress {
+  slug: string
+  status:
+    | 'challenge_awaits'
+    | 'challenged'
+    | 'challenge_completed'
+    | 'challenge_failed'
+    | 'challenge_abandoned'
+  attempts: number
+  points_earned: number
+  is_locked: boolean
+  is_paid: boolean
+  started_at: string | null
+  completed_at: string | null
+}
+
+/** What one poll returns. */
+export interface ProjectProgress {
+  run: number
+  completed: number
+  total: number
+  points_earned: number
+  tasks: TaskProgress[]
 }
 
 export interface HorizonBook {

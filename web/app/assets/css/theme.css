@@ -83,7 +83,12 @@
     --color-crumb: #c8c8bf;
     --color-locked-bg: #fafaf6;
 
-    /* lesson access pills */
+    /* lesson access pills.
+       lock/free are the reader's pills; teal-wash and amber carry the book
+       page's, which reads free against the site accent and paid against its
+       warm opposite rather than against a second green. */
+    --color-amber: #b07d2a;
+    --color-amber-soft: #f6eedc;
     --color-lock: #a16207;
     --color-lock-bg: #fefce8;
     --color-lock-line: #eab308;
@@ -92,7 +97,6 @@
     --color-free-line: #86efac;
 
     /* signals */
-    --color-wip: oklch(0.63 0.21 330.42);
     --color-live: #16a34a;
     --color-marker: #fef3c7;
     --color-ok: #166534;
@@ -108,6 +112,15 @@
     --color-teal-mid: #2e9c9c;
     --color-teal-bright: #5dd3da;
     --color-teal-wash: #e4f1f1;
+
+    /* annotations — what a reader draws on the prose themselves.
+       Two families because they mean two things: a note is a passage somebody
+       wrote about, a bookmark is the single place they left off. Washes rather
+       than fills, so the words stay the thing being read. */
+    --color-mark-note: #fbf0c4;
+    --color-mark-note-edge: #e6d089;
+    --color-mark-bookmark: #d9efef;
+    --color-mark-bookmark-edge: #8fcccc;
 
     /* terminal — github dark, only inside terminal mock-ups */
     --color-term-void: #0b0f15;
@@ -254,6 +267,28 @@
 
     --color-teal: #4bbec5;
     --color-teal-deep: #7fd6db;
+
+    /* Not the light washes darkened. Both are pill grounds a few points off
+       the panel, so the pill reads as a tint rather than as a lit chip on a
+       dark page — the same reasoning as the mark-* pair below. */
+    --color-teal-wash: #12302f;
+    --color-amber: #d9a441;
+    --color-amber-soft: #2e2413;
+
+    /* Only the foreground half of the bad family, because only the foreground
+       half is used outside prose.css — a refusal message, a delete on hover.
+       `#991b1b` is a dark red for a white page and is barely legible on this
+       one. Its `-bg` and `-line` partners belong to the callouts, which are
+       step 3 with the rest of prose.css. */
+    --color-bad: #f87171;
+
+    /* Not the light washes darkened — a pale yellow on a dark page glares and
+       the text on it stops being readable. These are dim, saturated grounds
+       that the reader's own ink still sits legibly on. */
+    --color-mark-note: #4a3f14;
+    --color-mark-note-edge: #6f5f22;
+    --color-mark-bookmark: #123c3d;
+    --color-mark-bookmark-edge: #1d5f61;
 
     /* shadcn tokens, kept in step with the palette above */
     --background: hsl(30 6% 8%);

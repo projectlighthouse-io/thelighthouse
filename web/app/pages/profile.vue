@@ -7,9 +7,9 @@ useSeo({
   noindex: true,
 })
 
-// The middleware resolved the session before this page rendered, so there is
-// nothing to load here.
-const { user, initials, signOut } = useAuth()
+// The route guard already resolved the session to let this page render, so
+// this reads the state rather than asking again.
+const { reader, initials, signOut } = useReader()
 
 const stats = [
   { label: 'lessons read', value: '—' },
@@ -23,11 +23,10 @@ const stats = [
   <div class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
     <div class="flex items-center gap-5">
       <img
-        v-if="user?.avatar"
-        :src="user.avatar"
+        v-if="reader?.avatar"
+        :src="reader.avatar"
         alt=""
         class="size-16 shrink-0 rounded-full object-cover"
-        referrerpolicy="no-referrer"
       >
       <div
         v-else
@@ -35,13 +34,12 @@ const stats = [
       >
         {{ initials }}
       </div>
-
       <div>
         <h1 class="font-serif text-3xl tracking-tight text-ink">
-          {{ user?.name ?? 'Your profile' }}
+          {{ reader?.name ?? 'Your profile' }}
         </h1>
         <p class="text-mono-body mt-1">
-          {{ user?.email ?? 'no email shared' }} · signed in with {{ user?.provider }}
+          {{ reader ? `${reader.email} · signed in with ${reader.provider}` : 'loading…' }}
         </p>
       </div>
     </div>
@@ -53,7 +51,7 @@ const stats = [
       </div>
     </dl>
 
-    <div class="mt-10 flex items-center gap-6">
+    <div class="mt-10 flex flex-wrap items-center gap-4">
       <NuxtLink
         to="/settings/profile"
         class="btn-chalk text-sm font-medium text-ink"
@@ -63,7 +61,7 @@ const stats = [
 
       <button
         type="button"
-        class="cursor-pointer text-sm text-quiet underline-offset-4 transition hover:text-ink hover:underline"
+        class="cursor-pointer rounded-md border border-stroke bg-panel px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-paper-warm"
         @click="signOut"
       >
         sign out

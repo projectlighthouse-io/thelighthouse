@@ -1,21 +1,38 @@
 <script setup lang="ts">
-import { challenges, projects } from '@/data/Projects'
+import type { ProjectPage } from '@/types/Content'
 
 const route = useRoute()
 const slug = computed<string>(() => String(route.params.slug))
 
-const all = [...projects, ...challenges]
-const project = computed(() => all.find(p => p.slug === slug.value))
-const isChallenge = computed<boolean>(() => challenges.some(c => c.slug === slug.value))
+// From ohara, through the rust api. A project that is not there 404s in the
+// nitro handler, which is where the api's own 404 is translated — see
+// `server/utils/Lighthouse.ts`.
+const { data } = await useAsyncData(
+  () => `project:${slug.value}`,
+  () => $fetch<ProjectPage>(`/_api/projects/${slug.value}`),
+  { watch: [slug] },
+)
+
+const project = computed<ProjectPage | null>(() => data.value ?? null)
 
 if (!project.value) {
   throw createError({ statusCode: 404, statusMessage: 'Project not found', fatal: true })
 }
 
-// task names are not in the static data yet — the api provides them in phase 7
-const taskNumbers = computed<number[]>(() =>
-  Array.from({ length: project.value?.tasksCount ?? 0 }, (_, i) => i + 1),
-)
+// What the reader has done, refreshed while they work in their terminal. Null
+// for a signed-out reader, which is why every use below is guarded rather than
+// defaulted — "no progress" and "no attempts" are different things to draw.
+const { forTask, progress } = useProjectProgress(slug)
+
+const label = computed<string>(() => (project.value?.isChallenge ? 'challenge' : 'project'))
+
+/** Where "start" goes: the first task not already done, or the first of all. */
+const resume = computed<string>(() => {
+  const tasks = project.value?.tasks ?? []
+  const next = tasks.find(t => forTask(t.slug)?.status !== 'challenge_completed')
+
+  return next?.slug ?? tasks[0]?.slug ?? ''
+})
 
 useSeo(() => ({
   title: `${project.value?.name} — projectlighthouse`,
@@ -47,10 +64,15 @@ useJsonLd('project', () => ({
       <div>
         <div class="mb-8 flex flex-wrap items-center gap-2 font-mono text-xs">
           <span class="inline-flex items-center rounded-full border border-stroke px-3 py-1 text-ink">
-            {{ isChallenge ? 'challenge' : 'project' }}
+            {{ label }}
           </span>
           <span class="text-faint">{{ project.tasksCount }} tasks</span>
+          <span v-if="project.difficulty" class="text-faint">· {{ project.difficulty }}</span>
         </div>
+
+        <p v-if="project.headline" class="mb-3 font-mono text-sm text-teal">
+          {{ project.headline }}
+        </p>
 
         <h1
           class="font-editorial text-ink font-semibold text-hero leading-[1.05] tracking-editorial"
@@ -64,30 +86,70 @@ useJsonLd('project', () => ({
 
         <div class="mt-10">
           <NuxtLink
-            :to="`/projects/${project.slug}/tasks/1`"
+            :to="`/projects/${project.slug}/tasks/${resume}`"
             class="inline-block rounded-md bg-ink px-5 py-3 text-base font-medium text-on-ink transition hover:bg-ink-hover"
           >
-            Start the {{ isChallenge ? 'challenge' : 'project' }}
+            {{ progress && progress.completed > 0 ? 'Continue' : `Start the ${label}` }}
           </NuxtLink>
         </div>
 
         <div class="mt-14">
-          <h2 class="mb-6 font-serif text-2xl text-ink">Tasks</h2>
+          <div class="mb-6 flex items-baseline justify-between">
+            <h2 class="font-serif text-2xl text-ink">Tasks</h2>
+            <!-- Only once the poll has answered. A bare "0 / 8" drawn before
+                 the first response reads as "you have done none of this" to a
+                 reader who has finished it. -->
+            <span v-if="progress" class="font-mono text-xs tabular-nums text-faint">
+              {{ progress.completed }} / {{ progress.total }} done
+              <span v-if="progress.points_earned > 0" class="ml-2 text-teal">
+                {{ progress.points_earned }} pts
+              </span>
+            </span>
+          </div>
+
           <ul>
             <li
-              v-for="n in taskNumbers"
-              :key="n"
+              v-for="task in project.tasks"
+              :key="task.slug"
               class="border-b border-dashed border-rule-soft py-4 last:border-b-0"
             >
               <NuxtLink
-                :to="`/projects/${project.slug}/tasks/${n}`"
+                :to="`/projects/${project.slug}/tasks/${task.slug}`"
                 class="flex items-baseline gap-6 px-2 no-underline"
               >
                 <span class="w-10 shrink-0 font-mono text-sm tabular-nums text-numeral">
-                  {{ String(n).padStart(2, '0') }}
+                  {{ String(task.sortOrder).padStart(2, '0') }}
                 </span>
-                <span class="font-editorial text-lg text-ink">Task {{ n }}</span>
+                <span class="font-editorial text-lg text-ink">{{ task.title }}</span>
+
+                <span class="ml-auto shrink-0 font-mono text-xs">
+                  <span
+                    v-if="forTask(task.slug)?.status === 'challenge_completed'"
+                    class="text-teal"
+                  >done</span>
+                  <span
+                    v-else-if="forTask(task.slug)?.status === 'challenge_failed'"
+                    class="text-faint"
+                  >failed</span>
+                  <span
+                    v-else-if="forTask(task.slug)?.is_locked"
+                    class="text-faint"
+                  >locked</span>
+                  <span v-else class="text-faint">{{ task.points }} pts</span>
+                </span>
               </NuxtLink>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="project.features.length" class="mt-14">
+          <h2 class="mb-6 font-serif text-2xl text-ink">What you'll build</h2>
+          <ul class="grid gap-6 sm:grid-cols-2">
+            <li v-for="feature in project.features" :key="feature.title">
+              <div class="font-editorial text-ink">{{ feature.title }}</div>
+              <p v-if="feature.description" class="mt-1 text-sm leading-relaxed text-quiet">
+                {{ feature.description }}
+              </p>
             </li>
           </ul>
         </div>

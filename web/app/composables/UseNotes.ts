@@ -2,14 +2,18 @@
  * A reader's own notes, according to rust.
  *
  * `GET /api/notes` is scoped to the session cookie, so there is no user id to
- * pass and no way to ask for somebody else's. The api decides what comes back;
- * this only decides how to ask.
+ * pass and no way to ask for somebody else's. Pass `book` and `lesson` and it
+ * narrows to one lesson — the reader page's case, where the notes are drawn on
+ * the passages they were taken against; pass neither and it is the whole shelf,
+ * which is what `/notes` wants.
  *
- * **Client-side only**, like `useAuth` and for the same reason: `/notes` is
- * `ssr: false`, so there is no server render to forward a cookie for. When a
- * signed-in page does start rendering on the server it will need
- * `useRequestHeaders(['cookie'])` — see docs/rebuild.md.
+ * **Client-side only**, like `useReader` and for the same reason: `/books/**`
+ * is edge-cached and its html has to be identical for everyone, so a signed-in
+ * reader's notes cannot be part of the server render. They arrive after mount
+ * and the page draws them then.
  */
+
+import { csrfHeader } from '@/composables/UseReader'
 
 export interface Note {
   id: number
@@ -17,8 +21,10 @@ export interface Note {
   noteContent: string | null
   /** ISO-8601, UTC. `null` for rows migrated without a timestamp. */
   createdAt: string | null
-  /** The note's own column — unchanged when a lesson is renamed. */
-  lessonId: number
+  /** A uuid the content repo mints, not a number — see the api's
+   *  `20260828020000_content_owns_its_ids.sql`. Opaque: compared, never
+   *  parsed. */
+  lessonId: string
   /** A slug is unique only within a book, so both are needed to name a lesson. */
   lessonSlug: string
   bookSlug: string
@@ -26,6 +32,10 @@ export interface Note {
   isPublic: boolean
   /** Set when this note is a reply. `null` for a top-level note. */
   parentId: number | null
+  /** Character offsets over the rendered lesson body, when it was taken
+   *  against a passage. `null` on a note written with nothing selected. */
+  startOffset: number | null
+  endOffset: number | null
 }
 
 /** The wire shape, which is snake_case because the columns are. */
@@ -34,11 +44,13 @@ interface NoteResponse {
   selected_text: string | null
   note_content: string | null
   created_at: string | null
-  lesson_id: number
+  lesson_id: string
   lesson_slug: string
   book_slug: string
   is_public: boolean
   parent_id: number | null
+  start_offset: number | null
+  end_offset: number | null
 }
 
 /**
@@ -52,8 +64,17 @@ interface PageResponse<T> {
   total: number
 }
 
-/** How long the search waits after the last keystroke before asking rust. */
-const DEBOUNCE_MS = 250
+/** Which lesson to narrow to, or nothing for all of a reader's notes. */
+export interface NotesScope {
+  book: string
+  lesson: string
+}
+
+/**
+ * A lesson's worth. High enough that a reader page draws every highlight it
+ * has rather than the first page of them, and the api clamps it anyway.
+ */
+const PER_LESSON = 50
 
 /** Shown when the api refused but said nothing a reader can act on. */
 const GENERIC_FAILURE = 'That could not be saved. Please try again.'
@@ -83,13 +104,19 @@ function toNote(note: NoteResponse): Note {
     bookSlug: note.book_slug,
     isPublic: note.is_public,
     parentId: note.parent_id,
+    startOffset: note.start_offset,
+    endOffset: note.end_offset,
   }
 }
 
-export function useNotes() {
+/**
+ * `scope` is read through `toValue` on every call rather than captured once:
+ * the reader page moves between lessons without unmounting — prev and next are
+ * `NuxtLink`s into the same route — so a scope frozen at setup would keep
+ * writing new notes against the lesson the reader arrived on.
+ */
+export function useNotes(scope?: MaybeRefOrGetter<NotesScope | undefined>) {
   const notes = ref<Note[]>([])
-  const page = ref<number>(1)
-  const perPage = ref<number>(20)
   const total = ref<number>(0)
 
   // Distinct from `notes.length === 0`, which cannot tell "no notes" from "not
@@ -97,60 +124,71 @@ export function useNotes() {
   // notes, for as long as the request takes.
   const loaded = ref<boolean>(false)
   const pending = ref<boolean>(false)
-  const failed = ref<boolean>(false)
-
-  const search = ref<string>('')
-
-  const pages = computed<number>(() => Math.max(1, Math.ceil(total.value / perPage.value)))
-
-  /**
-   * The request in flight, so a reply that has been overtaken by a newer one
-   * cannot land on top of it. Typing fast otherwise leaves whichever response
-   * happened to be slowest.
-   */
-  let latest = 0
 
   async function load(): Promise<void> {
     if (import.meta.server) return
 
-    const ticket = ++latest
     pending.value = true
-    failed.value = false
 
     try {
       const response = await $fetch<PageResponse<NoteResponse>>('/api/notes', {
-        query: { page: page.value, q: search.value || undefined },
+        query: { per_page: PER_LESSON, ...toValue(scope) },
       })
 
-      if (ticket !== latest) return
-
       notes.value = response.items.map(toNote)
-      perPage.value = response.per_page
       total.value = response.total
-      // The api clamps, so this is what the page actually is rather than what
-      // was asked for.
-      page.value = response.page
     }
     catch {
-      if (ticket !== latest) return
-
-      // Including a 401: the auth middleware is what sends a signed-out reader
-      // to /login, and duplicating that here would race it.
+      // Including a 401: a signed-out reader has no notes to draw, and the
+      // page is perfectly readable without them.
       notes.value = []
       total.value = 0
-      failed.value = true
     }
     finally {
-      if (ticket === latest) {
-        pending.value = false
-        loaded.value = true
-      }
+      pending.value = false
+      loaded.value = true
     }
   }
 
-  function goTo(next: number): void {
-    page.value = Math.min(Math.max(1, next), pages.value)
-    void load()
+  /**
+   * Saves a note against a passage, or against the lesson when `anchor` is
+   * absent.
+   *
+   * Returns the api's message on refusal and `null` on success — a thrown
+   * error is not a useful thing to hand a template. The saved note is pushed
+   * from the api's answer, so what the page draws is the row as stored.
+   */
+  async function create(
+    content: string,
+    anchor?: { text: string, start: number, end: number },
+    isPublic = true,
+  ): Promise<string | null> {
+    const here = toValue(scope)
+    if (!here) return GENERIC_FAILURE
+
+    try {
+      const saved = await $fetch<NoteResponse>('/api/notes', {
+        method: 'POST',
+        headers: csrfHeader(),
+        body: {
+          book: here.book,
+          lesson: here.lesson,
+          note_content: content,
+          selected_text: anchor?.text ?? null,
+          start_offset: anchor?.start ?? null,
+          end_offset: anchor?.end ?? null,
+          is_public: isPublic,
+        },
+      })
+
+      notes.value.push(toNote(saved))
+      total.value += 1
+
+      return null
+    }
+    catch (error) {
+      return problem(error)
+    }
   }
 
   /**
@@ -159,9 +197,6 @@ export function useNotes() {
    * The api answers with the row as stored, so what lands in the list is what
    * the database holds rather than what was typed — a note the api trimmed or
    * refused does not sit on screen looking saved.
-   *
-   * Returns the api's message on refusal, or `null` on success. A thrown error
-   * is not a useful thing to hand a template.
    */
   async function edit(id: number, content: string): Promise<string | null> {
     try {
@@ -181,22 +216,16 @@ export function useNotes() {
     }
   }
 
-  /**
-   * Deletes one note, and reloads rather than splicing.
-   *
-   * Splicing would leave the page one row short and `total` a row high until
-   * something else refetched, and on the last page it would leave an empty
-   * page the reader is still standing on. A reload costs one request and is
-   * always right.
-   */
+  /** Deletes one note, and drops it from the list the page is drawing. */
   async function remove(id: number): Promise<string | null> {
     try {
-      await $fetch(`/api/notes/${id}`, { method: 'DELETE', headers: csrfHeader() })
+      await $fetch(`/api/notes/${id}`, {
+        method: 'DELETE',
+        headers: csrfHeader(),
+      })
 
-      // Step back if that was the only row on this page.
-      if (notes.value.length === 1 && page.value > 1) page.value -= 1
-
-      await load()
+      notes.value = notes.value.filter(note => note.id !== id)
+      total.value = Math.max(0, total.value - 1)
 
       return null
     }
@@ -205,36 +234,5 @@ export function useNotes() {
     }
   }
 
-  let timer: ReturnType<typeof setTimeout> | null = null
-
-  // A request per keystroke is a request per keystroke. Debounced, and back to
-  // page one — page three of the old results is not page three of the new ones.
-  watch(search, () => {
-    if (timer) clearTimeout(timer)
-
-    timer = setTimeout(() => {
-      page.value = 1
-      void load()
-    }, DEBOUNCE_MS)
-  })
-
-  onScopeDispose(() => {
-    if (timer) clearTimeout(timer)
-  })
-
-  return {
-    notes,
-    page,
-    perPage,
-    total,
-    pages,
-    loaded,
-    pending,
-    failed,
-    search,
-    load,
-    goTo,
-    edit,
-    remove,
-  }
+  return { notes, total, loaded, pending, load, create, edit, remove }
 }

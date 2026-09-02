@@ -1,8 +1,12 @@
-import { books } from '@/data/Books'
+import type {
+  ApiBookDetail,
+  ApiBookSummary,
+  ApiProjectPage,
+  ApiProjectSummary,
+} from '#server/utils/Lighthouse'
 import { posts } from '@/data/Blog'
-import { curriculum } from '@/data/Curriculum'
-import { challenges, projects } from '@/data/Projects'
 import { languages } from '@/data/Syntax'
+import { fromApi } from '#server/utils/Lighthouse'
 
 const SITE = 'https://projectlighthouse.io'
 
@@ -14,11 +18,15 @@ interface Entry {
 }
 
 /**
- * Built from the same data the pages render from, so a book that exists on the
- * site cannot be missing here. Private routes are absent by construction —
+ * Built from the same source the pages render from, so a book or a project
+ * that exists on the site cannot be missing here. Private routes are absent by construction —
  * nothing in these lists is behind auth.
+ *
+ * Books come from the api rather than a static list, which is also why this
+ * route is not prerendered: content changes on SIGHUP without a build, and a
+ * sitemap baked at build time would advertise the previous set of lessons.
  */
-function entries(): Entry[] {
+async function entries(): Promise<Entry[]> {
   const out: Entry[] = [
     { path: '/', priority: 1.0, changefreq: 'weekly' },
     { path: '/books', priority: 0.9, changefreq: 'weekly' },
@@ -34,17 +42,41 @@ function entries(): Entry[] {
     { path: '/privacy', priority: 0.2, changefreq: 'yearly' },
   ]
 
-  for (const book of books) {
-    out.push({ path: `/books/${book.slug}`, priority: 0.9, changefreq: 'weekly' })
-    for (const lesson of curriculum[book.slug]?.lessons ?? []) {
-      // locked lessons still get indexed — the free portion is real content and
-      // the paywall is declared in the page's structured data
-      out.push({ path: `/books/${book.slug}/pages/${lesson.slug}`, priority: 0.7, changefreq: 'monthly' })
+  const books = await fromApi<ApiBookSummary[]>('/api/books')
+
+  for (const summary of books) {
+    out.push({ path: `/books/${summary.slug}`, priority: 0.9, changefreq: 'weekly' })
+
+    const book = await fromApi<ApiBookDetail>(`/api/books/${summary.slug}`)
+
+    for (const chapter of book.chapters) {
+      for (const lesson of chapter.lessons) {
+        // Paywalled lessons still get indexed — the free portion is real
+        // content, and the page declares the gap in its structured data.
+        out.push({ path: `/books/${summary.slug}/pages/${lesson.slug}`, priority: 0.7, changefreq: 'monthly' })
+      }
     }
   }
 
-  for (const project of [...projects, ...challenges]) {
-    out.push({ path: `/projects/${project.slug}`, priority: 0.8, changefreq: 'monthly' })
+  // Projects come from the api for the same reason books do: they change on
+  // SIGHUP without a build, and a list typed in here goes stale the first time
+  // one is published without somebody remembering this file.
+  const projects = await fromApi<ApiProjectSummary[]>('/api/projects')
+
+  for (const summary of projects) {
+    out.push({ path: `/projects/${summary.slug}`, priority: 0.8, changefreq: 'monthly' })
+
+    const project = await fromApi<ApiProjectPage>(`/api/projects/${summary.slug}`)
+
+    for (const task of project.tasks) {
+      // The brief is real content and worth indexing. What is sold is the
+      // validation and the hints, and neither is on the page.
+      out.push({
+        path: `/projects/${summary.slug}/tasks/${task.slug}`,
+        priority: 0.6,
+        changefreq: 'monthly',
+      })
+    }
   }
 
   for (const post of posts) {
@@ -58,10 +90,10 @@ function entries(): Entry[] {
   return out
 }
 
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
   setHeader(event, 'content-type', 'application/xml; charset=utf-8')
 
-  const urls = entries()
+  const urls = (await entries())
     .map(e => [
       '  <url>',
       `    <loc>${SITE}${e.path}</loc>`,

@@ -1,0 +1,84 @@
+/* The title block at the top of a page.
+ *
+ * It began as the reader's lesson title — its size, leading and dek — and has
+ * since taken a display face of its own, so a book's title and a lesson's no
+ * longer match. That is deliberate: a lesson title sits above prose in the same
+ * family, while a book title sits above a list of chapter headings and has to
+ * be a different thing from them. What this is *not* is a second copy of
+ * `reader.css`: that
+ * file is one system scoped under `.reader-shell`, deliberately not imported
+ * globally, and pulling it in for a heading would ship ~20kb to every route to
+ * borrow three rules.
+ *
+ * The colours come from the `--color-read-*` tokens rather than the
+ * `--reader-*` aliases, because those aliases are declared on `.reader-shell`
+ * and do not exist outside it — using them here would silently fall back to
+ * nothing. The tokens themselves are on `:root` and invert with the theme.
+ */
+
+.masthead-title {
+    /* Cormorant Garamond at 300, not a text face scaled up. The line is set
+     * large enough that stroke contrast is the whole effect, and a light
+     * Garamond at 62px has the thin hairlines to carry it — the same weight
+     * that would be unreadable at body size.
+     *
+     * The face below it changed too: the dek is now Newsreader rather than the
+     * site's Lora, so the title stands apart from the two serifs under it
+     * (the dek and the chapter headings) instead of being a bigger cut of one.
+     *
+     * Spelled out rather than tokenised: there is one masthead, and a
+     * `--font-display` token with a single user is a token invented for the
+     * next user rather than this one. */
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 300;
+    font-size: 62px;
+    line-height: 1.04;
+    letter-spacing: -0.015em;
+    margin: 0;
+    color: var(--color-read-ink);
+}
+
+.masthead-dek {
+    font-family: 'Newsreader', Georgia, serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-size: 16.5px;
+    line-height: 1.62;
+    color: var(--color-read-ink-soft);
+    margin-top: 16px;
+    max-width: 36em;
+}
+
+.masthead-dek em {
+    font-style: italic;
+}
+
+/* A kicker above the title: mono, teal, lowercase, with the slash the reader
+ * puts before its lesson number. Defined here and used where a page has
+ * something to put in it that is not already on screen.
+ */
+.masthead-eyebrow {
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: var(--color-teal-mid);
+    text-transform: lowercase;
+}
+
+.masthead-eyebrow::before {
+    content: '/ ';
+    color: var(--color-teal-mid);
+}
+
+/* The same step down the reader takes. A 62px display line is two or three
+ * words per line on a phone.
+ */
+@media (max-width: 820px) {
+    .masthead-title {
+        font-size: 44px;
+    }
+
+    .masthead-dek {
+        font-size: 15.5px;
+    }
+}

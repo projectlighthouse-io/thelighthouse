@@ -51,14 +51,20 @@
 }
 
 /* ---------- sticky sub-bar ---------- */
+/* The breadcrumb sits on the page, not on a bar of its own.
+ *
+ * It used to be a sticky strip: translucent white, blurred, with a rule under
+ * it. All three went together — the background and blur existed *because* it
+ * was sticky and prose scrolled beneath it, and the rule was what separated
+ * that strip from the page. Take the background away and keep the sticking and
+ * you get breadcrumb text sitting over moving paragraphs, which is not a
+ * lighter version of the design but a broken one.
+ *
+ * So it scrolls with the page now. Nothing is lost: the table of contents is
+ * still sticky, and the article carries its own previous/next links.
+ */
 .reader-subbar {
-    position: sticky;
-    top: 0;
     z-index: 30;
-    background: rgba(255, 255, 255, 0.86);
-    backdrop-filter: saturate(1.2) blur(8px);
-    -webkit-backdrop-filter: saturate(1.2) blur(8px);
-    border-bottom: 1px solid var(--reader-line-2);
 }
 
 .reader-subbar__inner {
@@ -112,7 +118,8 @@
 /* ---------- reader grid ---------- */
 .reader-layout {
     display: grid;
-    grid-template-columns: 232px minmax(0, 700px) 184px;
+    /* 796 = the 700px measure plus `.reader-article`'s 48px sides. */
+    grid-template-columns: 232px minmax(0, 796px) 184px;
     gap: 72px;
     justify-content: center;
     max-width: 1280px;
@@ -121,9 +128,23 @@
     align-items: start;
 }
 
+/* A reader with no third column.
+ *
+ * The grid above is shared with the syntax pages, which still fill their aside,
+ * so the column count is a modifier rather than a change to `.reader-layout` —
+ * dropping the 184px track there would leave those pages with their aside
+ * stacked underneath.
+ *
+ * Only the base width needs saying: below 1120px the layout is already two
+ * columns and the aside is already hidden.
+ */
+.reader-layout--no-aside {
+    grid-template-columns: 232px minmax(0, 796px);
+}
+
 @media (max-width: 1120px) {
     .reader-layout {
-        grid-template-columns: 200px minmax(0, 680px);
+        grid-template-columns: 200px minmax(0, 776px);
         gap: 56px;
     }
 
@@ -143,6 +164,10 @@
         display: none;
     }
 
+    .reader-article {
+        padding: 32px 24px 40px;
+    }
+
     .reader-article h1 {
         font-size: 40px !important;
     }
@@ -152,6 +177,59 @@
     }
 
     .reader-prose {
+        font-size: 17px !important;
+    }
+
+    /* The breadcrumb kept the desktop 40px inset at every width, which on a
+     * phone spends a fifth of the screen on margin. Match the page padding. */
+    .reader-subbar__inner {
+        padding: 12px 20px;
+        gap: 8px;
+    }
+
+    /* A lesson title is a sentence, and there is no room for it beside the
+     * book's. Truncate rather than wrap: a breadcrumb that grows to three
+     * lines stops being a breadcrumb. `min-width: 0` is what lets a flex item
+     * shrink below its content — without it `text-overflow` never fires. */
+    .reader-subbar__cur {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .reader-subbar__book {
+        flex: none;
+    }
+}
+
+/* Phones — tailwind's `sm`, so this lines up with the `sm:` utilities the
+ * templates use rather than being a width only this file knows about.
+ *
+ * The lesson title goes entirely: at this size the book's name and the reading
+ * time are the two things worth the row, and the lesson's own title is the h1
+ * immediately below it.
+ */
+@media (max-width: 639px) {
+    .reader-subbar__cur,
+    .reader-subbar__sep {
+        display: none;
+    }
+
+    .reader-layout {
+        padding: 28px 14px 80px;
+    }
+
+    .reader-article {
+        padding: 28px 18px 36px;
+        border-radius: 10px;
+    }
+
+    .reader-article h1 {
+        font-size: 32px !important;
+    }
+
+    .reader-article .reader-dek {
         font-size: 17px !important;
     }
 }
@@ -234,8 +312,23 @@
 }
 
 /* ---------- center: article ---------- */
+/* The prose sits on its own white page.
+ *
+ * `body` paints a dotted notebook pattern behind the whole site, and the rule
+ * there is that anything carrying content lays its own background over it —
+ * dots running behind body text is the one place that texture stops being
+ * charming. The token rather than `#fff`, so this inverts with the theme
+ * instead of staying a white slab in a dark room.
+ *
+ * The column is widened by exactly this padding in `.reader-layout`, so the
+ * measure the text is set to is unchanged — the white extends past the line
+ * length rather than shortening it.
+ */
 .reader-article {
     min-width: 0;
+    background: var(--reader-bg);
+    padding: 56px 48px 64px;
+    border-radius: 12px;
 }
 
 .reader-article .reader-eyebrow {
@@ -544,16 +637,7 @@
     margin: 0;
 }
 
-/* on narrow screens, soft-wrap code so long single-line snippets don't force
-   horizontal scroll. preserves formatting via pre-wrap (whitespace kept). */
-@media (max-width: 880px) {
-    .reader-prose pre,
-    .reader-prose pre code {
-        white-space: pre-wrap;
-        word-break: break-word;
-        overflow-wrap: anywhere;
-    }
-}
+
 
 /* lists — restore bullets/numbers killed by the rest of the cascade */
 .reader-prose ul,
@@ -1002,4 +1086,524 @@
 .reader-iconbtn svg {
     width: 14px;
     height: 14px;
+}
+
+/* ---------- annotations: highlights, the selection menu, the note dialog ----------
+ *
+ * The marks are painted into the lesson body by `app/utils/Anchor.ts`, one
+ * <mark> per text node a passage spans, so a highlight crossing two paragraphs
+ * is two elements that read as one. That is why the rules below never assume a
+ * mark is a whole passage: no rounded ends, no padding that would show as a gap
+ * at every block boundary.
+ *
+ * Deliberately *not* scoped under .reader-shell like everything above it. The
+ * menu and the dialog are fixed-position and the page mounts them at its root,
+ * outside the shell, so a descendant selector would miss them. */
+.reader-mark-note {
+    background: var(--color-mark-note);
+    box-shadow: inset 0 -1px 0 var(--color-mark-note-edge);
+    color: inherit;
+    cursor: pointer;
+}
+
+.reader-mark-bookmark {
+    background: var(--color-mark-bookmark);
+    box-shadow: inset 0 -1px 0 var(--color-mark-bookmark-edge);
+    color: inherit;
+    cursor: pointer;
+}
+
+/* A passage carrying both. The note wins the ground and the bookmark keeps its
+   underline, so neither disappears under the other. */
+.reader-mark-note.reader-mark-bookmark {
+    box-shadow: inset 0 -2px 0 var(--color-mark-bookmark-edge);
+}
+
+.reader-selectmenu {
+    position: fixed;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    background: var(--color-panel);
+    border: 1px solid var(--color-rule);
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgb(0 0 0 / 12%);
+    overflow: hidden;
+}
+
+.reader-selectmenu__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 13px;
+    border: none;
+    background: none;
+    font-family: var(--reader-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px;
+    white-space: nowrap;
+    color: var(--color-ink);
+    cursor: pointer;
+    transition: background 120ms;
+}
+
+.reader-selectmenu__item:hover {
+    background: var(--color-paper-warm);
+}
+
+.reader-selectmenu__item svg {
+    width: 14px;
+    height: 14px;
+}
+
+.reader-selectmenu__sep {
+    width: 1px;
+    align-self: stretch;
+    background: var(--color-rule);
+}
+
+.reader-notedialog {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.reader-notedialog__veil {
+    position: absolute;
+    inset: 0;
+    background: rgb(0 0 0 / 35%);
+}
+
+.reader-notedialog__card {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    padding: 24px;
+    border-radius: 14px;
+    box-shadow: 0 18px 50px rgb(0 0 0 / 22%);
+}
+
+.reader-notedialog__passage {
+    margin: 12px 0 16px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--color-mark-note-edge);
+    background: var(--color-paper-warm);
+    font-family: var(--reader-serif, 'Newsreader', Georgia, serif);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--color-mono-ink);
+}
+
+.reader-notedialog__field {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-rule);
+    border-radius: 8px;
+    background: var(--color-paper);
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--color-ink);
+    resize: vertical;
+}
+
+.reader-notedialog__field:focus {
+    outline: none;
+    border-color: var(--color-stroke);
+}
+
+.reader-notedialog__error {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--color-bad);
+}
+
+.reader-notepop {
+    position: fixed;
+    z-index: 70;
+    width: 280px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
+}
+
+.reader-notepop__body {
+    margin: 0;
+    font-family: var(--reader-serif, 'Newsreader', Georgia, serif);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--color-ink);
+    white-space: pre-wrap;
+}
+
+.reader-notepop__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-rule);
+}
+
+.reader-notepop__action {
+    border: none;
+    background: none;
+    padding: 0;
+    font-family: var(--reader-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    color: var(--color-quiet);
+    cursor: pointer;
+    transition: color 120ms;
+}
+
+.reader-notepop__action:hover {
+    color: var(--color-ink);
+}
+
+.reader-notepop__action:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* ---------- notes & highlights: the thread under a lesson ----------
+ *
+ * Ported from the laravel reader's `CommentsThread` and `NoteComment` so the
+ * two sites read the same. Sits inside `.reader-article`, which already holds
+ * the column width, so this carries the rhythm and the type and not a second
+ * max-width fighting the first. */
+/* No rule above the heading — the space does the separating. The prev/next
+   buttons sit directly above, and a line between them and this heading reads
+   as their underline rather than as the top of this section. */
+.reader-comments {
+    margin-top: 64px;
+    font-family: var(--reader-sans);
+    color: var(--reader-ink);
+}
+
+.reader-comments__title {
+    margin: 0 0 24px;
+    font-family: var(--reader-serif);
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--reader-ink);
+}
+
+.reader-comments__compose {
+    margin-bottom: 32px;
+    padding: 14px;
+    border: 1px solid var(--reader-line);
+    border-radius: 10px;
+    background: var(--reader-bg);
+}
+
+.reader-comments__signin {
+    margin-bottom: 32px;
+    padding: 18px 16px;
+    border: 1px solid var(--reader-line);
+    border-radius: 10px;
+    background: var(--reader-bg-2);
+    font-family: var(--reader-mono);
+    font-size: 13px;
+    color: var(--reader-mute);
+    text-align: center;
+}
+
+.reader-comments__signin-link {
+    margin-right: 4px;
+    padding: 0 0 1px;
+    border: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-teal-d) 40%, transparent);
+    background: none;
+    font: inherit;
+    color: var(--reader-teal-d);
+    cursor: pointer;
+    transition: border-color 120ms;
+}
+
+.reader-comments__signin-link:hover {
+    border-bottom-color: var(--reader-teal-d);
+}
+
+.reader-comments__textarea {
+    width: 100%;
+    border: none;
+    background: transparent;
+    outline: none;
+    resize: none;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--reader-ink);
+}
+
+.reader-comments__textarea::placeholder {
+    color: var(--reader-faint);
+}
+
+.reader-comments__compose-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+
+.reader-comments__counter {
+    font-family: var(--reader-mono);
+    font-size: 11px;
+    color: var(--reader-faint);
+}
+
+.reader-comments__submit {
+    padding: 7px 16px;
+    border: 1px solid var(--reader-ink);
+    border-radius: 6px;
+    background: var(--reader-ink);
+    font-family: var(--reader-mono);
+    font-size: 12px;
+    /* The page's own paper, so this inverts with the theme instead of being
+       white text on a light slab in dark mode. */
+    color: var(--reader-bg);
+    cursor: pointer;
+    transition: opacity 140ms;
+}
+
+.reader-comments__submit:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.reader-comments__submit:not(:disabled):hover {
+    opacity: 0.85;
+}
+
+.reader-comments__error {
+    margin-top: 8px;
+    font-family: var(--reader-mono);
+    font-size: 12px;
+    color: var(--color-bad);
+}
+
+.reader-comments__loading,
+.reader-comments__empty {
+    padding: 24px 0;
+    font-family: var(--reader-mono);
+    font-size: 12px;
+    color: var(--reader-mute);
+    text-align: center;
+}
+
+.reader-comments__list > * + * {
+    margin-top: 24px;
+}
+
+/* ---------- one note in the thread ---------- */
+.note-comment {
+    display: flex;
+    gap: 12px;
+}
+
+.note-comment__avatar {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: var(--reader-bg-2);
+}
+
+.note-comment__avatar--initials {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--reader-mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--reader-mute);
+}
+
+.note-comment__main {
+    flex: 1;
+    min-width: 0;
+}
+
+.note-comment__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.note-comment__who {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--reader-ink);
+}
+
+.note-comment__lock {
+    width: 13px;
+    height: 13px;
+    color: var(--reader-faint);
+}
+
+.note-comment__dot,
+.note-comment__when {
+    font-size: 12px;
+    color: var(--reader-faint);
+}
+
+/* Revealed on hover, so a thread at rest is the notes and not the chrome.
+   Always visible on touch, where there is no hover to reveal them with. */
+.note-comment__acts {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+@media (hover: hover) {
+    .note-comment__acts {
+        opacity: 0;
+        transition: opacity 140ms;
+    }
+
+    .note-comment:hover .note-comment__acts,
+    .note-comment:focus-within .note-comment__acts {
+        opacity: 1;
+    }
+}
+
+.note-comment__act {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--reader-faint);
+    cursor: pointer;
+    transition: color 120ms, background 120ms;
+}
+
+.note-comment__act svg {
+    width: 15px;
+    height: 15px;
+}
+
+.note-comment__act:hover {
+    background: var(--reader-bg-2);
+    color: var(--reader-ink-2);
+}
+
+.note-comment__act--danger:hover {
+    color: var(--color-bad);
+}
+
+.note-comment__act:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.note-comment__body {
+    margin: 0 0 8px;
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--reader-ink);
+    white-space: pre-wrap;
+}
+
+/* A button because it scrolls to the highlight, styled as the quotation it
+   is — anything that moves the page has to be reachable from the keyboard. */
+.note-comment__quote {
+    display: block;
+    width: 100%;
+    padding: 0 0 0 12px;
+    border: none;
+    border-left: 2px solid var(--reader-line);
+    background: none;
+    font-family: var(--reader-serif);
+    font-size: 14px;
+    font-style: italic;
+    line-height: 1.6;
+    text-align: left;
+    color: var(--reader-mute);
+    cursor: pointer;
+    transition: border-color 120ms, color 120ms;
+}
+
+.note-comment__quote:hover {
+    border-left-color: var(--color-mark-note-edge);
+    color: var(--reader-ink-2);
+}
+
+.note-comment__field {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--reader-line);
+    border-radius: 8px;
+    background: var(--reader-bg);
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--reader-ink);
+    resize: none;
+}
+
+.note-comment__field:focus {
+    outline: none;
+    border-color: var(--reader-mute);
+}
+
+.note-comment__editrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+}
+
+.note-comment__editacts {
+    display: flex;
+    gap: 8px;
+}
+
+.note-comment__cancel,
+.note-comment__save {
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: opacity 120ms;
+}
+
+.note-comment__cancel {
+    border: none;
+    background: none;
+    color: var(--reader-mute);
+}
+
+.note-comment__cancel:hover {
+    color: var(--reader-ink);
+}
+
+.note-comment__save {
+    border: 1px solid var(--reader-line);
+    background: var(--reader-bg);
+    font-weight: 500;
+    color: var(--reader-ink);
+}
+
+.note-comment__save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+    .note-comment__avatar {
+        width: 32px;
+        height: 32px;
+    }
 }

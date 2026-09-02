@@ -1,21 +1,67 @@
 <script setup lang="ts">
-import type { Chapter, LessonSummary } from '@/types/Content'
-import { books } from '@/data/Books'
-import { curriculum } from '@/data/Curriculum'
+import type { Book, Chapter, LessonSummary } from '@/types/Content'
+
+interface BookDetailResponse {
+  book: Book
+  chapters: Chapter[]
+  lessons: LessonSummary[]
+}
 
 const route = useRoute()
 const slug = computed<string>(() => String(route.params.slug))
 
-const book = computed(() => books.find(b => b.slug === slug.value))
-const plan = computed(() => curriculum[slug.value])
+// From ohara, through the rust api. During SSR this calls the handler directly,
+// so it costs no HTTP round trip.
+const { data, error } = await useAsyncData(
+  () => `book:${slug.value}`,
+  () => $fetch<BookDetailResponse>(`/_api/books/${slug.value}`),
+  { watch: [slug] },
+)
 
-// an unknown slug is a real 404, not an empty page
-if (!book.value) {
+/**
+ * Why the failure is read before the absence.
+ *
+ * `useAsyncData` does not throw — a request that failed leaves `data` null and
+ * puts the reason in `error`. Checking only `data` therefore reports an api
+ * that is down, a 500, or a timeout as "book not found", which sends
+ * whoever reads it looking for missing content that is not missing.
+ *
+ * A rejection with no status is nitro never reaching the api at all, and 502 is
+ * what that is: this process is the gateway, and its upstream did not answer.
+ */
+if (error.value) {
+  const status = error.value.statusCode ?? 502
+  const missing = status === 404
+
+  throw createError({
+    statusCode: status,
+    statusMessage: missing ? 'Book not found' : 'The api is not answering',
+    // Copy for this page's two failures, read by `error.vue` when it is
+    // there. A 404 here is a book that is not on the shelf, which is a
+    // different sentence from a route that does not exist, and a 5xx is the
+    // catalogue being down — worth saying, because it is worth retrying.
+    data: missing
+      ? {
+          headline: 'not on this shelf',
+          detail: `There is no book at /books/${slug.value}. It may have been renamed, or never made it out of drafts.`,
+        }
+      : {
+          headline: 'the catalogue is down',
+          detail: 'The site is up; the service that knows what is in the books is not answering. Nothing is lost — it is worth trying again.',
+          retry: true,
+        },
+    fatal: true,
+  })
+}
+
+// Past the error check, so this is a genuinely empty answer.
+if (!data.value) {
   throw createError({ statusCode: 404, statusMessage: 'Book not found', fatal: true })
 }
 
-const lessons = computed<LessonSummary[]>(() => plan.value?.lessons ?? [])
-const chapters = computed<Chapter[]>(() => plan.value?.chapters ?? [])
+const book = computed(() => data.value?.book)
+const lessons = computed<LessonSummary[]>(() => data.value?.lessons ?? [])
+const chapters = computed<Chapter[]>(() => data.value?.chapters ?? [])
 
 const lessonsFor = (chapter: Chapter): LessonSummary[] =>
   lessons.value.filter(l => l.chapterId === chapter.id)
@@ -24,9 +70,36 @@ const lessonsFor = (chapter: Chapter): LessonSummary[] =>
 const numberOf = (lesson: LessonSummary): string =>
   String(lessons.value.indexOf(lesson) + 1).padStart(2, '0')
 
-const firstLesson = computed<LessonSummary | undefined>(() => lessons.value[0])
-const hasLocked = computed<boolean>(() => lessons.value.some(l => l.locked))
-const estHours = computed<string>(() => `~${Math.max(1, Math.round(lessons.value.length * 0.4))} hours`)
+/**
+ * Where "start reading" goes.
+ *
+ * The api's own `first_lesson` rather than `lessons[0]`, because the two are
+ * answers to different questions: one is the first *published* lesson, the
+ * other is whatever survived into this response. They agree today. The
+ * fallback covers the older listing shape, which does not send the field, and
+ * null means a book with nothing published — a page with no button, not a
+ * button pointing at `/books/x/pages/undefined`.
+ */
+const firstLesson = computed<string | null>(
+  () => book.value?.firstLesson ?? lessons.value[0]?.slug ?? null,
+)
+
+/** A book whose lessons are all still drafts. Renders a note, not a blank. */
+const isEmpty = computed<boolean>(() => lessons.value.length === 0)
+
+/**
+ * What the slideshow shows.
+ *
+ * `images` is the book's own list and the thumbnail is the fallback, so a book
+ * whose yaml has no `images:` yet still shows its cover rather than a gap. A
+ * book with neither shows nothing at all — the component renders no frame.
+ */
+const covers = computed<string[]>(() => {
+  const listed = book.value?.images ?? []
+  if (listed.length) return listed
+
+  return book.value?.thumbnailUrl ? [book.value.thumbnailUrl] : []
+})
 
 useSeo(() => ({
   title: `${book.value?.title} — projectlighthouse`,
@@ -58,148 +131,232 @@ useJsonLd('crumbs', () => ({
 </script>
 
 <template>
-  <div v-if="book" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-    <nav class="pt-10 pb-8 font-mono text-sm text-faint">
-      <NuxtLink to="/books" class="hover:text-ink">books</NuxtLink>
-      <span class="mx-3 text-crumb">/</span>
-      <span class="text-quiet">{{ book.title.toLowerCase() }}</span>
-    </nav>
+  <div v-if="book" class="book mx-auto max-w-[1040px] bg-panel">
+    <!-- `bg-panel`, not `bg-white`: the token is #ffffff in light and the dark
+         panel in dark, so this slab inverts with the theme rather than staying
+         a sheet of white on a dark page.
 
-    <section class="grid gap-12 pb-16 lg:grid-cols-[1fr_420px] lg:items-start">
-      <div>
-        <div class="mb-10 flex flex-wrap items-center gap-2 font-mono text-xs">
-          <span class="inline-flex items-center rounded-md px-2.5 py-1 text-ink">
-            {{ lessons.length }} lessons
-          </span>
-          <span
-            class="inline-flex items-center rounded-full border border-stroke bg-panel px-3 py-1 text-ink"
-          >
-            {{ estHours }}
-          </span>
+         The breadcrumb that used to sit above the title is gone. `/books` is
+         one click away in the nav on every viewport, and the trail was a mono
+         line of chrome above a display face that has to be the first thing
+         read. The BreadcrumbList in the script stays: search results still
+         want the trail, and that markup is what they read, not this. -->
+    <header class="px-10 pt-11 max-[820px]:px-6 max-[820px]:pt-10">
+      <!-- One column until 1080px, then the images take a fixed 232px beside
+           the title. Fixed rather than fractional so the measure of the dek is
+           set by the dek, not by how wide the window happens to be. -->
+      <div
+        class="grid grid-cols-1 items-start gap-14"
+        :class="covers.length ? 'min-[1081px]:grid-cols-[minmax(0,1fr)_232px]' : ''"
+      >
+        <div>
+          <h1 class="masthead-title">
+            {{ book.title }}
+          </h1>
+
+          <p class="masthead-dek">
+            {{ book.description }}
+          </p>
+
+          <div v-if="firstLesson" class="mt-6">
+            <NuxtLink
+              :to="`/books/${book.slug}/pages/${firstLesson}`"
+              class="start"
+            >
+              Start reading
+              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path
+                  d="M3 8h9M8.5 4l4 4-4 4"
+                  stroke="currentColor"
+                  stroke-width="1.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </NuxtLink>
+          </div>
         </div>
 
-        <h1
-          class="font-editorial text-ink font-semibold text-hero-lg leading-none tracking-editorial"
+        <!-- The book's own images, not its thumbnail: `images` is what it has to
+             show, and falls back to the one image every book has. -->
+        <BookCoverSlideshow :images="covers" :title="book.title" />
+      </div>
+    </header>
+
+    <!-- 720px, and left under the title rather than centred. The rows are a
+         numbered list read top to bottom, so their left edge lines up with the
+         masthead's; centring them would set the whole page adrift of the one
+         vertical the title establishes. -->
+    <main class="mt-[34px] max-w-[720px] px-10 pb-[90px] max-[820px]:px-6">
+      <!-- A published book whose lessons are all still drafts. The api sends
+           no chapters for one, so without this the page ends at the hero and
+           reads as broken rather than as early. -->
+      <p v-if="isEmpty" class="empty">
+        No lessons published yet — this one is still being written. The
+        <NuxtLink to="/roadmap">roadmap</NuxtLink> says what lands next.
+      </p>
+
+      <!-- No `v-if` on the rows: the api builds a chapter only from the
+           lessons it has, so a chapter that reaches here always has some. -->
+      <section v-for="chapter in chapters" v-else :key="chapter.id" class="part">
+        <h2 class="part-title">
+          {{ chapter.title }}
+        </h2>
+
+        <NuxtLink
+          v-for="lesson in lessonsFor(chapter)"
+          :key="lesson.slug"
+          :to="`/books/${book.slug}/pages/${lesson.slug}`"
+          class="ch"
         >
-          {{ book.title }}
-        </h1>
-
-        <p class="mt-8 max-w-xl text-base leading-relaxed text-ink sm:text-lg">
-          {{ book.description }}
-        </p>
-
-        <div class="mt-10 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4">
-          <NuxtLink
-            v-if="firstLesson"
-            :to="`/books/${book.slug}/pages/${firstLesson.slug}`"
-            class="rounded-md bg-ink px-5 py-3 text-center text-base font-medium text-on-ink transition hover:bg-ink-hover sm:w-auto"
-          >
-            Start reading
-          </NuxtLink>
-          <NuxtLink
-            v-if="hasLocked"
-            to="/pricing"
-            class="rounded-md border border-stroke bg-panel px-5 py-3 text-center text-base font-medium text-ink transition hover:bg-paper-warm sm:w-auto"
-          >
-            Unlock the whole book
-          </NuxtLink>
-        </div>
-      </div>
-
-      <div class="hidden flex-col items-center gap-3 lg:flex">
-        <div class="relative aspect-[16/10] w-full overflow-hidden rounded-xl">
-          <img
-            :src="book.thumbnailUrl"
-            :alt="book.title"
-            class="absolute inset-0 h-full w-full rounded-xl object-contain"
-          >
-        </div>
-      </div>
-    </section>
-
-    <section class="grid gap-12 pb-20 lg:grid-cols-3 lg:items-start">
-      <div class="min-w-0 lg:col-span-2">
-        <div v-for="chapter in chapters" :key="chapter.id" class="mb-16 last:mb-0">
-          <header class="mb-6">
-            <h2
-              class="font-editorial text-ink font-medium text-display-sm tracking-editorial"
-            >
-              {{ chapter.title }}
-            </h2>
-          </header>
-
-          <ul>
-            <li
-              v-for="lesson in lessonsFor(chapter)"
-              :key="lesson.slug"
-              class="border-b border-dashed border-rule-soft py-5 last:border-b-0"
-              :class="lesson.locked ? 'bg-locked-bg' : ''"
-            >
-              <NuxtLink
-                :to="`/books/${book.slug}/pages/${lesson.slug}`"
-                class="block px-2 no-underline"
-              >
-                <div class="flex items-baseline gap-6">
-                  <span class="w-10 shrink-0 font-mono text-sm tabular-nums text-numeral">
-                    {{ numberOf(lesson) }}
-                  </span>
-                  <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-3">
-                      <h3
-                        class="font-editorial text-xl text-ink sm:text-[1.375rem] font-semibold tracking-editorial"
-                      >
-                        {{ lesson.title }}
-                      </h3>
-                      <span
-                        v-if="lesson.locked"
-                        class="inline-flex items-center gap-1 rounded-full border border-lock-line bg-lock-bg px-2.5 py-0.5 font-mono text-xs text-lock"
-                      >
-                        voyage
-                      </span>
-                      <span
-                        v-else
-                        class="inline-flex items-center rounded-full border border-free-line bg-free-bg px-2.5 py-0.5 font-mono text-xs text-free"
-                      >
-                        free
-                      </span>
-                    </div>
-                    <p
-                      v-if="lesson.description"
-                      class="mt-2 max-w-2xl text-sm leading-relaxed text-quiet"
-                    >
-                      {{ lesson.description }}
-                    </p>
-                  </div>
-                </div>
-              </NuxtLink>
-            </li>
-          </ul>
-        </div>
-      </div>
-
-      <aside class="hidden lg:block">
-        <div class="sticky top-24 rounded-lg bg-note p-7">
-          <div class="font-mono text-xs tracking-wider uppercase text-rose">
-            what you'll walk away with
-          </div>
-          <ul class="mt-5 space-y-4">
-            <li
-              v-for="chapter in chapters.slice(0, 6)"
-              :key="chapter.id"
-              class="flex gap-3 text-sm leading-relaxed text-ink"
-            >
-              <span class="mt-2 size-1.5 shrink-0 rounded-full bg-rose" />
-              <span>{{ chapter.title }}</span>
-            </li>
-          </ul>
-          <div
-            v-if="chapters.length > 6"
-            class="mt-6 border-t border-dashed border-rule-dashed pt-5 text-sm leading-relaxed italic text-quiet"
-          >
-            and {{ chapters.length - 6 }} more chapters.
-          </div>
-        </div>
-      </aside>
-    </section>
+          <span class="ch-no">{{ numberOf(lesson) }}</span>
+          <span>
+            <span class="ch-title">
+              {{ lesson.title }}
+              <span class="pill" :class="lesson.locked ? 'pill-paid' : 'pill-free'">
+                {{ lesson.locked ? 'paid' : 'free' }}
+              </span>
+            </span>
+            <span v-if="lesson.description" class="ch-desc">
+              {{ lesson.description }}
+            </span>
+          </span>
+        </NuxtLink>
+      </section>
+    </main>
   </div>
 </template>
+
+<style scoped>
+/* Written as css rather than utilities because almost every number here is off
+ * the scale — 15.5px titles, 9px pills, a 32px numeral gutter. As utilities
+ * each one is an arbitrary value in brackets, and the row markup stops being
+ * readable at a glance. */
+
+.start {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 6px;
+    padding: 9px 15px;
+    font-size: 12.5px;
+    font-weight: 500;
+    background: var(--color-read-ink);
+    color: var(--color-on-ink);
+    transition:
+        background 140ms,
+        color 140ms;
+}
+
+.start:hover {
+    background: var(--color-teal-deep);
+}
+
+.start svg {
+    width: 13px;
+    height: 13px;
+}
+
+.part + .part {
+    margin-top: 44px;
+}
+
+.part-title {
+    font-family: 'Newsreader', Georgia, serif;
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: 19px;
+    line-height: 1.15;
+    letter-spacing: -0.005em;
+    margin: 0 0 2px;
+    color: var(--color-read-ink);
+}
+
+/* No rule between rows and no tint on the locked ones. The pill already says
+ * which is which, and a full-width band behind every paid lesson turned the
+ * back half of the book into a grey block. */
+.ch {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+    padding: 11px 12px 11px 0;
+    text-decoration: none;
+}
+
+.ch-no {
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 10.5px;
+    padding: 4px 0 0 2px;
+    color: var(--color-read-faint);
+    transition: color 140ms;
+}
+
+.ch:hover .ch-no {
+    color: var(--color-teal-mid);
+}
+
+.ch-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    font-family: 'Newsreader', Georgia, serif;
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: 15.5px;
+    line-height: 1.25;
+    color: var(--color-read-ink);
+    transition: color 140ms;
+}
+
+.ch:hover .ch-title {
+    color: var(--color-teal-deep);
+}
+
+.ch-desc {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--color-read-mute);
+    text-wrap: pretty;
+}
+
+.empty {
+    font-family: 'Newsreader', Georgia, serif;
+    font-optical-sizing: auto;
+    font-size: 15.5px;
+    line-height: 1.55;
+    color: var(--color-read-mute);
+    border-top: 1px solid var(--color-read-line);
+    padding-top: 18px;
+    margin: 0;
+}
+
+.empty a {
+    color: var(--color-teal-deep);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.pill {
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: lowercase;
+    padding: 2px 7px;
+    border-radius: 20px;
+}
+
+.pill-free {
+    color: var(--color-teal-deep);
+    background: var(--color-teal-wash);
+}
+
+.pill-paid {
+    color: var(--color-amber);
+    background: var(--color-amber-soft);
+}
+</style>

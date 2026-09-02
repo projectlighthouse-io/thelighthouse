@@ -20,15 +20,7 @@ defineProps<{ book: Book }>()
     <div class="p-6">
       <div class="mb-3 flex items-center justify-between">
         <span
-          v-if="book.inProgress"
-          class="font-mono text-xs font-bold text-wip"
-        >
-          <span
-            class="mr-1 inline-block size-1.5 rounded-full bg-wip align-middle"
-          />in progress
-        </span>
-        <span
-          v-else-if="book.price"
+          v-if="book.price"
           class="rounded-full bg-ink px-3 py-1 text-xs font-semibold text-on-ink"
         >
           {{ book.price }}

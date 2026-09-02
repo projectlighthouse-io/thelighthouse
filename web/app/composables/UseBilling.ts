@@ -1,7 +1,7 @@
 /**
  * What the reader has paid for, and how they pay for more.
  *
- * The same shape as `UseAuth`: rust owns the truth, this asks. Nothing here is
+ * The same shape as `UseReader`: rust owns the truth, this asks. Nothing here is
  * a gate — entitlement is decided in rust against the session cookie, and the
  * paid half of a lesson is a separate request that either answers or does not.
  * What this decides is which button to draw.
@@ -70,7 +70,7 @@ export function useBilling() {
   const track = computed(() => (membership.value ? trackOf(membership.value.plan) : null))
 
   async function load(force = false): Promise<void> {
-    // Matches `UseAuth`: SSR renders every reader as anonymous, so asking here
+    // Matches `UseReader`: SSR renders every reader as anonymous, so asking here
     // would either leak one reader's state into a shared cache or make the
     // page uncacheable.
     if (import.meta.server) return

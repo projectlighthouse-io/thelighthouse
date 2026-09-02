@@ -1,20 +1,8 @@
 <script setup lang="ts">
-import { AUTH_ART_IMAGE, AUTH_TAGLINE } from '@/data/Auth'
+import { AUTH_ART } from '@/data/Auth'
 
 // full-bleed split screen — the site chrome would fight it
-definePageMeta({
-  layout: false,
-  // Arriving here changes the layout *and* the page, and the site-wide pair
-  // both run `out-in` — leave-layout, enter-layout, leave-page, enter-page,
-  // with nothing mounted in the handovers. That is the flicker.
-  //
-  // So this route opts out of both and fades in only: no leave half, no gap for
-  // the background to show through, and the incoming screen starts fading the
-  // moment the click lands. Every other route keeps the slide-and-fade pair,
-  // which does not stutter because the layout underneath them never changes.
-  layoutTransition: false,
-  pageTransition: { name: 'fade', mode: 'out-in' },
-})
+definePageMeta({ layout: false })
 
 useSeo({
   title: 'Join projectlighthouse',
@@ -22,41 +10,20 @@ useSeo({
   noindex: true,
 })
 
-// Shared with the header's join dropdown, which shows the same screen.
-const artImageUrl = AUTH_ART_IMAGE
+const route = useRoute()
 
-// The art is half the screen and lives on someone else's CDN, so without this
-// the panel paints its fallback colour first and snaps to the photo a moment
-// later. preconnect covers the DNS and TLS round trips, preload starts the
-// download with the document rather than after the stylesheet resolves the
-// background-image.
-useHead({
-  link: [
-    { rel: 'preconnect', href: 'https://i.pinimg.com', crossorigin: '' },
-    { rel: 'preload', as: 'image', href: artImageUrl, fetchpriority: 'high' },
-  ],
+// Handed to AuthOauthButtons, which builds the hrefs. Rust is what checks it
+// is a same-site path — see `safe_redirect`.
+const redirect = computed<string | undefined>(() => {
+  const target = route.query.redirect
+
+  return typeof target === 'string' && target !== '' ? target : undefined
 })
 
-const route = useRoute()
+const artImageUrl = AUTH_ART.image
+
 const status = computed<string | null>(() => (route.query.status as string) ?? null)
 const error = computed<string | null>(() => (route.query.error as string) ?? null)
-
-const { load, isSignedIn } = useAuth()
-
-// Whatever page sent the reader here. Passed to rust, which validates it again
-// and refuses anything that leaves the site — never trusted as a Location on
-// the strength of having come from our own query string.
-const redirect = computed<string | undefined>(() => {
-  const value = route.query.redirect
-  return typeof value === 'string' && value.startsWith('/') ? value : undefined
-})
-
-// Somebody already signed in has no business on the login page — most often a
-// back button after signing in.
-onMounted(async () => {
-  await load()
-  if (isSignedIn.value) await navigateTo(redirect.value ?? '/dashboard')
-})
 </script>
 
 <template>
@@ -68,7 +35,7 @@ onMounted(async () => {
         <span class="wm">projectlighthouse</span>
       </NuxtLink>
       <div class="art__quote">
-        <p class="lead">{{ AUTH_TAGLINE }}</p>
+        <p class="lead">{{ AUTH_ART.quote }}</p>
       </div>
     </div>
 
@@ -85,7 +52,7 @@ onMounted(async () => {
         <div v-if="status" class="status status--success">{{ status }}</div>
         <div v-if="error" class="status status--error">{{ error }}</div>
 
-        <AuthProviderButtons :redirect="redirect" class="oauth" />
+        <AuthOauthButtons class="oauth" :redirect="redirect" />
 
         <div class="divider"><span /><em>secure oauth</em><span /></div>
 
@@ -105,7 +72,7 @@ onMounted(async () => {
               stroke-linejoin="round"
             />
           </svg>
-          <span>No passwords to manage. We never post or read your repositories.</span>
+          <span>No passwords, no reset emails, no hassle.</span>
         </div>
 
         <p class="legal">
@@ -273,8 +240,6 @@ onMounted(async () => {
   border: 1px solid var(--color-bad-line);
 }
 
-/* The buttons themselves live in AuthProviderButtons, shared with the header's
-   join dropdown. Only their placement on this page is left here. */
 .oauth {
   margin-top: 34px;
 }

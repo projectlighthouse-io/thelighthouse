@@ -25,24 +25,16 @@ useSeo({ title: 'Pricing — projectlighthouse', description })
  * typed into this file is a number that drifts from what is actually charged,
  * and the drift is invisible until somebody compares a receipt with this page.
  *
- * Allowed to fail. It is a public, edge-cached endpoint, so a build with no
- * api behind it renders the tracks without amounts rather than failing, and
- * fills them in on the client.
+ * Through nitro's `/_api`, like the other public reads, so it resolves during
+ * SSR and the amounts are in the prerendered html rather than appearing a
+ * moment after hydration — which is what a price on a pricing page has to do.
+ *
+ * Allowed to fail: a build with no api behind it renders the tracks without
+ * amounts rather than failing the build.
  */
-const { data: offers, refresh } = await useFetch<Offer[]>('/api/billing/plans', {
-  key: 'billing-plans',
-  default: () => [],
-  onResponseError: () => {},
-})
-
-// The page is prerendered, and at build time there is usually no api behind
-// the same origin — so SSR hands over an empty list and hydration would leave
-// the prices as em dashes forever. Asking again on the client is what makes
-// the page correct in the build that has no api and still SEO-complete in the
-// one that does.
-onMounted(() => {
-  if (!offers.value?.length) refresh()
-})
+const { data: offers } = await useAsyncData('billing-plans', () =>
+  $fetch<Offer[]>('/_api/billing/plans').catch(() => [] as Offer[]),
+)
 
 function offerFor(track: string, recurring: boolean): Offer | undefined {
   return offers.value?.find(
@@ -64,16 +56,20 @@ function titleOf(slug: string): string {
 }
 
 const { checkout, busy, reason } = useBilling()
-const { chrome } = useAuth()
+const { isSignedIn } = useReader()
 
 /**
  * Buying needs a session, because the api ties the purchase to an account.
  * An anonymous reader signs in first and comes back here.
+ *
+ * `isSignedIn` falls back to the reader hint cookie until the session endpoint
+ * answers, so this does not bounce somebody who is in fact signed in and has
+ * simply not been confirmed yet.
  */
 async function buy(plan: string | undefined): Promise<void> {
   if (!plan) return
 
-  if (chrome.value === 'anonymous') {
+  if (!isSignedIn.value) {
     await navigateTo(`/login?redirect=${encodeURIComponent('/pricing')}`)
 
     return

@@ -5,18 +5,17 @@
  * in the browser on client-side navigation and can be bypassed. Anything that
  * actually matters — paid lesson bodies, admin data — is gated by rust, which
  * is why the api never trusts the frontend for entitlement.
- *
- * Every page using it is `ssr: false`, so this only ever runs client side and
- * the session is a real answer by the time it decides. On the server it does
- * nothing, deliberately: `useAuth` cannot resolve there, and redirecting on an
- * unresolved session would sign everyone out at the door.
  */
 export default defineNuxtRouteMiddleware(async (to) => {
+  // Every page that opts in is `ssr: false`, so this only ever runs in the
+  // browser. Bailing on the server keeps it correct if one ever stops being:
+  // the session cannot be resolved there, and bouncing to /login is the wrong
+  // answer to "we have not asked yet".
   if (import.meta.server) return
 
-  const { isSignedIn, load } = useAuth()
+  const { isSignedIn, resolve } = useReader()
 
-  await load()
+  await resolve()
 
   if (isSignedIn.value) return
 
