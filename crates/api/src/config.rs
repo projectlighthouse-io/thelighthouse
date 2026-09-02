@@ -10,6 +10,8 @@
 
 use secrecy::SecretString;
 
+use crate::limit::RateLimit;
+
 /// Every credential is a [`SecretString`], so `Debug` is derived rather than
 /// hand-written: they print as `[REDACTED]` and their memory is zeroed on
 /// drop. Redaction is a property of the field's type, which means a key added
@@ -48,10 +50,43 @@ pub(crate) struct Config {
     /// deploy time: which plans exist and what they map to at the provider is
     /// a deployment's business rather than this repository's.
     pub(crate) billing_plans: String,
+    /// Requests a minute, per caller, across every route.
+    ///
+    /// Defaulted rather than required, unlike every secret here: a limit that
+    /// is absent has an obvious safe answer, and a deployment that forgot one
+    /// should still come up limited rather than not come up at all.
+    pub(crate) request_limit: u32,
+    /// Note and bookmark writes a minute, per reader.
+    pub(crate) note_write_limit: u32,
+    /// Content reloads a minute, for the whole process.
+    pub(crate) content_reload_limit: u32,
     pub(crate) github_id: SecretString,
     pub(crate) github_secret: SecretString,
     pub(crate) google_id: SecretString,
     pub(crate) google_secret: SecretString,
+}
+
+/// A limit, or the default when it is not set.
+///
+/// A value that is present but not a number is an error rather than a silent
+/// fall back to the default: somebody meant to set it, and a typo that reads
+/// as "unset" is the kind that is only noticed under load.
+///
+/// Zero is refused. It reads as "no limit" and means the opposite — every
+/// request refused — which is a way to take a site down with a config edit.
+fn count(value: Option<&str>, fallback: u32) -> Result<u32, String> {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty())
+    else {
+        return Ok(fallback);
+    };
+
+    match value.parse::<u32>() {
+        Ok(0) | Err(_) => Err(format!(
+            "a rate limit must be a positive number of requests a minute, \
+             and this one is {value:?}"
+        )),
+        Ok(limit) => Ok(limit),
+    }
 }
 
 impl Config {
@@ -108,6 +143,18 @@ impl Config {
             content_path: required("CONTENT_PATH")?,
             // Not `required`: unset means hidden, which is the safe answer.
             drafts: ohara::Drafts::from_env(get("SHOW_DRAFTS").as_deref()),
+            request_limit: count(
+                get("REQUEST_LIMIT").as_deref(),
+                RateLimit::REQUESTS,
+            )?,
+            note_write_limit: count(
+                get("NOTE_WRITE_LIMIT").as_deref(),
+                RateLimit::NOTE_WRITES,
+            )?,
+            content_reload_limit: count(
+                get("CONTENT_RELOAD_LIMIT").as_deref(),
+                RateLimit::CONTENT_RELOADS,
+            )?,
             stripe_secret_key: required("STRIPE_SECRET_KEY")?.into(),
             stripe_webhook_secret: required("STRIPE_WEBHOOK_SECRET")?.into(),
             billing_plans: required("BILLING_PLANS")?,
@@ -148,6 +195,9 @@ impl Config {
             app_url: "https://lighthouse.test".to_owned(),
             content_path: "../ohara".to_owned(),
             drafts: ohara::Drafts::Hidden,
+            request_limit: RateLimit::REQUESTS,
+            note_write_limit: RateLimit::NOTE_WRITES,
+            content_reload_limit: RateLimit::CONTENT_RELOADS,
             stripe_secret_key: "sk_test".into(),
             stripe_webhook_secret: "whsec_test".into(),
             billing_plans: "billing.sample.yaml".to_owned(),
@@ -203,11 +253,19 @@ mod tests {
             .collect()
     }
 
-    fn with(key: &str, value: &str) -> Vec<(&'static str, String)> {
+    /// `COMPLETE` with one key overridden, or added when it is not required.
+    ///
+    /// The optional keys — the rate limits — are absent from `COMPLETE` on
+    /// purpose, so setting one has to add it rather than silently do nothing
+    /// and leave the test asserting against the default.
+    fn with(key: &'static str, value: &str) -> Vec<(&'static str, String)> {
         let mut pairs = complete();
-        if let Some(entry) = pairs.iter_mut().find(|(k, _)| *k == key) {
-            entry.1 = value.to_owned();
+
+        match pairs.iter_mut().find(|(k, _)| *k == key) {
+            Some(entry) => entry.1 = value.to_owned(),
+            None => pairs.push((key, value.to_owned())),
         }
+
         pairs
     }
 
@@ -238,6 +296,45 @@ mod tests {
 
         assert_eq!(config.luxctl_secret.expose_secret(), "");
         assert_eq!(config.api_port, 9000);
+    }
+
+    #[test]
+    fn a_rate_limit_falls_back_rather_than_failing_the_boot() {
+        // Unlike every secret here. A limit that is merely absent has an
+        // obvious safe answer, and a deployment that forgot one should come up
+        // limited rather than not come up.
+        let config = Config::from_vars(vars(complete())).unwrap();
+
+        assert_eq!(config.request_limit, RateLimit::REQUESTS);
+        assert_eq!(config.note_write_limit, RateLimit::NOTE_WRITES);
+        assert_eq!(config.content_reload_limit, RateLimit::CONTENT_RELOADS);
+    }
+
+    #[test]
+    fn a_rate_limit_that_is_set_is_used() {
+        let config =
+            Config::from_vars(vars(with("REQUEST_LIMIT", "100000"))).unwrap();
+
+        assert_eq!(config.request_limit, 100_000);
+    }
+
+    #[test]
+    fn a_rate_limit_that_is_not_a_number_is_refused() {
+        // A typo that read as "unset" would fall back to sixty and only be
+        // noticed under load, which is the worst time to find out.
+        for bad in ["nonsense", "-1", "12.5"] {
+            assert!(
+                Config::from_vars(vars(with("REQUEST_LIMIT", bad))).is_err(),
+                "{bad} should not parse as a limit"
+            );
+        }
+    }
+
+    #[test]
+    fn a_rate_limit_of_zero_is_refused() {
+        // It reads as "no limit" and means the opposite: every request
+        // refused. A way to take the site down with a config edit.
+        assert!(Config::from_vars(vars(with("REQUEST_LIMIT", "0"))).is_err());
     }
 
     #[test]

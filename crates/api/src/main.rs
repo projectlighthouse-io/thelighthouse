@@ -121,9 +121,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!(%addr, "api listening");
 
-    axum::serve(listener, api::app(config, socials, db, catalog, billing))
-        .with_graceful_shutdown(shutdown())
-        .await?;
+    // `into_make_service_with_connect_info` is what puts the peer address in
+    // the extensions. Without it a request that carries no `CF-Connecting-IP`
+    // has no address at all, and the rate limiter has nothing to key on but a
+    // single shared bucket — which is every server-rendered request, since
+    // nitro calls this api over loopback and Cloudflare never sees it.
+    axum::serve(
+        listener,
+        api::app(config, socials, db, catalog, billing)
+            .into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown())
+    .await?;
 
     Ok(())
 }

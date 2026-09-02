@@ -113,13 +113,20 @@ pub(crate) fn app(
     catalog: Arc<Catalog>,
     billing: Billing,
 ) -> Router {
+    // Read before `config` moves into the state.
+    let (requests, note_writes, reloads) = (
+        config.request_limit,
+        config.note_write_limit,
+        config.content_reload_limit,
+    );
+
     let state = AppState {
         config,
         socials,
         db,
-        limits: Arc::new(RateLimit::note_writes()),
-        requests: Arc::new(RateLimit::requests()),
-        reloads: Arc::new(RateLimit::content_reloads()),
+        limits: Arc::new(RateLimit::note_writes(note_writes)),
+        requests: Arc::new(RateLimit::requests(requests)),
+        reloads: Arc::new(RateLimit::content_reloads(reloads)),
         catalog,
         billing,
     };

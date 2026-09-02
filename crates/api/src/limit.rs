@@ -55,8 +55,11 @@ impl RateLimit {
     ///
     /// A function, not a `const` item: a `const` is substituted at each mention,
     /// so two references would be two limiters with separate counters.
-    pub(crate) fn note_writes() -> Self {
-        Self::new(10, Duration::from_secs(60))
+    /// The default. `NOTE_WRITE_LIMIT` overrides it.
+    pub(crate) const NOTE_WRITES: u32 = 10;
+
+    pub(crate) fn note_writes(per_minute: u32) -> Self {
+        Self::new(per_minute, Duration::from_secs(60))
     }
 
     /// Three a minute, and the whole process shares them.
@@ -72,8 +75,11 @@ impl RateLimit {
     /// a fresh sixty a minute per forged address. One bucket caps the work
     /// this process will do regardless of who is asking or how many of them
     /// there are.
-    pub(crate) fn content_reloads() -> Self {
-        Self::new(3, Duration::from_secs(60))
+    /// The default. `CONTENT_RELOAD_LIMIT` overrides it.
+    pub(crate) const CONTENT_RELOADS: u32 = 3;
+
+    pub(crate) fn content_reloads(per_minute: u32) -> Self {
+        Self::new(per_minute, Duration::from_secs(60))
     }
 
     /// Sixty a minute, which is `RateLimiter::for('api')` in the laravel app —
@@ -82,8 +88,19 @@ impl RateLimit {
     /// It sits *outside* the per-route limits rather than replacing them: a
     /// note write counts against this and against `note_writes`, exactly as a
     /// laravel route carrying both `throttle:api` and `throttle:notes` does.
-    pub(crate) fn requests() -> Self {
-        Self::new(60, Duration::from_secs(60))
+    ///
+    /// **Sixty is a browser's budget, and nitro is not a browser.** Server-side
+    /// rendering calls this api over loopback, carrying no `CF-Connecting-IP`,
+    /// so every such request shares the one unattributed bucket — one page
+    /// render can be several calls, and a prerender is hundreds. That is why
+    /// this is configurable rather than a constant: the number that is right
+    /// for a reader is wrong for the process rendering for them.
+    ///
+    /// The default. `REQUEST_LIMIT` overrides it.
+    pub(crate) const REQUESTS: u32 = 60;
+
+    pub(crate) fn requests(per_minute: u32) -> Self {
+        Self::new(per_minute, Duration::from_secs(60))
     }
 
     /// The budget is the caller's, not this module's: a search box and a note
@@ -155,7 +172,7 @@ mod tests {
 
     #[test]
     fn the_first_ten_writes_pass_and_the_eleventh_does_not() {
-        let limit = RateLimit::note_writes();
+        let limit = RateLimit::note_writes(RateLimit::NOTE_WRITES);
 
         for attempt in 1..=BUDGET {
             assert_eq!(
@@ -170,7 +187,7 @@ mod tests {
 
     #[test]
     fn one_reader_hitting_the_limit_does_not_stop_another() {
-        let limit = RateLimit::note_writes();
+        let limit = RateLimit::note_writes(RateLimit::NOTE_WRITES);
 
         for _ in 0..=BUDGET {
             let _ = limit.check("user:1");
@@ -182,7 +199,7 @@ mod tests {
 
     #[test]
     fn a_refusal_says_how_long_to_wait() {
-        let limit = RateLimit::note_writes();
+        let limit = RateLimit::note_writes(RateLimit::NOTE_WRITES);
 
         for _ in 0..BUDGET {
             let _ = limit.check("user:1");
