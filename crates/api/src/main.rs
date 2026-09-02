@@ -289,10 +289,6 @@ fn billing_providers(
             // `SecretString` cannot be printed by a `Debug` further in.
             secret_key: config.stripe_secret_key.clone(),
             webhook_secret: config.stripe_webhook_secret.clone(),
-            returns: billing::Returns {
-                success: format!("{}/billing/thanks", config.app_url),
-                cancel: format!("{}/pricing", config.app_url),
-            },
             // Three attempts, backing off. A checkout that fails because
             // stripe hiccuped is a reader who thinks the site is broken, and
             // every attempt shares one idempotency key so retrying cannot

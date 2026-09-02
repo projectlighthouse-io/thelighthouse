@@ -2,6 +2,8 @@
 //!
 //! ```text
 //!   GET  /api/billing/plans
+//!   GET  /api/billing/access
+//!   GET  /api/billing/{provider}/bought/{session}
 //!   GET  /api/billing/membership
 //!   POST /api/billing/{provider}/checkout
 //!   POST /api/billing/{provider}/cancel
@@ -80,8 +82,15 @@ pub(crate) use track::{covers, of_plan, validate};
 /// token and a place in the write limit. A checkout that could be triggered
 /// cross-site is a reader sent to a payment page they did not ask for.
 pub(crate) fn routes(state: &AppState) -> Router<AppState> {
-    let reads =
-        Router::new().route("/api/billing/membership", get(handler::show));
+    let reads = Router::new()
+        .route("/api/billing/membership", get(handler::show))
+        // What this reader may now read, however they came by it.
+        .route("/api/billing/access", get(handler::access))
+        // What one finished checkout was for, for the page they land on.
+        .route(
+            "/api/billing/{provider}/bought/{session}",
+            get(handler::bought),
+        );
 
     let writes = Router::new()
         .route("/api/billing/{provider}/checkout", post(handler::checkout))

@@ -66,6 +66,8 @@ fn cache_control(response: &Response) -> &str {
 async fn every_reader_route_needs_a_reader() {
     let uris = [
         ("GET", "/api/billing/membership"),
+        ("GET", "/api/billing/access"),
+        ("GET", "/api/billing/stripe/bought/cs_test_1"),
         ("POST", "/api/billing/stripe/checkout"),
         ("POST", "/api/billing/stripe/cancel"),
         ("POST", "/api/billing/stripe/resume"),
@@ -124,6 +126,34 @@ async fn what_things_cost_is_public_and_cacheable() {
     assert_eq!(at("/0/plan"), "yearly");
     assert_eq!(at("/0/track"), "yearly");
     assert_eq!(at("/0/recurring"), true);
+}
+
+#[tokio::test]
+async fn a_checkout_lookup_needs_a_reader() {
+    // It reads one session out of the provider and says what it was for, so
+    // an anonymous caller with a guessed id must get nothing.
+    let response = send(
+        Request::builder()
+            .uri("/api/billing/stripe/bought/cs_test_whatever")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn what_a_reader_may_read_needs_a_reader() {
+    let response = send(
+        Request::builder()
+            .uri("/api/billing/access")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]

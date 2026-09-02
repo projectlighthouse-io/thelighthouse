@@ -63,6 +63,161 @@ pub(crate) async fn catalogue(State(state): State<AppState>) -> Response {
     json(StatusCode::OK, plans, CachePolicy::public_content())
 }
 
+/// Where the provider sends the browser back.
+///
+/// `{CHECKOUT_SESSION_ID}` is a literal the provider substitutes for the real
+/// session id on the way back — it must be written exactly, not interpolated.
+///
+/// The id is all that is handed to the browser, deliberately. What was bought
+/// is then read from the provider by `bought` below, so a reader editing the
+/// url gets somebody else's session refused rather than somebody else's
+/// purchase displayed.
+fn returns(state: &AppState) -> billing::Returns {
+    billing::Returns {
+        success: format!(
+            "{}/billing/thanks?session={{CHECKOUT_SESSION_ID}}",
+            state.config.app_url
+        ),
+        cancel: format!("{}/pricing", state.config.app_url),
+    }
+}
+
+/// What a finished checkout was for, for the page a reader lands on.
+///
+/// **Display, not fulfilment.** The provider's own guidance is that a landing
+/// page cannot be relied on — a reader can pay and close the tab — so nothing
+/// here writes anything. The webhook remains the only writer; this only lets
+/// the page say something true immediately instead of polling in silence.
+///
+/// The session is refused unless it names this reader. Without that check, a
+/// guessed session id would read out a stranger's purchase.
+pub(crate) async fn bought(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    Path((provider, checkout)): Path<(String, String)>,
+) -> Response {
+    let Some(driver) = driver_named(&state, &provider) else {
+        return response::not_found();
+    };
+
+    let bought = match driver.bought(&checkout).await {
+        Ok(bought) => bought,
+        Err(error) => {
+            tracing::warn!(%error, provider, "failed to read a checkout back");
+            return response::not_found();
+        }
+    };
+
+    // Somebody else's session, or one this application did not start.
+    if bought.reference.as_deref().and_then(reader) != Some(session.user_id) {
+        tracing::warn!(
+            user_id = session.user_id,
+            "a reader asked about a checkout that is not theirs"
+        );
+        return response::not_found();
+    }
+
+    let track = bought
+        .plan
+        .as_ref()
+        .map(|plan| track::of(plan.as_str()).to_owned());
+
+    let snapshot = state.catalog.current();
+    let books: Vec<_> = track
+        .as_deref()
+        .map(|track| {
+            snapshot
+                .books()
+                .filter(|entry| track::covers(track, &entry.book))
+                .map(|entry| {
+                    serde_json::json!({
+                        "slug": entry.book.slug,
+                        "title": entry.book.title,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    json(
+        StatusCode::OK,
+        serde_json::json!({
+            "plan": bought.plan.as_ref().map(billing::PlanId::as_str),
+            "track": track,
+            "paid": bought.paid,
+            "books": books,
+        }),
+        CachePolicy::NoStore,
+    )
+}
+
+/// What this reader may now read, and what bought it.
+///
+/// The page a reader lands on after paying asks this. It answers for both
+/// shapes a purchase can take, which is why it is not simply the membership:
+/// a track subscribed to leaves a `memberships` row and no entitlements, and a
+/// track bought outright leaves entitlements and no membership. A reader can
+/// hold both at once.
+///
+/// **The books are derived, never frozen.** A subscription has to cover books
+/// published after it was bought, so recording the list at purchase time would
+/// be wrong within a release. This asks the catalogue every time.
+pub(crate) async fn access(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+) -> Response {
+    let membership = match store::live(&state.db, session.user_id).await {
+        Ok(found) => found,
+        Err(error) => {
+            tracing::error!(%error, "failed to read a membership");
+            return response::server_error();
+        }
+    };
+
+    let owned = match store::owned(&state.db, session.user_id).await {
+        Ok(owned) => owned,
+        Err(error) => {
+            tracing::error!(%error, "failed to read entitlements");
+            return response::server_error();
+        }
+    };
+
+    // Only a membership that grants access counts, so a reader in grace is
+    // told what they bought without being shown it as readable.
+    let track = membership
+        .as_ref()
+        .filter(|membership| membership.grants_access())
+        .map(|membership| track::of(&membership.plan).to_owned());
+
+    let snapshot = state.catalog.current();
+
+    let books: Vec<_> = snapshot
+        .books()
+        .filter(|entry| {
+            track
+                .as_deref()
+                .is_some_and(|track| track::covers(track, &entry.book))
+                || entry.book.id.is_some_and(|id| owned.contains(&id))
+        })
+        .map(|entry| {
+            serde_json::json!({
+                "slug": entry.book.slug,
+                "title": entry.book.title,
+            })
+        })
+        .collect();
+
+    json(
+        StatusCode::OK,
+        serde_json::json!({
+            "plan": membership.as_ref().map(|membership| &membership.plan),
+            "track": track,
+            "books": books,
+        }),
+        CachePolicy::NoStore,
+    )
+}
+
 /// What this reader is currently paying for.
 ///
 /// 204 rather than 404 for a reader with nothing: having no subscription is a
@@ -143,10 +298,12 @@ pub(crate) async fn checkout(
     // The plan's own interval decides which kind of checkout this is. One
     // route rather than two, because from the reader's side it is the same
     // act — they picked a thing and they are going to pay for it.
+    let back = returns(&state);
+
     let opened = if plan.interval.recurs() {
-        driver.subscribe(plan, &who).await
+        driver.subscribe(plan, &who, &back).await
     } else {
-        driver.purchase(plan, &who).await
+        driver.purchase(plan, &who, &back).await
     };
 
     match opened {

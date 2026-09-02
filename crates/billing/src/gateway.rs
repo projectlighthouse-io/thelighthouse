@@ -1,7 +1,7 @@
 //! The interface a payment provider is reached through.
 
 use crate::{
-    checkout::{Customer, Handoff},
+    checkout::{Bought, Customer, Handoff, Returns},
     error::Error,
     event::Event,
     plan::Plan,
@@ -54,6 +54,7 @@ pub trait Gateway: std::fmt::Debug + Send + Sync {
         &self,
         to: &Plan,
         who: &Customer<'_>,
+        back: &Returns,
     ) -> Result<Handoff, Error>;
 
     /// Buy something outright, and say where to send the browser to pay.
@@ -74,6 +75,7 @@ pub trait Gateway: std::fmt::Debug + Send + Sync {
         &self,
         what: &Plan,
         who: &Customer<'_>,
+        back: &Returns,
     ) -> Result<Handoff, Error>;
 
     /// Stop a subscription, at the end of the paid period or immediately.
@@ -110,6 +112,19 @@ pub trait Gateway: std::fmt::Debug + Send + Sync {
         subscription: &str,
         to: &Plan,
     ) -> Result<Subscription, Error>;
+
+    /// What a finished checkout was for.
+    ///
+    /// The reader comes back from the provider carrying a session id and
+    /// nothing else; this turns that into what they bought. It is how a
+    /// thanks page can say something true immediately, without waiting on the
+    /// webhook — which may not have landed, and which the provider's own docs
+    /// are clear is the only thing fulfilment may depend on.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Refused`] if the provider does not know the session.
+    async fn bought(&self, session: &str) -> Result<Bought, Error>;
 
     /// The request header this provider puts its delivery signature in.
     ///

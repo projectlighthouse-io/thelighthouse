@@ -128,7 +128,7 @@ impl Providers {
 mod tests {
     use super::*;
     use crate::{
-        checkout::{Customer, Handoff},
+        checkout::{Bought, Customer, Handoff, Returns},
         event::Event,
         plan::Plan,
         subscription::{Cancel, Subscription},
@@ -148,6 +148,7 @@ mod tests {
             &self,
             _to: &Plan,
             _who: &Customer<'_>,
+            _back: &Returns,
         ) -> Result<Handoff, Error> {
             Ok(Handoff {
                 url: self.answer.to_owned(),
@@ -158,6 +159,7 @@ mod tests {
             &self,
             _what: &Plan,
             _who: &Customer<'_>,
+            _back: &Returns,
         ) -> Result<Handoff, Error> {
             Ok(Handoff {
                 url: self.answer.to_owned(),
@@ -185,6 +187,15 @@ mod tests {
             _to: &Plan,
         ) -> Result<Subscription, Error> {
             Ok(canned())
+        }
+
+        async fn bought(&self, _session: &str) -> Result<Bought, Error> {
+            Ok(Bought {
+                plan: None,
+                reference: None,
+                paid: false,
+                subscription: None,
+            })
         }
 
         fn signature_header(&self) -> &'static str {
@@ -238,6 +249,10 @@ mod tests {
                     reference: "1",
                     email: "reader@example.com",
                     existing: None,
+                },
+                &Returns {
+                    success: "https://example.com/paid".to_owned(),
+                    cancel: "https://example.com/pricing".to_owned(),
                 },
             )
             .await

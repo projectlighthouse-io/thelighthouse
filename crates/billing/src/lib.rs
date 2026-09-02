@@ -82,8 +82,8 @@ mod registry;
 mod request;
 mod subscription;
 
-pub use checkout::{Customer, Handoff};
-pub use drivers::stripe::{Returns, Stripe, StripeConfig};
+pub use checkout::{Bought, Customer, Handoff, Returns};
+pub use drivers::stripe::{Stripe, StripeConfig};
 pub use error::Error;
 pub use event::Event;
 pub use gateway::Gateway;

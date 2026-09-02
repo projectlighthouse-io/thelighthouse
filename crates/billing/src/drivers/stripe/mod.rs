@@ -13,7 +13,7 @@ use secrecy::SecretString;
 
 use self::client::{Client, field};
 use crate::{
-    checkout::{Customer, Handoff},
+    checkout::{Bought, Customer, Handoff, Returns},
     error::Error,
     event::Event,
     gateway::Gateway,
@@ -27,34 +27,22 @@ use crate::{
 /// stored row will carry.
 pub const NAME: &str = "stripe";
 
-/// Where Stripe sends the browser when checkout finishes.
-///
-/// Driver configuration rather than a parameter on every call: there is one
-/// checkout flow, and threading two urls through the trait to serve it would
-/// be an interface built for a caller that does not exist. When a second flow
-/// needs to come back somewhere else, this becomes a parameter — the change is
-/// local to this file and the trait.
-#[derive(Clone, Debug)]
-pub struct Returns {
-    /// Where a reader who paid ends up.
-    pub success: String,
-    /// Where a reader who backed out ends up.
-    pub cancel: String,
-}
-
 /// Everything the driver needs to take money.
 ///
 /// A struct rather than a parameter list, and with no `Default`, deliberately.
 /// Two adjacent `String` parameters is a call where transposing the api key
 /// and the webhook secret compiles — and then fails much later as "every
-/// delivery is refused" rather than as a type error. Naming all four fields at
-/// the literal makes both mistakes unwriteable, and a `Default` to spread over
+/// delivery is refused" rather than as a type error. Naming every field at the
+/// literal makes both mistakes unwriteable, and a `Default` to spread over
 /// would hand back the ability to omit one silently.
 ///
 /// Both secrets are [`SecretString`], so `Debug` prints `[REDACTED]` and the
-/// memory is zeroed on drop. That makes not-logging-the-key a property of the
-/// type rather than of every struct it passes through remembering to hand-write
-/// a `Debug`.
+/// memory is zeroed on drop. Redaction is a property of the field's type, not
+/// of somebody remembering to hand-write a `Debug`.
+///
+/// Where checkout returns to is *not* here: that is per checkout, because the
+/// caller usually wants to say which plan was bought on the way back. See
+/// [`Returns`].
 #[derive(Debug)]
 pub struct StripeConfig {
     /// The api key. `sk_live_…` or `sk_test_…`.
@@ -63,8 +51,6 @@ pub struct StripeConfig {
     /// when the endpoint is created. Not the api key, and different per
     /// endpoint, so staging and production do not share one.
     pub webhook_secret: SecretString,
-    /// Where checkout sends the browser afterwards.
-    pub returns: Returns,
     /// How hard to try each request.
     pub strategy: RequestStrategy,
 }
@@ -100,7 +86,6 @@ impl Mode {
 pub struct Stripe {
     client: Client,
     webhook_secret: SecretString,
-    returns: Returns,
 }
 
 impl Stripe {
@@ -114,7 +99,6 @@ impl Stripe {
         Ok(Self {
             client: Client::new(config.secret_key, config.strategy)?,
             webhook_secret: config.webhook_secret,
-            returns: config.returns,
         })
     }
 
@@ -191,6 +175,7 @@ impl Stripe {
         customer: &str,
         reference: &str,
         mode: Mode,
+        back: &Returns,
     ) -> Result<Handoff, Error> {
         let session: wire::Session = self
             .client
@@ -202,8 +187,8 @@ impl Stripe {
                     field("customer", customer),
                     field("line_items[0][price]", to.price.clone()),
                     field("line_items[0][quantity]", "1"),
-                    field("success_url", self.returns.success.clone()),
-                    field("cancel_url", self.returns.cancel.clone()),
+                    field("success_url", back.success.clone()),
+                    field("cancel_url", back.cancel.clone()),
                     field("client_reference_id", reference),
                     // Written here and read back on every subscription and
                     // every webhook. It is what lets a delivery about
@@ -338,10 +323,11 @@ impl Gateway for Stripe {
         &self,
         to: &Plan,
         who: &Customer<'_>,
+        back: &Returns,
     ) -> Result<Handoff, Error> {
         let customer = self.customer(who).await?;
 
-        self.checkout(to, &customer, who.reference, Mode::Subscription)
+        self.checkout(to, &customer, who.reference, Mode::Subscription, back)
             .await
     }
 
@@ -349,10 +335,11 @@ impl Gateway for Stripe {
         &self,
         what: &Plan,
         who: &Customer<'_>,
+        back: &Returns,
     ) -> Result<Handoff, Error> {
         let customer = self.customer(who).await?;
 
-        self.checkout(what, &customer, who.reference, Mode::Payment)
+        self.checkout(what, &customer, who.reference, Mode::Payment, back)
             .await
     }
 
@@ -388,6 +375,32 @@ impl Gateway for Stripe {
         self.move_to(subscription, to).await
     }
 
+    async fn bought(&self, session: &str) -> Result<Bought, Error> {
+        let session: wire::Session = self
+            .client
+            .send(
+                Method::GET,
+                &format!("/v1/checkout/sessions/{session}"),
+                &[],
+            )
+            .await?;
+
+        Ok(Bought {
+            plan: session
+                .metadata
+                .get(wire::PLAN_KEY)
+                .map(|name| name.clone().into()),
+            reference: session.client_reference_id,
+            // `no_payment_required` is a zero-amount session — a full discount
+            // — which is paid for as far as access goes.
+            paid: session
+                .payment_status
+                .as_deref()
+                .is_some_and(|status| status != "unpaid"),
+            subscription: session.subscription,
+        })
+    }
+
     fn signature_header(&self) -> &'static str {
         "stripe-signature"
     }
@@ -418,10 +431,6 @@ mod tests {
         StripeConfig {
             secret_key: "sk_test".into(),
             webhook_secret: "whsec_test".into(),
-            returns: Returns {
-                success: "https://example.com/paid".to_owned(),
-                cancel: "https://example.com/pricing".to_owned(),
-            },
             strategy,
         }
     }
@@ -430,6 +439,15 @@ mod tests {
         Stripe::new(config(strategy))
             .unwrap()
             .with_base(server.uri())
+    }
+
+    /// Where a test checkout comes back to. The urls are the caller's, and
+    /// these assert nothing about them beyond being sent.
+    fn back() -> Returns {
+        Returns {
+            success: "https://example.com/paid".to_owned(),
+            cancel: "https://example.com/pricing".to_owned(),
+        }
     }
 
     fn plan() -> Plan {
@@ -477,7 +495,7 @@ mod tests {
             .await;
 
         let handoff = driver(&server, RequestStrategy::Once)
-            .subscribe(&plan(), &reader(Some("cus_existing")))
+            .subscribe(&plan(), &reader(Some("cus_existing")), &back())
             .await
             .unwrap();
 
@@ -508,7 +526,7 @@ mod tests {
             .await;
 
         let handoff = driver(&server, RequestStrategy::Once)
-            .purchase(&plan(), &reader(Some("cus_existing")))
+            .purchase(&plan(), &reader(Some("cus_existing")), &back())
             .await
             .unwrap();
 
@@ -533,7 +551,7 @@ mod tests {
 
         assert!(
             driver(&server, RequestStrategy::Once)
-                .subscribe(&plan(), &reader(Some("cus_existing")))
+                .subscribe(&plan(), &reader(Some("cus_existing")), &back())
                 .await
                 .is_ok()
         );
@@ -565,7 +583,7 @@ mod tests {
 
         assert!(
             driver(&server, RequestStrategy::Once)
-                .subscribe(&plan(), &reader(None))
+                .subscribe(&plan(), &reader(None), &back())
                 .await
                 .is_ok()
         );
@@ -585,7 +603,7 @@ mod tests {
             .await;
 
         driver(&server, RequestStrategy::Once)
-            .subscribe(&plan(), &reader(Some("cus_existing")))
+            .subscribe(&plan(), &reader(Some("cus_existing")), &back())
             .await
             .unwrap();
 

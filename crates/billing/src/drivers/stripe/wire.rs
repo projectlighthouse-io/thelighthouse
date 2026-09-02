@@ -40,6 +40,9 @@ pub(crate) struct Customer {
 #[derive(Debug, Deserialize)]
 pub(crate) struct Session {
     pub(crate) url: Option<String>,
+    /// `paid`, `unpaid`, or `no_payment_required`. Absent on the webhook
+    /// payloads this crate also parses with this struct.
+    pub(crate) payment_status: Option<String>,
     #[serde(default)]
     pub(crate) metadata: BTreeMap<String, String>,
     pub(crate) customer: Option<String>,

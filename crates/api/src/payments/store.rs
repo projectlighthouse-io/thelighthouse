@@ -144,6 +144,25 @@ pub(crate) async fn grant(
     Ok(done.rows_affected())
 }
 
+/// Every book this reader holds outright, by id.
+///
+/// The purchases, not the subscription: a track bought once expands into one
+/// row per book, and those rows outlive any membership.
+pub(crate) async fn owned(
+    db: &PgPool,
+    user_id: i64,
+) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
+    let rows: Vec<(uuid::Uuid,)> = sqlx::query_as(
+        "SELECT book_id FROM entitlements \
+         WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > now())",
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
+
+    Ok(rows.into_iter().map(|(id,)| id).collect())
+}
+
 /// Write what the provider says a subscription now is.
 ///
 /// **An upsert on `(provider, provider_ref)`, which is what makes this safe to

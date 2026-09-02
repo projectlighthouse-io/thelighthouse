@@ -65,10 +65,6 @@ plans:
             billing::StripeConfig {
                 secret_key: "sk_test".into(),
                 webhook_secret: "whsec_test".into(),
-                returns: billing::Returns {
-                    success: "https://lighthouse.test/paid".to_owned(),
-                    cancel: "https://lighthouse.test/pricing".to_owned(),
-                },
                 strategy: billing::RequestStrategy::Once,
             },
         )
