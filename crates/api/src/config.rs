@@ -60,6 +60,11 @@ pub(crate) struct Config {
     pub(crate) note_write_limit: u32,
     /// Content reloads a minute, for the whole process.
     pub(crate) content_reload_limit: u32,
+    /// Kit's api key, for the newsletter list. Required for the same reason
+    /// the stripe key is: a deployment that came up with the subscribe toggle
+    /// on the page but no key behind it would only find out from a reader who
+    /// tried to use it.
+    pub(crate) kit_api_key: SecretString,
     pub(crate) github_id: SecretString,
     pub(crate) github_secret: SecretString,
     pub(crate) google_id: SecretString,
@@ -158,6 +163,7 @@ impl Config {
             stripe_secret_key: required("STRIPE_SECRET_KEY")?.into(),
             stripe_webhook_secret: required("STRIPE_WEBHOOK_SECRET")?.into(),
             billing_plans: required("BILLING_PLANS")?,
+            kit_api_key: required("KIT_API_KEY")?.into(),
             github_id: required("GITHUB_CLIENT_ID")?.into(),
             github_secret: required("GITHUB_CLIENT_SECRET")?.into(),
             google_id: required("GOOGLE_CLIENT_ID")?.into(),
@@ -201,6 +207,7 @@ impl Config {
             stripe_secret_key: "sk_test".into(),
             stripe_webhook_secret: "whsec_test".into(),
             billing_plans: "billing.sample.yaml".to_owned(),
+            kit_api_key: "kit-key".into(),
             github_id: "gh-id".into(),
             github_secret: "gh-secret".into(),
             google_id: "goo-id".into(),
@@ -229,6 +236,7 @@ mod tests {
         ("STRIPE_SECRET_KEY", "sk_test"),
         ("STRIPE_WEBHOOK_SECRET", "whsec_test"),
         ("BILLING_PLANS", "billing.sample.yaml"),
+        ("KIT_API_KEY", "kit-key"),
         ("GITHUB_CLIENT_ID", "gh-id"),
         ("GITHUB_CLIENT_SECRET", "gh-secret"),
         ("GOOGLE_CLIENT_ID", "goo-id"),
@@ -390,6 +398,7 @@ mod tests {
         "GITHUB_CLIENT_SECRET",
         "GOOGLE_CLIENT_ID",
         "GOOGLE_CLIENT_SECRET",
+        "KIT_API_KEY",
     ];
 
     #[test]

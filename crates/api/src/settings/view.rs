@@ -385,3 +385,20 @@ mod tests {
         assert!(written.github_username.is_none());
     }
 }
+
+/// Whether this reader is on the newsletter.
+///
+/// One boolean, and deliberately one. The page used to offer a checkbox per
+/// kind of email — new books, platform changes — against no column and no
+/// sender that read them; there is one list at Kit and one thing to say about
+/// it, which is whether a reader is on it.
+#[derive(Debug, Serialize)]
+pub(crate) struct NewsletterView {
+    pub(crate) subscribed: bool,
+}
+
+/// The toggle, on its way in.
+#[derive(Debug, Deserialize)]
+pub(crate) struct EditNewsletter {
+    pub(crate) subscribed: bool,
+}

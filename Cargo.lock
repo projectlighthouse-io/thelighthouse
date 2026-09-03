@@ -1320,6 +1320,7 @@ dependencies = [
  "hmac",
  "loginwith",
  "ohara",
+ "reqwest",
  "secrecy",
  "serde",
  "serde_json",

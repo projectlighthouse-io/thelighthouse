@@ -26,6 +26,9 @@ pub(crate) enum Refusal {
     LocationTooLong,
     /// Not an `http(s)` link with a host — see `view::is_web_url`.
     NotALink,
+    /// Kit would not take the address, so the reader is not on the list and
+    /// saying they were subscribed would be a lie the next send exposes.
+    NewsletterProviderRefused,
 }
 
 impl Refusal {
@@ -40,6 +43,7 @@ impl Refusal {
             Self::FieldTooLong => "field_too_long",
             Self::LocationTooLong => "location_too_long",
             Self::NotALink => "not_a_link",
+            Self::NewsletterProviderRefused => "newsletter_provider_refused",
         }
     }
 
@@ -52,8 +56,10 @@ impl Refusal {
             | Self::FieldTooLong
             | Self::LocationTooLong
             | Self::NotALink => StatusCode::UNPROCESSABLE_ENTITY,
-            // Not the caller's fault, and retrying may well work.
-            Self::NoRandomness => StatusCode::SERVICE_UNAVAILABLE,
+            // Neither is the caller's fault, and retrying may well work.
+            Self::NoRandomness | Self::NewsletterProviderRefused => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
         }
     }
 
@@ -71,6 +77,9 @@ impl Refusal {
             Self::FieldTooLong => "That is longer than 255 characters.",
             Self::LocationTooLong => "Location must be 120 characters or less.",
             Self::NotALink => "Enter a full link, starting with https://",
+            Self::NewsletterProviderRefused => {
+                "Could not reach the newsletter provider. Try again."
+            }
         }
     }
 }
@@ -91,7 +100,7 @@ pub(crate) fn refuse(cause_of: Refusal) -> Response {
 mod tests {
     use super::*;
 
-    const REFUSALS: [Refusal; 8] = [
+    const REFUSALS: [Refusal; 9] = [
         Refusal::NameRequired,
         Refusal::NameTooLong,
         Refusal::NoRandomness,
@@ -100,6 +109,7 @@ mod tests {
         Refusal::FieldTooLong,
         Refusal::LocationTooLong,
         Refusal::NotALink,
+        Refusal::NewsletterProviderRefused,
     ];
 
     #[test]

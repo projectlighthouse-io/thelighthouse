@@ -55,6 +55,8 @@ async fn every_settings_route_needs_a_reader() {
         ("GET", "/api/settings/tokens"),
         ("POST", "/api/settings/tokens"),
         ("DELETE", "/api/settings/tokens/1"),
+        ("GET", "/api/settings/newsletter"),
+        ("PUT", "/api/settings/newsletter"),
     ] {
         assert_eq!(
             send(method, uri).await.status(),

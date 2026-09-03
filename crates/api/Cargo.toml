@@ -72,6 +72,16 @@ hmac = "0.12"
 sha2 = "0.10"
 subtle = "2"
 serde = { version = "1", features = ["derive"] }
+# The one outbound call this crate makes on its own account: telling Kit a
+# reader subscribed. `billing` and `loginwith` already pull reqwest in, so this
+# adds a feature set rather than a dependency. webpki roots for the same reason
+# they do it: an alpine runtime has no system ca store.
+reqwest = { version = "0.12", default-features = false, features = [
+    "http2",
+    "charset",
+    "json",
+    "rustls-tls-webpki-roots",
+] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
