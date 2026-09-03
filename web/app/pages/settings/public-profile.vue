@@ -110,102 +110,102 @@ async function save() {
 <template>
   <SettingsShell>
     <h2 class="font-serif text-2xl text-ink">Public profile</h2>
-    <p class="text-mono-body mt-2">What other learners see.</p>
+    <p class="mt-2 text-sm leading-relaxed text-quiet">What other learners see.</p>
 
-    <dl v-if="username" class="mt-6 flex gap-8">
-      <div>
-        <dt class="font-mono text-xs tracking-wider uppercase text-faint">username</dt>
-        <dd class="mt-1 text-ink">{{ username }}</dd>
+    <dl v-if="username" class="mt-6 overflow-hidden rounded-lg border border-rule">
+      <div class="flex items-baseline justify-between gap-4 px-4 py-3" :class="githubUsername && 'border-b border-rule'">
+        <dt class="shrink-0 text-xs font-medium tracking-wider uppercase text-faint">username</dt>
+        <dd class="min-w-0 truncate text-sm text-ink">{{ username }}</dd>
       </div>
-      <div v-if="githubUsername">
-        <dt class="font-mono text-xs tracking-wider uppercase text-faint">github</dt>
-        <dd class="mt-1 text-ink">{{ githubUsername }}</dd>
+      <div v-if="githubUsername" class="flex items-baseline justify-between gap-4 px-4 py-3">
+        <dt class="shrink-0 text-xs font-medium tracking-wider uppercase text-faint">github</dt>
+        <dd class="min-w-0 truncate text-sm text-ink">{{ githubUsername }}</dd>
       </div>
     </dl>
 
     <form class="mt-8 space-y-6" @submit.prevent="save">
       <label class="block">
-        <span class="font-mono text-xs tracking-wider uppercase text-faint">tagline</span>
+        <span class="text-xs font-medium tracking-wider uppercase text-faint">tagline</span>
         <input
           v-model="form.tagline"
           type="text"
           :maxlength="MAX.tagline"
           placeholder="One line about you"
-          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-ink focus:border-stroke focus:outline-none"
+          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-sm text-ink transition outline-none placeholder:text-faint focus:border-ink"
         >
       </label>
 
       <label class="block">
-        <span class="font-mono text-xs tracking-wider uppercase text-faint">bio</span>
+        <span class="text-xs font-medium tracking-wider uppercase text-faint">bio</span>
         <textarea
           v-model="form.bio"
           rows="3"
           :maxlength="MAX.bio"
-          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-ink focus:border-stroke focus:outline-none"
+          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-sm text-ink transition outline-none placeholder:text-faint focus:border-ink"
         />
       </label>
 
       <label class="block">
-        <span class="font-mono text-xs tracking-wider uppercase text-faint">company</span>
+        <span class="text-xs font-medium tracking-wider uppercase text-faint">company</span>
         <input
           v-model="form.company"
           type="text"
           :maxlength="MAX.short"
-          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-ink focus:border-stroke focus:outline-none"
+          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-sm text-ink transition outline-none placeholder:text-faint focus:border-ink"
         >
       </label>
 
       <label class="block">
-        <span class="font-mono text-xs tracking-wider uppercase text-faint">education</span>
+        <span class="text-xs font-medium tracking-wider uppercase text-faint">education</span>
         <input
           v-model="form.education"
           type="text"
           :maxlength="MAX.short"
-          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-ink focus:border-stroke focus:outline-none"
+          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-sm text-ink transition outline-none placeholder:text-faint focus:border-ink"
         >
       </label>
 
       <label class="block">
-        <span class="font-mono text-xs tracking-wider uppercase text-faint">location</span>
+        <span class="text-xs font-medium tracking-wider uppercase text-faint">location</span>
         <input
           v-model="form.location"
           type="text"
           :maxlength="MAX.location"
           placeholder="City, country"
-          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-ink focus:border-stroke focus:outline-none"
+          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-sm text-ink transition outline-none placeholder:text-faint focus:border-ink"
         >
       </label>
 
       <label class="block">
-        <span class="font-mono text-xs tracking-wider uppercase text-faint">linkedin</span>
+        <span class="text-xs font-medium tracking-wider uppercase text-faint">linkedin</span>
         <input
           v-model="form.linkedin_url"
           type="url"
           :maxlength="MAX.short"
           placeholder="https://linkedin.com/in/your-handle"
-          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-ink focus:border-stroke focus:outline-none"
+          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-sm text-ink transition outline-none placeholder:text-faint focus:border-ink"
         >
       </label>
 
       <label class="block">
-        <span class="font-mono text-xs tracking-wider uppercase text-faint">x</span>
+        <span class="text-xs font-medium tracking-wider uppercase text-faint">x</span>
         <input
           v-model="form.x_url"
           type="url"
           :maxlength="MAX.short"
           placeholder="https://x.com/your-handle"
-          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-ink focus:border-stroke focus:outline-none"
+          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-sm text-ink transition outline-none placeholder:text-faint focus:border-ink"
         >
       </label>
 
       <label class="block">
-        <span class="font-mono text-xs tracking-wider uppercase text-faint">website</span>
+        <span class="text-xs font-medium tracking-wider uppercase text-faint">website</span>
         <input
           v-model="form.website_url"
           type="url"
           :maxlength="MAX.short"
           placeholder="https://yourdomain.dev"
-          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-ink focus:border-stroke focus:outline-none"
+          class="mt-2 w-full rounded-md border border-rule bg-panel px-4 py-2.5 text-sm text-ink transition outline-none placeholder:text-faint focus:border-ink"
         >
       </label>
 

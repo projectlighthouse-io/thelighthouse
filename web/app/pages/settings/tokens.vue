@@ -122,14 +122,14 @@ const when = (at: string | null): string =>
 <template>
   <SettingsShell>
     <h2 class="font-serif text-2xl text-ink">API tokens</h2>
-    <p class="text-mono-body mt-2">
+    <p class="mt-2 text-sm leading-relaxed text-quiet">
       luxctl authenticates with a bearer token. Create one, copy it once, keep it somewhere safe.
     </p>
 
     <p v-if="problem" class="mt-4 text-sm text-red-700">{{ problem }}</p>
 
     <!-- Shown once. The api keeps only a hash, so this cannot be recovered. -->
-    <div v-if="justMinted" class="border-pencil-light mt-8 rounded-md p-4">
+    <div v-if="justMinted" class="mt-8 rounded-lg border border-rule bg-paper p-4">
       <p class="text-sm font-medium text-ink">
         Copy “{{ justMinted.name }}” now — it is not shown again.
       </p>
@@ -137,7 +137,7 @@ const when = (at: string | null): string =>
         <input
           :value="justMinted.token_string"
           readonly
-          class="border-pencil-light flex-1 rounded-md px-3 py-2 font-mono text-xs"
+          class="min-w-0 flex-1 rounded-md border border-rule bg-panel px-3 py-2 font-mono text-xs text-ink"
           @focus="(e) => (e.target as HTMLInputElement).select()"
         >
         <button
@@ -158,7 +158,7 @@ const when = (at: string | null): string =>
         v-model="name"
         placeholder="What is it for? e.g. my laptop"
         maxlength="60"
-        class="border-pencil-light flex-1 rounded-md px-3 py-2 text-sm"
+        class="min-w-0 flex-1 rounded-md border border-rule px-3 py-2.5 text-sm transition outline-none placeholder:text-faint focus:border-ink"
       >
       <button
         type="submit"
@@ -169,22 +169,22 @@ const when = (at: string | null): string =>
       </button>
     </form>
 
-    <div v-if="tokens.length" class="mt-8">
+    <div v-if="tokens.length" class="mt-8 overflow-hidden rounded-lg border border-rule">
       <div
         v-for="token in tokens"
         :key="token.id"
-        class="border-pencil-light flex items-center justify-between border-b py-3"
+        class="flex items-center justify-between gap-4 border-b border-rule px-4 py-3 last:border-b-0"
       >
-        <div>
-          <p class="text-sm font-medium text-ink">{{ token.name }}</p>
-          <p class="text-xs text-quiet">
+        <div class="min-w-0">
+          <p class="truncate text-sm font-medium text-ink">{{ token.name }}</p>
+          <p class="mt-0.5 text-xs text-quiet">
             created {{ when(token.created_at) }} · last used {{ when(token.last_used_at) }}
           </p>
         </div>
         <button
           type="button"
           :disabled="busy"
-          class="text-sm text-quiet transition hover:text-red-700 disabled:opacity-50"
+          class="shrink-0 rounded-md px-2.5 py-1.5 text-sm text-quiet transition hover:bg-paper-warm hover:text-rose disabled:opacity-50"
           @click="revoke(token)"
         >
           Revoke
@@ -192,7 +192,7 @@ const when = (at: string | null): string =>
       </div>
     </div>
 
-    <div v-else class="border-pencil-light mt-8 rounded-md p-6 text-center">
+    <div v-else class="mt-8 rounded-lg border border-dashed border-rule p-8 text-center">
       <p class="text-sm text-quiet">No tokens yet.</p>
     </div>
 

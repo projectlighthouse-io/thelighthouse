@@ -41,14 +41,14 @@ function on(date: string | null): string {
 <template>
   <SettingsShell>
     <h2 class="font-serif text-2xl text-ink">Billing</h2>
-    <p class="text-mono-body mt-2">
+    <p class="mt-2 text-sm leading-relaxed text-quiet">
       What you are paying for. Books you bought outright are not listed here —
       they do not renew, and they stay yours.
     </p>
 
     <p v-if="!resolved" class="mt-8 text-sm text-quiet">Loading…</p>
 
-    <div v-else-if="!membership" class="border-pencil-light mt-8 rounded-md p-6 text-center">
+    <div v-else-if="!membership" class="mt-8 rounded-lg border border-dashed border-rule p-8 text-center">
       <p class="text-sm text-quiet">You have no subscription.</p>
       <NuxtLink
         to="/pricing"
@@ -58,7 +58,7 @@ function on(date: string | null): string {
       </NuxtLink>
     </div>
 
-    <div v-else class="border-pencil-light mt-8 rounded-md p-6">
+    <div v-else class="mt-8 rounded-lg border border-rule p-6">
       <div class="flex items-baseline justify-between">
         <span class="font-editorial text-xl text-ink capitalize">{{ track }}</span>
         <span class="text-sm text-quiet">{{ period }}</span>
@@ -66,14 +66,14 @@ function on(date: string | null): string {
 
       <!-- Grace is a failed payment being retried. Access has already stopped,
            so saying "active" here would be a lie the reader can see through. -->
-      <p v-if="membership.status === 'grace'" class="text-mono-body mt-4">
+      <p v-if="membership.status === 'grace'" class="mt-4 text-sm leading-relaxed text-quiet">
         A payment did not go through, and your books are closed until it does.
         Update your card with your bank or try again.
       </p>
-      <p v-else-if="ending" class="text-mono-body mt-4">
+      <p v-else-if="ending" class="mt-4 text-sm leading-relaxed text-quiet">
         Ends on {{ on(membership.cancel_at) }}. You keep everything until then.
       </p>
-      <p v-else-if="membership.period_ends_at" class="text-mono-body mt-4">
+      <p v-else-if="membership.period_ends_at" class="mt-4 text-sm leading-relaxed text-quiet">
         Renews on {{ on(membership.period_ends_at) }}.
       </p>
 
@@ -93,7 +93,7 @@ function on(date: string | null): string {
           v-else-if="subscribed"
           type="button"
           :disabled="busy"
-          class="border-stroke rounded-md border bg-panel px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-paper-warm disabled:opacity-50"
+          class="rounded-md border border-rule bg-panel px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-paper-warm disabled:opacity-50"
           @click="cancel()"
         >
           {{ busy ? 'Working…' : 'Cancel' }}
