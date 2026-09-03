@@ -20,7 +20,7 @@ useJsonLd('support', {
 
 <template>
   <section class="py-16">
-    <div class="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-4xl px-2 sm:px-6 lg:px-8">
       <div class="mb-10 text-center">
         <h1 class="mb-4 font-mono text-4xl font-medium text-ink">support</h1>
       </div>

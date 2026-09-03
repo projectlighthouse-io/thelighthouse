@@ -30,14 +30,14 @@ useJsonLd('blog', {
 <template>
   <div>
     <section class="py-16">
-      <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 text-center">
+      <div class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8 text-center">
         <h1 class="mb-4 font-serif text-4xl tracking-tight text-ink sm:text-5xl">Blog</h1>
         <p class="text-mono-body">notes from the workshop floor.</p>
       </div>
     </section>
 
     <section class="pb-20">
-      <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8">
         <article
           v-for="post in sorted"
           :key="post.slug"

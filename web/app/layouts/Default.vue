@@ -58,7 +58,7 @@ const year = new Date().getFullYear()
 <template>
   <div class="flex min-h-screen flex-col">
     <header class="dotted-bg fixed top-0 right-0 left-0 z-50">
-      <div class="mx-auto max-w-full px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-full px-2 sm:px-6 lg:px-8">
         <div class="relative flex h-16 items-center justify-between">
           <NuxtLink to="/" class="flex items-center gap-2">
             <img src="/lighthouse.svg" alt="projectlighthouse logo" class="h-8 w-8 object-contain">
@@ -106,7 +106,7 @@ const year = new Date().getFullYear()
       </div>
     </header>
 
-    <main class="mt-16 flex flex-1 flex-col">
+    <main class="mt-16 flex flex-1 flex-col *:w-full">
       <slot />
     </main>
 
@@ -115,7 +115,7 @@ const year = new Date().getFullYear()
       <ChromeBinaryLogo />
     </div>
 
-    <footer class="mt-auto px-4 py-8 sm:px-6 lg:px-8">
+    <footer class="mt-auto px-2 py-8 sm:px-6 lg:px-8">
       <div class="mx-auto w-full max-w-7xl text-center">
         <nav
           class="mb-6 grid grid-cols-2 gap-x-4 gap-y-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-6 sm:gap-y-2"

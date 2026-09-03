@@ -1,11 +1,11 @@
 <template>
   <section id="about" class="py-12">
-    <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8">
       <h2 class="mb-8 font-serif text-3xl tracking-tight text-ink sm:text-4xl">
         and a letter from the author...
       </h2>
       <div
-        class="letter-paper border-pencil-solid-black relative rotate-[-0.4deg] bg-panel px-5 py-12 sm:px-16 sm:py-32"
+        class="letter-paper border-pencil-solid-black relative rotate-[-0.4deg] bg-panel px-2 py-12 sm:px-16 sm:py-32"
       >
         <div class="space-y-5 font-mono text-sm leading-relaxed text-mono-ink">
           <p>Hi, I'm Aryan</p>

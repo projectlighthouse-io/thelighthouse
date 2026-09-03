@@ -32,7 +32,7 @@ useSeo(() => ({
 </script>
 
 <template>
-  <div v-if="task" class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+  <div v-if="task" class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8">
     <nav class="pt-10 pb-8 font-mono text-sm text-faint">
       <NuxtLink to="/projects" class="hover:text-ink">projects</NuxtLink>
       <span class="mx-3 text-crumb">/</span>

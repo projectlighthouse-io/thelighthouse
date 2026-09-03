@@ -11,7 +11,7 @@ const toggle = (index: number): void => {
 
 <template>
   <section id="faq" class="py-24">
-    <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8">
       <div class="mb-12 text-center">
         <h2 class="mb-4 text-3xl font-semibold text-ink">Frequently Asked Questions</h2>
         <p class="text-lg text-quiet">The why behind the what</p>

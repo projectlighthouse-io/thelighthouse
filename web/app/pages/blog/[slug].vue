@@ -35,7 +35,7 @@ useJsonLd('post', () => ({
 </script>
 
 <template>
-  <article v-if="post" class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+  <article v-if="post" class="mx-auto max-w-3xl px-2 py-16 sm:px-6 lg:px-8">
     <nav class="mb-8 font-mono text-sm text-faint">
       <NuxtLink to="/blog" class="hover:text-ink">blog</NuxtLink>
       <span class="mx-3 text-crumb">/</span>

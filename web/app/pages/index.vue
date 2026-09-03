@@ -61,7 +61,7 @@ const challenges = computed<Project[]>(() =>
          of ~290px cards, and inside the 7xl column it fits four and then stops
          — the rest of a wide monitor stays empty while the band runs long. -->
     <section class="py-12">
-      <div class="px-4 sm:px-6 lg:px-8">
+      <div class="px-2 sm:px-6 lg:px-8">
         <div class="mx-auto mb-12 max-w-3xl text-center">
           <h2 class="mb-3 font-serif text-4xl text-ink sm:text-5xl">Books</h2>
           <p class="text-mono-body">Carefully crafted books to help you level up your skills</p>
@@ -93,13 +93,13 @@ const challenges = computed<Project[]>(() =>
     </section>
 
     <section class="py-12">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
         <MarketingFounderEditionCta />
       </div>
     </section>
 
     <section id="projects-challenges" class="py-12">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
         <div class="mb-6 text-center font-mono text-xs tracking-[0.2em] text-teal">
           / PROJECTS &amp; CHALLENGES
         </div>
@@ -168,7 +168,7 @@ const challenges = computed<Project[]>(() =>
     </section>
 
     <section class="pt-16 pb-12 sm:pt-24">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
         <MarketingOnTheHorizon :books="horizonBooks" />
       </div>
     </section>

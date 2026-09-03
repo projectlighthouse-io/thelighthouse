@@ -65,7 +65,7 @@ useSeo({
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-3xl px-2 py-16 sm:px-6 lg:px-8">
     <h1 class="mb-2 font-serif text-3xl tracking-tight text-ink sm:text-4xl">My notes</h1>
     <p class="text-mono-body mb-8">
       every passage you highlighted, with whatever you wrote next to it.
