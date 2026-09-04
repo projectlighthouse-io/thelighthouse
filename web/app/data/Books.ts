@@ -22,7 +22,7 @@ export const books: Book[] = [
     slug: 'crack-the-interview',
     title: 'Crack the Interview — 15 Algorithmic Patterns',
     description:
-      'stop memorizing solutions — start recognizing the patterns underneath. 15 algorithmic patterns, each with real problems of increasing difficulty, solutions in Go, Rust, and C.',
+      'the fifteen shapes most interview problems reduce to — two pointers, sliding window, tree DFS, backtracking, and the rest. each one worked through problems that get harder as they go, with solutions in Go, Rust, and C.',
     thumbnailUrl: `${CDN}/dsa/cract-the-interview.001.jpeg`,
     tracks: {},
     pages: 16,
