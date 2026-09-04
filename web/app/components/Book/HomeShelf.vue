@@ -306,10 +306,11 @@ function dismiss(event: MouseEvent): void {
 
 .list {
     display: grid;
-    /* Four across, stated rather than fitted: `auto-fill` gave three on a
-     * laptop and five on a wide monitor, and the band is meant to be four.
-     * Halved to two and then to one as the card runs out of room. */
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* Three across, stated rather than fitted: `auto-fill` gave three on a
+     * laptop and five on a wide monitor, and the band is meant to be three
+     * inside the centred column. Two and then one as the card runs out of
+     * room. */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     margin-top: 40px;
 }
@@ -482,8 +483,8 @@ function dismiss(event: MouseEvent): void {
     color: rgb(255 255 255 / 62%);
 }
 
-/* 1024 rather than something roomier: at four columns a 1024px window still
- * gives each card ~230px, which the cover and a serif title carry. Two is for
+/* 1024 rather than something roomier: at three columns a 1024px window still
+ * gives each card ~310px, which the cover and a serif title carry. Two is for
  * a tablet, one for a phone. */
 @media (max-width: 1023px) {
     .list {

@@ -57,18 +57,18 @@ const challenges = computed<Project[]>(() =>
   <div>
     <MarketingHeroSection :stats="heroStats" />
 
-    <!-- Full width, unlike every other band on this page: the shelf is a grid
-         of ~290px cards, and inside the 7xl column it fits four and then stops
-         — the rest of a wide monitor stays empty while the band runs long. -->
+    <!-- Inside the same 7xl column as every other band: at three cards the
+         shelf fits it, so running full width would only push the books wider
+         than the sections above and below them. -->
     <section class="py-12">
-      <div class="px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
         <div class="mx-auto mb-12 max-w-3xl text-center">
           <h2 class="mb-3 font-serif text-4xl text-ink sm:text-5xl">Books</h2>
           <p class="text-mono-body">Carefully crafted books to help you level up your skills</p>
         </div>
 
         <!-- `HomeShelf`, not the `Shelf` `/books` renders: the same books and
-             the same tabs, laid out two cards wide instead of eleven
+             the same tabs, laid out three cards wide instead of eleven
              full-width rows. Two columns halve the band's height, which is
              what the scroll box was there to do — so the shelf sits on the
              page in full and the page scrolls, rather than a panel scrolling
