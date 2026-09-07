@@ -1,10 +1,11 @@
 import type {
+  ApiArticle,
   ApiBookDetail,
   ApiBookSummary,
+  ApiPage,
   ApiProjectPage,
   ApiProjectSummary,
 } from '#server/utils/Lighthouse'
-import { posts } from '@/data/Blog'
 import { languages } from '@/data/Syntax'
 import { fromApi } from '#server/utils/Lighthouse'
 
@@ -79,8 +80,21 @@ async function entries(): Promise<Entry[]> {
     }
   }
 
-  for (const post of posts) {
-    out.push({ path: `/blog/${post.slug}`, priority: 0.7, changefreq: 'monthly', lastmod: post.publishedAt })
+  // From the api rather than a static list, for the same reason books are: an
+  // article is written without a deploy, and a sitemap built from a file would
+  // both miss new ones and keep advertising a url that has been taken down —
+  // which is a 404 in a search console rather than a page nobody links to.
+  const articles = await fromApi<ApiPage<ApiArticle>>('/api/articles', {
+    per_page: '1000',
+  })
+
+  for (const article of articles.items) {
+    out.push({
+      path: `/blog/${article.slug}`,
+      priority: 0.7,
+      changefreq: 'monthly',
+      lastmod: (article.updated_at ?? article.created_at ?? '').slice(0, 10) || undefined,
+    })
   }
 
   for (const lang of languages) {

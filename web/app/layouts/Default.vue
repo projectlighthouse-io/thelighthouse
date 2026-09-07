@@ -9,24 +9,45 @@ const navLinks: NavLink[] = [
   { to: '/books', label: 'books' },
   { to: '/projects', label: 'projects' },
   { to: '/syntax', label: 'syntax' },
+  { to: '/blog', label: 'blog' },
   { to: '/pricing', label: 'pricing' },
 ]
 
+// Grouped rather than in the order they were added: the things to read, then
+// the things about the site, then the legal pages, then what is off-site.
+// `blog` was last here, after the external links, which put it below linkedin
+// on a page it belongs at the top of.
 const footerLinks: NavLink[] = [
   { to: '/books', label: 'books' },
   { to: '/projects', label: 'projects' },
+  { to: '/blog', label: 'blog' },
   { to: '/roadmap', label: 'roadmap' },
   { to: '/connecting-the-dots', label: 'connecting the dots' },
-  { to: '/terms', label: 'terms' },
-  { to: '/privacy', label: 'privacy' },
   { to: '/changelog', label: 'changelog' },
   { to: '/support', label: 'support' },
+  { to: '/terms', label: 'terms' },
+  { to: '/privacy', label: 'privacy' },
   { to: 'https://www.linkedin.com/company/projectlighthouse-io', label: 'linkedin', external: true },
   { to: 'https://projectlighthouse.substack.com/', label: 'substack', external: true },
-  { to: '/blog', label: 'blog' },
 ]
 
 const { isSignedIn, resolve } = useReader()
+
+/**
+ * Whether the page wants the wordmark and the footer under it.
+ *
+ * The editor asks for `definePageMeta({ chrome: false })`: it is a
+ * viewport-height writing surface with its own action bar pinned to the bottom
+ * edge, and anything rendered after `<main>` makes the document taller than
+ * the viewport — so the page scrolls, and the bar the author was told is fixed
+ * scrolls away with it.
+ *
+ * Opt-out on the page rather than a second layout, which would mean a second
+ * copy of this header — nav, theme toggle and user menu — kept in step by
+ * hand.
+ */
+const route = useRoute()
+const showChrome = computed(() => route.meta.chrome !== false)
 
 // Client side, after hydration: the header is the only per-reader thing on an
 // otherwise identical page, and asking during SSR would make every page
@@ -111,11 +132,11 @@ const year = new Date().getFullYear()
     </main>
 
     <!-- ascii wordmark — hidden on mobile, too wide to be legible -->
-    <div class="hidden w-full sm:block">
+    <div v-if="showChrome" class="hidden w-full sm:block">
       <ChromeBinaryLogo />
     </div>
 
-    <footer class="mt-auto px-2 py-8 sm:px-6 lg:px-8">
+    <footer v-if="showChrome" class="mt-auto px-2 py-8 sm:px-6 lg:px-8">
       <div class="mx-auto w-full max-w-7xl text-center">
         <nav
           class="mb-6 grid grid-cols-2 gap-x-4 gap-y-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-6 sm:gap-y-2"
