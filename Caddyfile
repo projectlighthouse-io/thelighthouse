@@ -134,6 +134,14 @@
 		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
+	# The blog. Reading is open and the same bytes for everybody, so it is
+	# held at the edge; writing is behind the session cookie and a CSRF
+	# token, both the api's own gates. This rule only says the path is
+	# reachable — see `articles::routes`.
+	handle /api/articles* {
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
+	}
+
 	# The reader's place in one lesson, written and read by the reader page
 	# under the same session cookie its notes go out under. Its own rule
 	# because the block above is one path prefix, not a licence for the
