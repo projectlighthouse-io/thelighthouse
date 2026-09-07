@@ -28,6 +28,9 @@ pub(crate) struct ReaderResponse {
     sub: String,
     provider: String,
     name: String,
+    /// How this reader is addressed in a url. `null` for a row that predates
+    /// the column — the frontend has to cope with not having one.
+    username: Option<String>,
     email: String,
     avatar: Option<String>,
     /// The CSRF token for this session, which the frontend echoes in a header
@@ -87,6 +90,7 @@ pub(crate) async fn resolve(
         sub: reader.id.to_string(),
         provider: session.provider,
         name: reader.name,
+        username: reader.username,
         email: reader.email,
         avatar: reader.avatar,
         csrf: session.csrf,
