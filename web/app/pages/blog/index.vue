@@ -20,7 +20,7 @@ const perPage = computed(() => numberParam(route.query.per_page, 1, 50))
 // articles, and this document is cached by the edge on its url alone. Rendered
 // here, one reader's private rows would be handed to the next person opening
 // the same link. Fetched in the browser, they never reach the html.
-const { data: listing, refresh } = await useAsyncData(
+const { data: listing, error: failed, refresh } = await useAsyncData(
   () => `articles:${topic.value}:${author.value}:${page.value}:${perPage.value}`,
   () => $fetch<BlogListResponse>('/_api/blog', {
     query: {
@@ -36,6 +36,26 @@ const { data: listing, refresh } = await useAsyncData(
     server: !route.query.author,
   },
 )
+
+// **A listing that could not be fetched is not an empty listing.** Left as
+// one, the page renders "nothing here yet" and answers 200 — which the rule on
+// `/blog/**` then lets the edge keep for a minute past the api coming back, and
+// the browser keep longer. So the failure is thrown: nitro answers 5xx, and a
+// 5xx is stored nowhere.
+if (failed.value) {
+  // The rule on `/blog/**` says `s-maxage`, and it says it whatever the status
+  // is. A 502 the edge kept would outlive the outage it describes.
+  // Straight onto the node response: `setResponseHeader` is h3's, and this is
+  // app code, which does not have it.
+  const event = import.meta.server ? useRequestEvent() : null
+  event?.node.res.setHeader('cache-control', 'private, no-store')
+
+  throw createError({
+    statusCode: 502,
+    statusMessage: 'The blog is not answering',
+    fatal: true,
+  })
+}
 
 const posts = computed(() => listing.value.items)
 
