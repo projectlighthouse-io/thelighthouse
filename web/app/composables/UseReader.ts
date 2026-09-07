@@ -6,6 +6,9 @@ export interface Reader {
   sub: string
   provider: string
   name: string
+  /** How this reader is addressed in a url — `/blog?author=`. `null` for a
+   *  row that predates the column. */
+  username: string | null
   email: string
   avatar: string | null
   /**

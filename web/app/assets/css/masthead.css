@@ -38,12 +38,23 @@
     color: var(--color-read-ink);
 }
 
-.masthead-dek {
+/* The dek's *face*, without the masthead's own spacing.
+ *
+ * Split out because the blog editor sets its fields in the same face, and it
+ * wants none of `margin-top` / `max-width` / the muted colour that belong to a
+ * dek sitting under a title. Shared selector rather than a second copy of the
+ * five declarations: one place to change the face, and the masthead keeps
+ * rendering exactly as it did. */
+.masthead-dek,
+.dek-face {
     font-family: 'Newsreader', Georgia, serif;
     font-optical-sizing: auto;
     font-weight: 400;
     font-size: 16.5px;
     line-height: 1.62;
+}
+
+.masthead-dek {
     color: var(--color-read-ink-soft);
     margin-top: 16px;
     max-width: 36em;
@@ -78,7 +89,8 @@
         font-size: 44px;
     }
 
-    .masthead-dek {
+    .masthead-dek,
+    .dek-face {
         font-size: 15.5px;
     }
 }

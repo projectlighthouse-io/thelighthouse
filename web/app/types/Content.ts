@@ -140,10 +140,20 @@ export interface Curriculum {
 export interface BlogPost {
   slug: string
   title: string
+  /** A plain-text excerpt of the body. Never html — see `SafeMarkdown`. */
   description: string
   publishedAt: string
+  /** The article's one category, as a list so the existing card markup that
+   *  renders tags needs no change. */
   tags: string[]
   readMinutes: number
+  author: string
+  authorUsername: string | null
+  /** Only on the author's own listing — `/blog?author=<them>` read by them.
+   *  `null` means live; a date means it is not being served. */
+  takenDownAt?: string | null
+  /** Why, shown to its author and to nobody else. */
+  takenDownReason?: string | null
 }
 
 export interface SyntaxLanguage {
@@ -189,7 +199,19 @@ export interface SyntaxResponse {
 }
 
 export interface BlogPostResponse extends BlogPost {
+  updatedAt: string
+  /** Sanitised on the server by `SafeMarkdown.renderArticle`. This is the only
+   *  field in the app that is safe to put in `v-html`, and the unsanitised
+   *  markdown is deliberately not sent alongside it. */
   html: string
+}
+
+/** What `/_api/blog` answers: a page of cards, plus the count. */
+export interface BlogListResponse {
+  items: BlogPost[]
+  page: number
+  per_page: number
+  total: number
 }
 
 export interface LessonResponse {

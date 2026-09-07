@@ -16,6 +16,11 @@ const base = (): string =>
  * A GET against the api, with its 404 turned into nitro's and its silence into
  * a 502.
  *
+ * `headers` is for the one case that needs them: a route forwarding the
+ * reader's session cookie, because the api's answer depends on who is asking.
+ * Anything forwarded this way is a response no shared cache may hold — the
+ * calling route is what has to say so.
+ *
  * A rejection carrying no status at all is a connection that was never made —
  * the api down, restarting, or not yet listening. Rethrown as it comes, nitro
  * reports that as a 500, which says *this* process broke. It did not: it is the
@@ -28,13 +33,14 @@ const base = (): string =>
 export async function fromApi<T>(
   path: string,
   query?: Record<string, string>,
+  headers?: Record<string, string>,
 ): Promise<T> {
   try {
     // Cast because `$fetch<T>` returns `TypedInternalResponse<..., T>`, which
     // resolves to T for a concrete type but not for a type parameter — the
     // compiler cannot prove the two agree while T is still open. The runtime
     // value is exactly what T describes; only the generic is unprovable.
-    return await $fetch<T>(`${base()}${path}`, { query }) as T
+    return await $fetch<T>(`${base()}${path}`, { query, headers }) as T
   }
   catch (error: unknown) {
     const status = (error as { status?: number, statusCode?: number })?.status
@@ -192,4 +198,39 @@ export interface ApiTaskPage {
   project: { slug: string, name: string }
   previous: ApiTaskRef | null
   next: ApiTaskRef | null
+}
+
+/**
+ * An article, as `GET /api/articles` returns it. Snake case, because that is
+ * the wire.
+ *
+ * `body` is markdown as its author typed it — rust renders nothing, so it
+ * arrives raw and `SafeMarkdown` is what turns it into html.
+ */
+export interface ApiArticle {
+  id: number
+  slug: string
+  title: string
+  /** The line under the title. Author-written and required. */
+  subtitle: string
+  /** Every topic the article is filed under; at least one. */
+  topics: string[]
+  body: string
+  author: string
+  author_username: string | null
+  created_at: string | null
+  updated_at: string | null
+  /** Only on the author's own listing — `/api/articles?author=<them>` and
+   *  `/api/articles/mine`. Absent everywhere else, and `null` there means the
+   *  article is live. */
+  taken_down_at?: string | null
+  taken_down_reason?: string | null
+}
+
+/** The envelope every rust listing answers with. */
+export interface ApiPage<T> {
+  items: T[]
+  page: number
+  per_page: number
+  total: number
 }

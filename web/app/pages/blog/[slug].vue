@@ -28,7 +28,7 @@ useJsonLd('post', () => ({
   'description': post.value?.description,
   'datePublished': post.value?.publishedAt,
   'keywords': post.value?.tags.join(', '),
-  'author': { '@type': 'Person', 'name': 'Aryan Ahmed' },
+  'author': { '@type': 'Person', 'name': post.value?.author },
   'publisher': { '@type': 'Organization', 'name': SITE.name, 'url': SITE.url },
   'mainEntityOfPage': `${SITE.url}/blog/${slug.value}`,
 }))
@@ -46,6 +46,8 @@ useJsonLd('post', () => ({
       <time :datetime="post.publishedAt">{{ post.publishedAt }}</time>
       <span>·</span>
       <span>{{ post.readMinutes }} min read</span>
+      <span>·</span>
+      <span>{{ post.author }}</span>
       <span v-for="tag in post.tags" :key="tag" class="text-teal">#{{ tag }}</span>
     </div>
 
@@ -55,7 +57,7 @@ useJsonLd('post', () => ({
 
     <p class="mt-6 font-serif text-lg leading-relaxed text-quiet">{{ post.description }}</p>
 
-    <!-- eslint-disable-next-line vue/no-v-html -- authored markdown, rendered at build -->
+    <!-- eslint-disable-next-line vue/no-v-html -- sanitised server side by SafeMarkdown.renderArticle; the raw markdown is never sent to this page -->
     <div class="lesson-content prose mt-12 max-w-none" v-html="post.html" />
   </article>
 </template>
