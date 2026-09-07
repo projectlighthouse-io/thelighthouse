@@ -22,7 +22,7 @@ use ohara::catalog::Catalog;
 use sqlx::postgres::PgPool;
 
 use crate::{
-    auth, bookmarks, books,
+    articles, auth, bookmarks, books,
     cache::CachePolicy,
     config::Config,
     db,
@@ -157,6 +157,9 @@ pub(crate) fn app(
         // browser cannot make one. See `projects::page_routes`.
         .merge(projects::page_routes(&state))
         .merge(books::routes())
+        // The blog: markdown readers wrote. Open to read, behind the session
+        // cookie to write — see `articles::routes`.
+        .merge(articles::routes(&state))
         .merge(notes::routes(&state))
         .merge(bookmarks::routes(&state))
         .merge(payments::routes(&state))

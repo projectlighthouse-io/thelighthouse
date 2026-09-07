@@ -67,6 +67,22 @@ impl CachePolicy {
         }
     }
 
+    /// Prose a reader wrote — the blog. The same bytes for everybody, so it is
+    /// shareable, but on a much shorter leash than [`Self::public_content`].
+    ///
+    /// A lesson changes when somebody deploys the content repo. An article
+    /// changes when its author fixes a typo a minute after posting, and it
+    /// stops being served when an admin takes it down — and a takedown that
+    /// the edge keeps answering for a day is not a takedown. The window is
+    /// what bounds how long that lasts, which is why `stale-while-revalidate`
+    /// is short here too rather than the day a lesson gets.
+    pub(crate) const fn reader_content() -> Self {
+        Self::Shared {
+            max_age: 60,
+            stale_while_revalidate: 60,
+        }
+    }
+
     fn header_value(self) -> HeaderValue {
         match self {
             Self::Shared { max_age, stale_while_revalidate } => HeaderValue::from_str(&format!(

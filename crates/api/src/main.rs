@@ -6,6 +6,7 @@
 //! bottom.
 
 mod api;
+mod articles;
 mod auth;
 mod bookmarks;
 mod books;
