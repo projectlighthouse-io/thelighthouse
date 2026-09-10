@@ -181,7 +181,7 @@ function dismiss(event: MouseEvent): void {
       </p>
 
       <template v-else>
-        <article v-for="book in shown" :key="book.slug" class="bk">
+        <article v-for="book in shown" :key="book.slug" class="bk border-pencil">
           <button
             v-if="book.thumbnailUrl"
             type="button"
@@ -311,7 +311,10 @@ function dismiss(event: MouseEvent): void {
      * inside the centred column. Two and then one as the card runs out of
      * room. */
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
+    /* 20px, not the 8px this had before the cards were drawn: with no border
+       the gap only had to keep two hover tints apart, and now it is the white
+       space between three sketched boxes. */
+    gap: 20px;
     margin-top: 40px;
 }
 
