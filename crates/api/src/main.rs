@@ -16,6 +16,7 @@ mod cookie;
 mod db;
 mod limit;
 mod middleware;
+mod newsletter;
 mod notes;
 mod payments;
 mod projects;

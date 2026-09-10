@@ -28,7 +28,7 @@ use crate::{
     db,
     limit::RateLimit,
     middleware::{rate::limit_requests, signature::require_signature},
-    notes, payments, projects, response, settings, telemetry,
+    newsletter, notes, payments, projects, response, settings, telemetry,
 };
 
 /// Everything needed to take money: the drivers registered at boot, and the
@@ -160,6 +160,9 @@ pub(crate) fn app(
         // The blog: markdown readers wrote. Open to read, behind the session
         // cookie to write — see `articles::routes`.
         .merge(articles::routes(&state))
+        // The subscribe form, open to anybody — no session, no CSRF token and
+        // no reader. See `newsletter`, which says why each of those is absent.
+        .merge(newsletter::routes(&state))
         .merge(notes::routes(&state))
         .merge(bookmarks::routes(&state))
         .merge(payments::routes(&state))

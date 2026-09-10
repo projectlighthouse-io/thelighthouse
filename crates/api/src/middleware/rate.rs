@@ -63,7 +63,12 @@ pub(crate) async fn limit_requests(
 /// This runs *outside* `require_reader`, so there is usually no `Session` in
 /// the extensions — only the routes that mount that gate insert one. Falling
 /// back to the address is therefore the common path, not the exception.
-fn caller(request: &Request) -> String {
+///
+/// Shared with `newsletter`, which limits an anonymous form against its own
+/// budget and needs the same answer to "who is this" — including the same
+/// rules about which address header can be believed. A second implementation
+/// would be a second set of those rules to keep right.
+pub(crate) fn caller(request: &Request) -> String {
     if let Some(session) = request.extensions().get::<Session>() {
         return format!("user:{}", session.user_id);
     }

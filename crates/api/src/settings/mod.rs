@@ -49,7 +49,7 @@
 //! than a refused one.
 
 mod handler;
-mod kit;
+pub(crate) mod kit;
 mod refusal;
 #[cfg(test)]
 mod tests;

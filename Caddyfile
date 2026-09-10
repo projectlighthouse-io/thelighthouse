@@ -161,6 +161,16 @@
 		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
+	# The subscribe form, and the one rule here with no gate behind it at all —
+	# no signature, no session, no CSRF token. That is not an oversight: the
+	# form is for visitors who have never signed in, so there is no credential
+	# for any of those to check. What keeps it from being an open pipe to our
+	# newsletter provider is a rate limit in the api, per caller, stricter than
+	# the one every route inherits. See `newsletter`.
+	handle /api/newsletter* {
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
+	}
+
 	# The project pages, and the progress an open tab polls for while its
 	# reader works in their terminal.
 	#
