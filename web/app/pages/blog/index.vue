@@ -292,6 +292,8 @@ useJsonLd('blog', () => ({
           </NuxtLink>
           <span v-else />
         </nav>
+
+        <MarketingNewsletterForm class="mt-16" />
       </div>
     </section>
   </div>

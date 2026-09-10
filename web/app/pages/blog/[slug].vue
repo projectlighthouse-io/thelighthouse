@@ -59,5 +59,9 @@ useJsonLd('post', () => ({
 
     <!-- eslint-disable-next-line vue/no-v-html -- sanitised server side by SafeMarkdown.renderArticle; the raw markdown is never sent to this page -->
     <div class="lesson-content prose mt-12 max-w-none" v-html="post.html" />
+
+    <!-- After the piece, not before it: somebody who has just finished
+         reading is the one worth asking. -->
+    <MarketingNewsletterForm class="mt-16" />
   </article>
 </template>
