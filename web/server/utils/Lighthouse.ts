@@ -111,9 +111,15 @@ export interface ApiLesson {
   chapter_id: number
   sort_order: number
   html: string
-  toc: { id: string, text: string }[]
+  /** `locked` is per entry: the contents list describes the whole lesson to
+   *  everybody, and marks which entries this reader cannot reach. */
+  toc: { id: string, text: string, locked: boolean }[]
   read_minutes: number
   has_paid_part: boolean
+  /** Whether this reader may read the paid half. A fact about the reader, not
+   *  about the lesson — the api needs the session cookie to answer it, and
+   *  `has_paid_part` is the fact about the lesson beside it. */
+  unlocked: boolean
   remaining_sections: number
   position: number
   total: number

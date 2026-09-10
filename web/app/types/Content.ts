@@ -189,6 +189,19 @@ export interface TocItem {
   text: string
 }
 
+/**
+ * A lesson's contents entry, which carries one thing a syntax page's does not.
+ *
+ * The api sends every heading to everybody and marks the ones this reader
+ * cannot reach — so a locked lesson still shows what is in it, and only the
+ * anchors change. Its own type rather than an optional field on `TocItem`:
+ * a syntax page has no paywall, and `locked?: boolean` there would be a
+ * question nothing can answer.
+ */
+export interface LessonTocItem extends TocItem {
+  locked: boolean
+}
+
 export interface SyntaxResponse {
   slug: string
   name: string
@@ -218,7 +231,7 @@ export interface LessonResponse {
   book: { slug: string, title: string, thumbnailUrl: string }
   lesson: { slug: string, title: string, description: string, locked: boolean }
   html: string
-  toc: TocItem[]
+  toc: LessonTocItem[]
   readMinutes: number
   remainingSections: number
   position: number
