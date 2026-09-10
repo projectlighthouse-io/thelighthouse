@@ -398,7 +398,20 @@ function dismiss(event: MouseEvent): void {
  * under `.reader-shell` and deliberately not imported globally, so borrowing
  * four declarations would mean shipping ~20kb to this route. */
 .bk-desc {
-    display: block;
+    /* Two lines, then cut. The blurbs run from one line to five, and left to
+       run the cards in a row end at different heights — the shelf reads as
+       ragged rather than as a grid. `BookCard` has clamped at two since it was
+       written; this is the shelf catching up.
+
+       `-webkit-box` is not a legacy prefix here: it is the only display type
+       `line-clamp` works against, and every engine implements it under that
+       name. The unprefixed property is emitted beside it for whenever that
+       stops being true. */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
     margin-top: 10px;
     font-family: 'Newsreader', Georgia, serif;
     font-optical-sizing: auto;
