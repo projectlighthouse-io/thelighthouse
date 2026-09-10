@@ -178,5 +178,13 @@ const challenges = computed<Project[]>(() =>
     <MarketingFaqSection />
 
     <MarketingAuthorLetter />
+
+    <!-- Last thing on the page, under the letter — the footer's copy is right
+         there too, and one of the two being scrolled past is fine. -->
+    <section class="px-2 pb-20 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-3xl">
+        <MarketingNewsletterForm />
+      </div>
+    </section>
   </div>
 </template>

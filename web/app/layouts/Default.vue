@@ -24,6 +24,7 @@ const footerLinks: NavLink[] = [
   { to: '/roadmap', label: 'roadmap' },
   { to: '/connecting-the-dots', label: 'connecting the dots' },
   { to: '/changelog', label: 'changelog' },
+  { to: '/newsletter', label: 'newsletter' },
   { to: '/support', label: 'support' },
   { to: '/terms', label: 'terms' },
   { to: '/privacy', label: 'privacy' },
@@ -138,6 +139,12 @@ const year = new Date().getFullYear()
 
     <footer v-if="showChrome" class="mt-auto px-2 py-8 sm:px-6 lg:px-8">
       <div class="mx-auto w-full max-w-7xl text-center">
+        <!-- Narrower than the nav under it: a full-width input reads as a
+             search box, and this is not one. -->
+        <div class="mx-auto mb-8 max-w-md text-left">
+          <MarketingNewsletterForm compact />
+        </div>
+
         <nav
           class="mb-6 grid grid-cols-2 gap-x-4 gap-y-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-6 sm:gap-y-2"
         >
