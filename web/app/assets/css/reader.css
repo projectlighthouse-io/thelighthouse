@@ -1641,3 +1641,56 @@
         height: 32px;
     }
 }
+
+/* ---------- subbar, on a page with an empty gutter ---------- */
+
+/* The task page fills no contents list, so its breadcrumb had nothing in the
+ * gutter to line up with and sat about 200px left of the article it names:
+ * `.reader-subbar__inner` centres itself in 1280px while the article is the
+ * middle track of `.reader-layout--no-aside`'s 1404px grid.
+ *
+ * Rather than an offset that has to be re-derived at every breakpoint the grid
+ * changes at, the subbar borrows the grid itself — same classes, so the
+ * breadcrumb is in the article's own column by construction and the three
+ * layout media queries below already move both. Only the box padding differs,
+ * and only vertically, so the responsive side padding still comes from
+ * `.reader-layout`.
+ *
+ * Must stay after those media queries: same specificity, so source order is
+ * what makes these win. */
+.reader-subbar__grid {
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+/* Holds column one open, the way `.reader-toc` does under it — and disappears
+   at the same width, where the layout collapses to one column. */
+@media (max-width: 880px) {
+    .reader-subbar__gutter {
+        display: none;
+    }
+}
+
+/* The breadcrumb row itself. `.reader-article`'s own side padding, so this
+   aligns with the prose rather than with the card the prose sits in. */
+.reader-subbar__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 48px;
+    font-family: var(--reader-mono);
+    font-size: 12px;
+    color: var(--reader-mute);
+}
+
+@media (max-width: 880px) {
+    .reader-subbar__row {
+        padding: 0 24px;
+    }
+}
+
+@media (max-width: 639px) {
+    .reader-subbar__row {
+        padding: 0 18px;
+    }
+}
