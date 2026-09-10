@@ -106,28 +106,6 @@ async function destroy(slug: string): Promise<void> {
 // topic picker follows.
 const topics = [...CATEGORIES].sort()
 
-// ponytail: Intl.RelativeTimeFormat, no date library. Cascade down the units
-// and hand the largest whole one to the formatter.
-const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ['year', 31536000],
-  ['month', 2592000],
-  ['week', 604800],
-  ['day', 86400],
-  ['hour', 3600],
-  ['minute', 60],
-]
-
-const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-
-function humanDate(iso: string): string {
-  const seconds = (Date.parse(iso) - Date.now()) / 1000
-  if (Number.isNaN(seconds)) return iso
-  for (const [unit, size] of UNITS) {
-    if (Math.abs(seconds) >= size) return rtf.format(Math.round(seconds / size), unit)
-  }
-  return rtf.format(Math.round(seconds), 'second')
-}
-
 const description
   = 'Notes on systems programming, Go, Rust, networking and the runtime under your code.'
 
@@ -159,25 +137,15 @@ useJsonLd('blog', () => ({
          the edges. -->
     <section class="py-16">
       <div class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8 text-center">
-        <h1 class="mb-4 font-sans font-semibold text-4xl tracking-tight text-ink sm:text-5xl">Blog</h1>
-
-        <div class="mt-6 flex flex-wrap items-center justify-center gap-4">
-          <NuxtLink v-if="isSignedIn" to="/blog/write-something-amazing" class="btn-chalk text-sm font-medium text-ink">
-            write <span class="ml-1">———→</span>
-          </NuxtLink>
-          <NuxtLink
-            v-if="isSignedIn && mine"
-            :to="mine"
-            class="font-mono text-sm text-faint hover:text-ink"
-          >
-            my writing
-          </NuxtLink>
-        </div>
+        <h1 class="font-sans font-semibold text-4xl tracking-tight text-ink sm:text-5xl">Blog</h1>
       </div>
     </section>
 
+    <!-- Topics on the left, what the reader can *do* on the right: the write
+         button used to sit under the title, centred, where it read as part of
+         the masthead rather than as an action. -->
     <section class="pb-6">
-      <div class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-4 px-2 sm:px-6 lg:px-8">
         <nav class="flex flex-wrap gap-x-4 gap-y-2 font-mono text-xs">
           <NuxtLink
             to="/blog"
@@ -200,6 +168,21 @@ useJsonLd('blog', () => ({
             {{ isMine ? 'mine' : `@${author}` }} ✕
           </NuxtLink>
         </nav>
+
+        <div v-if="isSignedIn" class="flex items-center gap-4">
+          <NuxtLink
+            v-if="mine"
+            :to="mine"
+            class="font-mono text-xs text-faint hover:text-ink"
+          >
+            my writing
+          </NuxtLink>
+
+          <NuxtLink to="/blog/write-something-amazing" class="btn-write">
+            write
+            <span class="btn-write-arrow" aria-hidden="true">→</span>
+          </NuxtLink>
+        </div>
       </div>
     </section>
 
@@ -300,6 +283,64 @@ useJsonLd('blog', () => ({
 </template>
 
 <style scoped>
+/* The one filled button on the page, so it reads as the action rather than as
+   another link. `--color-on-ink` is the token for text on an ink fill — it
+   flips with the ink, not with the paper. */
+.btn-write {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 0.95rem;
+    border-radius: 999px;
+    background: var(--color-ink);
+    color: var(--color-on-ink);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+    transition:
+        transform 140ms ease,
+        box-shadow 140ms ease,
+        background-color 140ms ease;
+}
+
+.btn-write:hover {
+    background: var(--color-ink-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgb(0 0 0 / 0.18);
+}
+
+.btn-write:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+}
+
+.btn-write-arrow {
+    transition: transform 140ms ease;
+}
+
+.btn-write:hover .btn-write-arrow {
+    transform: translateX(2px);
+}
+
+/* The lift is decoration. Anybody who asked not to be moved gets the colour
+   change and nothing else. */
+@media (prefers-reduced-motion: reduce) {
+    .btn-write,
+    .btn-write-arrow {
+        transition: background-color 140ms ease;
+    }
+
+    .btn-write:hover {
+        transform: none;
+    }
+
+    .btn-write:hover .btn-write-arrow {
+        transform: none;
+    }
+}
+
 /* Same size as the chapter headings on /books/:slug, but Inter rather than
    their serif. */
 .post-title {
