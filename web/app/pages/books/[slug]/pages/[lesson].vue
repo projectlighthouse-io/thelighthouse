@@ -159,6 +159,9 @@ const activeId = ref<string>(data.value?.toc?.[0]?.id ?? '')
  */
 const TOP_LINE = 116
 
+/** Percent of the page scrolled, for the progress bar. */
+const read = ref(0)
+
 /**
  * The last heading to have crossed the line, or the last heading outright once
  * the page can scroll no further.
@@ -168,6 +171,15 @@ const TOP_LINE = 116
  * measuring the rest.
  */
 const syncFromScroll = (): void => {
+  // How far down the document the reader is, for the bar across the top. Not
+  // `data.percent`: that is where this lesson sits in the book, which does not
+  // change while the page is open — the bar sat still because it was showing a
+  // number that never moves.
+  const scrollable = document.documentElement.scrollHeight - window.innerHeight
+  read.value = scrollable > 0
+    ? Math.min(100, Math.max(0, (window.scrollY / scrollable) * 100))
+    : 100
+
   const last = toc.value.at(-1)
 
   if (!last) return
@@ -621,7 +633,7 @@ useJsonLd('crumbs', () => ({
 
 <template>
   <div v-if="data && book && lesson" class="reader-shell">
-    <div class="reader-progress"><span :style="{ width: `${data.percent}%` }" /></div>
+    <div class="reader-progress"><span :style="{ width: `${read}%` }" /></div>
 
     <div class="reader-subbar">
       <div class="reader-subbar__inner">
