@@ -53,34 +53,20 @@ useJsonLd('project', () => ({
 </script>
 
 <template>
-  <div v-if="project" class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8">
-    <nav class="pt-10 pb-8 font-mono text-sm text-faint">
+  <div v-if="project" class="mx-auto max-w-3xl bg-panel px-6 sm:px-10">
+    <nav class="pt-10 pb-8 font-sans text-xs text-crumb">
       <NuxtLink to="/projects" class="hover:text-ink">projects</NuxtLink>
-      <span class="mx-3 text-crumb">/</span>
-      <span class="text-quiet">{{ project.slug }}</span>
+      <span class="mx-2">/</span>
+      <span class="text-faint">{{ project.slug }}</span>
     </nav>
 
-    <section class="grid gap-12 pb-16 lg:grid-cols-[1fr_360px] lg:items-start">
+    <section class="pb-16">
       <div>
-        <div class="mb-8 flex flex-wrap items-center gap-2 font-mono text-xs">
-          <span class="inline-flex items-center rounded-full border border-stroke px-3 py-1 text-ink">
-            {{ label }}
-          </span>
-          <span class="text-faint">{{ project.tasksCount }} tasks</span>
-          <span v-if="project.difficulty" class="text-faint">· {{ project.difficulty }}</span>
-        </div>
-
-        <p v-if="project.headline" class="mb-3 font-mono text-sm text-teal">
-          {{ project.headline }}
-        </p>
-
-        <h1
-          class="font-editorial text-ink font-semibold text-hero leading-[1.05] tracking-editorial"
-        >
+        <h1 class="masthead-title">
           {{ project.name }}
         </h1>
 
-        <p class="mt-8 max-w-xl font-serif text-lg leading-relaxed text-ink">
+        <p class="masthead-dek">
           {{ project.shortDescription }}
         </p>
 
@@ -95,7 +81,7 @@ useJsonLd('project', () => ({
 
         <div class="mt-14">
           <div class="mb-6 flex items-baseline justify-between">
-            <h2 class="font-serif text-2xl text-ink">Tasks</h2>
+            <h2 class="part-title">Tasks</h2>
             <!-- Only once the poll has answered. A bare "0 / 8" drawn before
                  the first response reads as "you have done none of this" to a
                  reader who has finished it. -->
@@ -107,39 +93,26 @@ useJsonLd('project', () => ({
             </span>
           </div>
 
-          <ul>
-            <li
-              v-for="task in project.tasks"
-              :key="task.slug"
-              class="border-b border-dashed border-rule-soft py-4 last:border-b-0"
-            >
-              <NuxtLink
-                :to="`/projects/${project.slug}/tasks/${task.slug}`"
-                class="flex items-baseline gap-6 px-2 no-underline"
-              >
-                <span class="w-10 shrink-0 font-mono text-sm tabular-nums text-numeral">
-                  {{ String(task.sortOrder).padStart(2, '0') }}
-                </span>
-                <span class="font-editorial text-lg text-ink">{{ task.title }}</span>
-
-                <span class="ml-auto shrink-0 font-mono text-xs">
-                  <span
-                    v-if="forTask(task.slug)?.status === 'challenge_completed'"
-                    class="text-teal"
-                  >done</span>
-                  <span
-                    v-else-if="forTask(task.slug)?.status === 'challenge_failed'"
-                    class="text-faint"
-                  >failed</span>
-                  <span
-                    v-else-if="forTask(task.slug)?.is_locked"
-                    class="text-faint"
-                  >locked</span>
-                  <span v-else class="text-faint">{{ task.points }} pts</span>
-                </span>
-              </NuxtLink>
-            </li>
-          </ul>
+          <NuxtLink
+            v-for="task in project.tasks"
+            :key="task.slug"
+            :to="`/projects/${project.slug}/tasks/${task.slug}`"
+            class="ch"
+          >
+            <span class="ch-no">{{ String(task.sortOrder).padStart(2, '0') }}</span>
+            <span class="ch-title">
+              {{ task.title }}
+              <span v-if="forTask(task.slug)?.status === 'challenge_completed'" class="pill pill-done">
+                done
+              </span>
+              <span
+                v-else-if="forTask(task.slug)?.status === 'challenge_failed'"
+                class="pill pill-muted"
+              >failed</span>
+              <span v-else-if="forTask(task.slug)?.is_locked" class="pill pill-muted">locked</span>
+              <span v-else class="pill pill-muted">{{ task.points }} pts</span>
+            </span>
+          </NuxtLink>
         </div>
 
         <div v-if="project.features.length" class="mt-14">
@@ -155,8 +128,8 @@ useJsonLd('project', () => ({
         </div>
       </div>
 
-      <aside class="hidden lg:block">
-        <div class="border-pencil-light sticky top-24 rounded-md bg-panel p-7">
+      <aside class="mt-14">
+        <div class="border-pencil-light rounded-md bg-panel p-7">
           <div class="font-mono text-xs tracking-wider uppercase text-teal">run it locally</div>
           <pre class="mt-5 overflow-x-auto rounded-md bg-term-bg p-4 font-mono text-xs leading-relaxed text-term-text"><span class="text-term-dim">$</span> luxctl projects start {{ project.slug }}
 <span class="text-term-dim">$</span> luxctl tasks submit</pre>
@@ -168,3 +141,12 @@ useJsonLd('project', () => ({
     </section>
   </div>
 </template>
+
+<style scoped>
+/* Lighter than the book's chapter rows. A lesson title is the only thing on
+ * its row that carries weight; a task row is shorter and reads as a list of
+ * steps rather than a table of contents, and 600 made it shout. */
+.ch-title {
+    font-weight: 500;
+}
+</style>

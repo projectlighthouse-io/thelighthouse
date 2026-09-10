@@ -228,10 +228,9 @@ useJsonLd('crumbs', () => ({
 </template>
 
 <style scoped>
-/* Written as css rather than utilities because almost every number here is off
- * the scale — 15.5px titles, 9px pills, a 32px numeral gutter. As utilities
- * each one is an arbitrary value in brackets, and the row markup stops being
- * readable at a glance. */
+/* What is left here is this page's own: the start button and the empty state.
+ * The chapter and lesson rows moved to `assets/css/contents.css` when the
+ * project page started drawing the same list. */
 
 .start {
     display: inline-flex;
@@ -257,72 +256,6 @@ useJsonLd('crumbs', () => ({
     height: 13px;
 }
 
-.part + .part {
-    margin-top: 44px;
-}
-
-.part-title {
-    font-family: 'Newsreader', Georgia, serif;
-    font-optical-sizing: auto;
-    font-weight: 600;
-    font-size: 19px;
-    line-height: 1.15;
-    letter-spacing: -0.005em;
-    margin: 0 0 2px;
-    color: var(--color-read-ink);
-}
-
-/* No rule between rows and no tint on the locked ones. The pill already says
- * which is which, and a full-width band behind every paid lesson turned the
- * back half of the book into a grey block. */
-.ch {
-    display: grid;
-    grid-template-columns: 32px minmax(0, 1fr);
-    gap: 14px;
-    align-items: start;
-    padding: 11px 12px 11px 0;
-    text-decoration: none;
-}
-
-.ch-no {
-    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-    font-size: 10.5px;
-    padding: 4px 0 0 2px;
-    color: var(--color-read-faint);
-    transition: color 140ms;
-}
-
-.ch:hover .ch-no {
-    color: var(--color-teal-mid);
-}
-
-.ch-title {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    flex-wrap: wrap;
-    font-family: 'Newsreader', Georgia, serif;
-    font-optical-sizing: auto;
-    font-weight: 600;
-    font-size: 15.5px;
-    line-height: 1.25;
-    color: var(--color-read-ink);
-    transition: color 140ms;
-}
-
-.ch:hover .ch-title {
-    color: var(--color-teal-deep);
-}
-
-.ch-desc {
-    display: block;
-    margin-top: 4px;
-    font-size: 12px;
-    line-height: 1.55;
-    color: var(--color-read-mute);
-    text-wrap: pretty;
-}
-
 .empty {
     font-family: 'Newsreader', Georgia, serif;
     font-optical-sizing: auto;
@@ -340,23 +273,4 @@ useJsonLd('crumbs', () => ({
     text-underline-offset: 2px;
 }
 
-.pill {
-    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-    font-size: 9px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: lowercase;
-    padding: 2px 7px;
-    border-radius: 20px;
-}
-
-.pill-free {
-    color: var(--color-teal-deep);
-    background: var(--color-teal-wash);
-}
-
-.pill-paid {
-    color: var(--color-amber);
-    background: var(--color-amber-soft);
-}
 </style>
