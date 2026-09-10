@@ -125,30 +125,95 @@ export function useNotes(scope?: MaybeRefOrGetter<NotesScope | undefined>) {
   const loaded = ref<boolean>(false)
   const pending = ref<boolean>(false)
 
+  // Distinct again from an empty list: the notes page offers a retry, and
+  // "could not be loaded" is the only state that should show it. The reader
+  // page ignores this and draws nothing, which is the same as it did before.
+  const failed = ref<boolean>(false)
+
+  /** Which page of the reader's own notes. The lesson scope never leaves 1 —
+   *  fifty notes against one lesson is already more than anyone writes. */
+  const page = ref<number>(1)
+
+  /** The search box, sent as `q`. Empty means no filter, which is what the api
+   *  reads an absent `q` as. */
+  const search = ref<string>('')
+
+  const pages = computed<number>(
+    () => Math.max(1, Math.ceil(total.value / PER_LESSON)),
+  )
+
   async function load(): Promise<void> {
     if (import.meta.server) return
 
     pending.value = true
+    failed.value = false
 
     try {
       const response = await $fetch<PageResponse<NoteResponse>>('/api/notes', {
-        query: { per_page: PER_LESSON, ...toValue(scope) },
+        query: {
+          per_page: PER_LESSON,
+          page: page.value,
+          // Omitted when empty rather than sent as `q=`: the api reads a blank
+          // term as no filter either way, and leaving it off keeps the url the
+          // reader sees honest about what was asked.
+          ...(search.value.trim() ? { q: search.value.trim() } : {}),
+          ...toValue(scope),
+        },
       })
 
       notes.value = response.items.map(toNote)
       total.value = response.total
+
+      // The api clamps the page it was asked for, so this is the page actually
+      // answered — a `goTo` past the end lands on the last one rather than on
+      // an empty list numbered something that does not exist.
+      page.value = response.page
     }
     catch {
       // Including a 401: a signed-out reader has no notes to draw, and the
       // page is perfectly readable without them.
       notes.value = []
       total.value = 0
+      failed.value = true
     }
     finally {
       pending.value = false
       loaded.value = true
     }
   }
+
+  /** Moves to a page, if it is one. Clamped here as well as by the api so an
+   *  out-of-range click costs no request at all. */
+  async function goTo(to: number): Promise<void> {
+    const wanted = Math.min(Math.max(1, Math.trunc(to)), pages.value)
+
+    if (wanted === page.value) return
+
+    page.value = wanted
+    await load()
+  }
+
+  // Typing restarts at page one: page four of "everything" is not page four of
+  // the three notes that match, and staying there shows an empty list.
+  //
+  // Debounced, so a search is one request per pause rather than one per
+  // keystroke. `loaded` is deliberately left alone — the list on screen stays
+  // until the new answer replaces it, rather than flashing an empty state
+  // between every letter.
+  let debounce: ReturnType<typeof setTimeout> | null = null
+
+  watch(search, () => {
+    if (debounce) clearTimeout(debounce)
+
+    debounce = setTimeout(() => {
+      page.value = 1
+      void load()
+    }, 250)
+  })
+
+  onScopeDispose(() => {
+    if (debounce) clearTimeout(debounce)
+  })
 
   /**
    * Saves a note against a passage, or against the lesson when `anchor` is
@@ -234,5 +299,8 @@ export function useNotes(scope?: MaybeRefOrGetter<NotesScope | undefined>) {
     }
   }
 
-  return { notes, total, loaded, pending, load, create, edit, remove }
+  return {
+    notes, page, pages, total, loaded, pending, failed, search,
+    load, goTo, create, edit, remove,
+  }
 }
