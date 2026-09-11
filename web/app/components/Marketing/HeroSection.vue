@@ -101,8 +101,19 @@ onBeforeUnmount(() => {
       <div
         class="mx-auto mt-16 flex max-w-2xl sm:mt-24 lg:my-auto lg:mr-0 lg:ml-10 lg:max-w-none lg:flex-none xl:ml-20"
       >
-        <div class="relative max-w-3xl flex-none sm:max-w-5xl lg:max-w-none">
-          <div class="w-[40rem] lg:w-[50rem] xl:w-[56rem]">
+        <!--
+          `min-w-0` and `lg:flex-none`, not a bare `flex-none`: a flex item that
+          cannot shrink, holding a child with a stated width, is a floor on the
+          page's width — and below `lg` that floor was wider than a phone.
+        -->
+        <div class="relative min-w-0 max-w-3xl sm:max-w-5xl lg:max-w-none lg:flex-none">
+          <!--
+            `w-full` first. This was `w-[40rem]` with variants only at `lg` and
+            `xl`, so every screen narrower than a laptop got a hard 640px box —
+            140px wider than a phone, which is the whole of why the page could
+            be dragged sideways.
+          -->
+          <div class="w-full lg:w-[50rem] xl:w-[56rem]">
             <MarketingHeroTerminal />
           </div>
         </div>

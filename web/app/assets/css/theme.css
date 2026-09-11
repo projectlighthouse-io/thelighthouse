@@ -427,6 +427,17 @@
        sets its own bg-white on top, which blocks the pattern. */
     body {
         @apply text-foreground;
+        /* A guard against decorative bleed, not a substitute for fixing layout
+         * overflow. The pencil borders paint through `filter: url(#pencil-filter)`,
+         * whose filter region is wider than the element it decorates — that ink
+         * added ~2px to the document on a phone and let the whole page be dragged
+         * sideways.
+         *
+         * `clip`, not `hidden`: `hidden` would make the body a scroll container
+         * and break `position: sticky` for everything inside it. `clip` cuts the
+         * paint without that. Anything that genuinely needs to scroll sideways
+         * still does — those carry their own `overflow-x: auto`. */
+        overflow-x: clip;
         background-color: var(--color-page);
         background-image: radial-gradient(var(--color-dot) 1px, transparent 1px);
         background-size: 16px 16px;

@@ -10,7 +10,10 @@ const active = computed<Project | undefined>(() => props.challenges[selected.val
 <template>
   <div class="border-pencil-light grid gap-0 rounded-md bg-panel lg:grid-cols-[minmax(0,20rem)_1fr]">
     <!-- master -->
-    <ul class="max-h-[28rem] overflow-y-auto border-b border-rule lg:border-r lg:border-b-0">
+    <!-- `min-w-0`: a grid item defaults to `min-width: auto`, so it refuses to
+         shrink below its content — which let a long challenge name push this
+         list to 442px inside a 359px phone and drag the whole page sideways. -->
+    <ul class="max-h-[28rem] min-w-0 overflow-y-auto border-b border-rule lg:border-r lg:border-b-0">
       <li v-for="(challenge, i) in challenges" :key="challenge.slug">
         <button
           type="button"
@@ -18,14 +21,14 @@ const active = computed<Project | undefined>(() => props.challenges[selected.val
           :class="i === selected ? 'bg-paper' : 'hover:bg-paper'"
           @click="selected = i"
         >
-          <div class="font-serif text-base text-ink">{{ challenge.name }}</div>
+          <div class="font-serif text-base break-words text-ink">{{ challenge.name }}</div>
           <div class="mt-1 font-mono text-xs text-faint">{{ challenge.tasksCount }} tasks</div>
         </button>
       </li>
     </ul>
 
     <!-- detail -->
-    <div v-if="active" class="flex flex-col p-8">
+    <div v-if="active" class="flex min-w-0 flex-col p-8">
       <div class="mb-2 font-mono text-xs text-teal">/ {{ active.slug }}</div>
       <h4 class="font-serif text-2xl text-ink">{{ active.name }}</h4>
       <p class="mt-4 font-serif text-base leading-relaxed text-ink/85">
