@@ -6,7 +6,7 @@ interface NavLink {
 }
 
 // `books` is deliberately absent: it is a dropdown rather than a link, and
-// `ChromeBooksDropdown` renders its own trigger beside these. See that
+// `NavBooksDropdown` renders its own trigger beside these. See that
 // component for why the shelf opens in place instead of navigating.
 const navLinks: NavLink[] = [
   { to: '/projects', label: 'projects' },
@@ -33,6 +33,16 @@ const footerLinks: NavLink[] = [
   { to: 'https://www.linkedin.com/company/projectlighthouse-io', label: 'linkedin', external: true },
   { to: 'https://projectlighthouse.substack.com/', label: 'substack', external: true },
 ]
+
+/**
+ * The same links, plus `books`, for the narrow-screen menu.
+ *
+ * `books` is a dropdown in the header and a plain link here, so it cannot come
+ * from `navLinks` — but everything else must, or the two navigations drift.
+ */
+const mobileLinks = computed<NavLink[]>(
+  () => [{ to: '/books', label: 'books' }, ...navLinks],
+)
 
 const { isSignedIn, resolve } = useReader()
 
@@ -82,15 +92,18 @@ const year = new Date().getFullYear()
 <template>
   <div class="flex min-h-screen flex-col">
     <header class="dotted-bg fixed top-0 right-0 left-0 z-50">
-      <div class="mx-auto max-w-full px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-full px-4 sm:px-6 lg:px-8">
         <div class="relative flex h-16 items-center justify-between">
-          <NuxtLink to="/" class="flex items-center gap-2">
-            <img src="/lighthouse.svg" alt="projectlighthouse logo" class="h-8 w-8 object-contain">
-            <span class="text-base tracking-tight text-ink">projectlighthouse</span>
+          <!-- `min-w-0` and `truncate`: the wordmark is the one thing here that
+               can give way, and without this the logo, the menu, the toggle and
+               the join button together were wider than a phone. -->
+          <NuxtLink to="/" class="flex min-w-0 items-center gap-2">
+            <img src="/lighthouse.svg" alt="projectlighthouse logo" class="h-8 w-8 shrink-0 object-contain">
+            <span class="truncate text-base tracking-tight text-ink">projectlighthouse</span>
           </NuxtLink>
 
           <nav class="absolute left-1/2 hidden -translate-x-1/2 items-center gap-2 sm:flex">
-            <ChromeBooksDropdown />
+            <NavBooksDropdown />
 
             <NuxtLink
               v-for="link in navLinks"
@@ -102,8 +115,10 @@ const year = new Date().getFullYear()
             </NuxtLink>
           </nav>
 
-          <div class="flex items-center gap-1">
-            <ChromeThemeToggle />
+          <div class="flex shrink-0 items-center gap-1">
+            <NavMenu :links="mobileLinks" />
+
+            <NavThemeToggle />
 
             <!-- Who the reader is is client state, so the server has nothing
                  correct to render. It renders the join button, which is also
@@ -113,9 +128,9 @@ const year = new Date().getFullYear()
               <!-- A menu, not a link to /profile: sign out and the reader's own
                    pages live behind it, and the header is the one place every
                    page has room for them. -->
-              <ChromeUserMenu v-if="isSignedIn" />
+              <NavUserMenu v-if="isSignedIn" />
 
-              <ChromeJoinDropdown v-else />
+              <NavJoinDropdown v-else />
 
               <!-- The same component the anonymous branch renders, so the
                    server emits the real button rather than a stand-in for it.
@@ -124,7 +139,7 @@ const year = new Date().getFullYear()
                    to wait for hydration, and a page whose javascript has not
                    run yet still shows the thing it will become. -->
               <template #fallback>
-                <ChromeJoinDropdown />
+                <NavJoinDropdown />
               </template>
             </ClientOnly>
           </div>
@@ -138,17 +153,14 @@ const year = new Date().getFullYear()
 
     <!-- ascii wordmark — hidden on mobile, too wide to be legible -->
     <div v-if="showChrome" class="hidden w-full sm:block">
-      <ChromeBinaryLogo />
+      <NavBinaryLogo />
     </div>
 
-    <footer v-if="showChrome" class="mt-auto px-2 py-8 sm:px-6 lg:px-8">
+    <!-- Deeper bottom padding on a phone than on a desktop: the last line sits
+         right where the browser's own bar and the home indicator are, and 32px
+         leaves it looking jammed against the bottom of the screen. -->
+    <footer v-if="showChrome" class="mt-auto px-4 pt-8 pb-16 sm:px-6 sm:pb-8 lg:px-8">
       <div class="mx-auto w-full max-w-7xl text-center">
-        <!-- Narrower than the nav under it: a full-width input reads as a
-             search box, and this is not one. -->
-        <div class="mx-auto mb-8 max-w-md text-left">
-          <MarketingNewsletterForm compact />
-        </div>
-
         <nav
           class="mb-6 grid grid-cols-2 gap-x-4 gap-y-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-6 sm:gap-y-2"
         >
