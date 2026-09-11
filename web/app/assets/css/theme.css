@@ -315,6 +315,16 @@
     --text-hero: 3.25rem;
     --text-hero-lg: 3.75rem;
 
+    /* The books menu's widest: a list of books beside a preview of one.
+       Wider than any page column on purpose — it is a panel over the page
+       rather than a column in it — but not much wider, because a row of
+       cover-and-title stops reading as a row once the line gets long.
+
+       A named token rather than a bracket value in the markup, so the number
+       sits here with the rest of the measurements. Tailwind's `--container-*`
+       namespace, so this is `max-w-shelf`. */
+    --container-shelf: 60rem;
+
     --font-sans:
         Inter, ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
@@ -431,6 +441,21 @@
         --font-sans:
             'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
             'Segoe UI Symbol', 'Noto Color Emoji';
+    }
+
+    /* How tall the books menu may get.
+     *
+     * Not `max-h-full`: on a fixed element a percentage height resolves against
+     * the viewport, not against the `top`/`bottom` inset box — so `max-h-full`
+     * let the panel start 5rem down and still be a full viewport tall, running
+     * off the bottom of the screen. This states the arithmetic instead.
+     *
+     * `dvh`, so a mobile browser's collapsing address bar does not leave the
+     * panel taller than the window it is in. The 9rem is the `top-20` the panel
+     * sits at plus a gutter of the same order under it — the page shows above
+     * and below, because this is a panel over the page and not a takeover. */
+    .max-h-shelf {
+        max-height: calc(100dvh - 9rem);
     }
 
     .font-fredericka {

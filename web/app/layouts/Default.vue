@@ -5,8 +5,10 @@ interface NavLink {
   external?: boolean
 }
 
+// `books` is deliberately absent: it is a dropdown rather than a link, and
+// `ChromeBooksDropdown` renders its own trigger beside these. See that
+// component for why the shelf opens in place instead of navigating.
 const navLinks: NavLink[] = [
-  { to: '/books', label: 'books' },
   { to: '/projects', label: 'projects' },
   { to: '/syntax', label: 'syntax' },
   { to: '/blog', label: 'blog' },
@@ -88,6 +90,8 @@ const year = new Date().getFullYear()
           </NuxtLink>
 
           <nav class="absolute left-1/2 hidden -translate-x-1/2 items-center gap-2 sm:flex">
+            <ChromeBooksDropdown />
+
             <NuxtLink
               v-for="link in navLinks"
               :key="link.to"
