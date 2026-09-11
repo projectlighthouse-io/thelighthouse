@@ -61,7 +61,7 @@ const challenges = computed<Project[]>(() =>
          shelf fits it, so running full width would only push the books wider
          than the sections above and below them. -->
     <section class="py-12">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="mx-auto mb-12 max-w-3xl text-center">
           <h2 class="mb-3 font-serif text-4xl text-ink sm:text-5xl">Books</h2>
           <p class="text-mono-body">Carefully crafted books to help you level up your skills</p>
@@ -77,7 +77,13 @@ const challenges = computed<Project[]>(() =>
              `bg-panel` for the same reason `/books` carries it: the cards tint
              on hover, and without a ground of their own they do it over the
              body's dotted paper. -->
-        <div class="rounded-md bg-panel p-6 max-[820px]:p-4">
+        <!--
+             No horizontal padding on a phone: the page gutter already insets
+             this, and the slab adding its own put the book cards 32px in while
+             every other card on the page sat at 16px. Vertical padding stays —
+             that one is not doubled by anything.
+        -->
+        <div class="rounded-md bg-panel p-6 max-[820px]:px-0 max-[820px]:py-4">
           <BookHomeShelf :books="books" />
         </div>
 
@@ -93,13 +99,13 @@ const challenges = computed<Project[]>(() =>
     </section>
 
     <section class="py-12">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <MarketingFounderEditionCta />
       </div>
     </section>
 
     <section id="projects-challenges" class="py-12">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="mb-6 text-center font-mono text-xs tracking-[0.2em] text-teal">
           / PROJECTS &amp; CHALLENGES
         </div>
@@ -168,7 +174,7 @@ const challenges = computed<Project[]>(() =>
     </section>
 
     <section class="pt-16 pb-12 sm:pt-24">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <MarketingOnTheHorizon :books="horizonBooks" />
       </div>
     </section>
@@ -181,7 +187,7 @@ const challenges = computed<Project[]>(() =>
 
     <!-- Last thing on the page, under the letter — the footer's copy is right
          there too, and one of the two being scrolled past is fine. -->
-    <section class="px-2 pb-20 sm:px-6 lg:px-8">
+    <section class="px-4 pb-20 sm:px-6 lg:px-8">
       <div class="mx-auto max-w-3xl">
         <MarketingNewsletterForm />
       </div>

@@ -39,7 +39,7 @@ useJsonLd('post', () => ({
     <!-- The same slab the listing sits on: `bg-panel` rather than `bg-white`,
          so it follows the theme, and a little wider than the max-w-3xl column
          inside it so the dotted page still shows at the edges. -->
-    <article class="mx-auto max-w-3xl px-2 py-16 sm:px-6 lg:px-8">
+    <article class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
       <nav class="mb-8 font-mono text-sm text-whisper">
         <NuxtLink to="/blog" class="hover:text-ink">blog</NuxtLink>
         <span class="mx-3 text-crumb">/</span>

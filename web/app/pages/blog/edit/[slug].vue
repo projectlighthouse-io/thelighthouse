@@ -62,11 +62,11 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <div v-if="loading" class="mx-auto max-w-7xl px-2 py-16 sm:px-6 lg:px-8">
+  <div v-if="loading" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
     <p class="text-mono-body">loading…</p>
   </div>
 
-  <div v-else-if="missing" class="mx-auto max-w-7xl px-2 py-16 sm:px-6 lg:px-8">
+  <div v-else-if="missing" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
     <h1 class="font-serif text-3xl tracking-tight text-ink">Not found</h1>
     <p class="text-mono-body mt-2">
       no article of yours at that address.

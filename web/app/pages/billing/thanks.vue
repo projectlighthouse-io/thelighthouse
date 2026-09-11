@@ -47,7 +47,7 @@ const trackName = computed(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-2 py-24 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-3xl px-4 py-24 sm:px-6 lg:px-8">
     <h1 class="font-editorial text-4xl font-bold text-ink">Thank you.</h1>
 
     <template v-if="bought">

@@ -25,7 +25,7 @@ useJsonLd('syntax', {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-2 py-16 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
     <div class="font-mono text-xs tracking-[0.2em] uppercase text-teal">reference</div>
     <h1 class="mt-3 font-editorial text-4xl text-ink sm:text-5xl font-semibold">
       Syntax Reference

@@ -29,7 +29,7 @@ const links: SettingsLink[] = [
 </script>
 
 <template>
-  <div class="border-pencil-light mx-auto my-16 max-w-3xl rounded-md bg-panel px-2 py-10 sm:px-6 lg:px-8">
+  <div class="border-pencil-light mx-auto my-16 max-w-3xl rounded-md bg-panel px-4 py-10 sm:px-6 lg:px-8">
     <h1 class="mb-2 font-serif text-3xl tracking-tight text-ink sm:text-4xl">Settings</h1>
     <p class="mb-10 text-sm leading-relaxed text-quiet">manage your account and preferences.</p>
 

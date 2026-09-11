@@ -41,7 +41,7 @@ useJsonLd('roadmap', {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-2 py-16 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
     <div class="mx-auto max-w-3xl text-center">
       <h1 class="mb-4 font-serif text-4xl tracking-tight text-ink sm:text-5xl">Roadmap</h1>
       <p class="text-mono-body">what's shipped, what's building, what's still an idea.</p>

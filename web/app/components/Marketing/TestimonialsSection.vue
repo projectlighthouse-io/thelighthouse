@@ -51,7 +51,7 @@ withDefaults(
 
 <template>
   <section class="py-8 sm:py-12 lg:py-16">
-    <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="mx-auto max-w-2xl text-center">
         <h2
           class="font-handwritten text-3xl text-ink sm:text-4xl lg:text-5xl font-medium tracking-handwritten"

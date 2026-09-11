@@ -13,7 +13,7 @@ const { reader, initials } = useReader()
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-2 py-16 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
     <div class="flex items-center gap-5">
       <img
         v-if="reader?.avatar"

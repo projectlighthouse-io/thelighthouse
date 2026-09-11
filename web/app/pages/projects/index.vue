@@ -47,7 +47,7 @@ useJsonLd('projects', () => ({
 <template>
   <div>
     <section class="py-16">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="mx-auto max-w-3xl text-center">
           <h1 class="mb-4 font-serif text-4xl tracking-tight text-ink sm:text-5xl">Projects</h1>
           <p class="text-mono-body">build real systems from scratch, or sharpen your tools.</p>
@@ -81,7 +81,7 @@ useJsonLd('projects', () => ({
     </section>
 
     <section class="pb-16">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <ProjectCard v-for="project in shown" :key="project.slug" :project="project" />
         </div>

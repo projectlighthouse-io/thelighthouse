@@ -136,7 +136,7 @@ useJsonLd('blog', () => ({
          max-w-3xl content column inside it, so the dotted page still shows at
          the edges. -->
     <section class="py-16">
-      <div class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8 text-center">
+      <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 text-center">
         <h1 class="font-sans font-semibold text-4xl tracking-tight text-ink sm:text-5xl">Blog</h1>
       </div>
     </section>
@@ -145,7 +145,7 @@ useJsonLd('blog', () => ({
          button used to sit under the title, centred, where it read as part of
          the masthead rather than as an action. -->
     <section class="pb-6">
-      <div class="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-4 px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <nav class="flex flex-wrap gap-x-4 gap-y-2 font-mono text-xs">
           <NuxtLink
             to="/blog"
@@ -187,7 +187,7 @@ useJsonLd('blog', () => ({
     </section>
 
     <section class="pb-20">
-      <div class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
         <p
           v-if="error"
           class="mb-6 rounded-md border border-stroke px-4 py-3 font-mono text-sm text-ink"

@@ -108,7 +108,7 @@ useJsonLd('faq', {
 <template>
   <div>
     <section class="pt-10 pb-6 sm:pt-14 sm:pb-8">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="mx-auto max-w-4xl text-center">
           <h1
             class="font-editorial text-ink text-hero-lg tracking-editorial font-medium leading-[1.05]"
@@ -129,7 +129,7 @@ useJsonLd('faq', {
     </section>
 
     <section id="pricing" class="pb-16">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <p v-if="reason" class="mb-6 text-center text-sm text-ink">{{ reason }}</p>
 
         <div class="grid gap-8 lg:grid-cols-4">
@@ -195,7 +195,7 @@ useJsonLd('faq', {
     </section>
 
     <section class="pb-20">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <MarketingFounderEditionCta />
       </div>
     </section>

@@ -99,7 +99,7 @@ function cancel(): void {
          viewport's bottom edge and the article scrolls *inside* the card
          rather than moving the page. Below `lg` this is ordinary document
          flow — a scroll box inside a scrolling page is the worst of both. -->
-    <div class="px-2 py-2 sm:px-6 lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:px-10">
+    <div class="px-4 py-2 sm:px-6 lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:px-10">
       <!-- Widened with the column. `max-w-2xl` was chosen when this was half
            the screen; at two thirds it would leave the extra width as empty
            gutter rather than as writing room, which is the point of the split.
