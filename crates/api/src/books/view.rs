@@ -197,19 +197,17 @@ impl<'b> LessonView<'b> {
     ) -> Self {
         // The contents list describes the whole lesson, whoever is reading —
         // a reader who has not bought it still gets to see what is in it.
-        // Anchorized over both halves at once, so the ids are the ids the
-        // rendered document uses when it carries both.
-        let whole = prose.paid.as_deref().map_or_else(
-            || prose.free.clone(),
-            |paid| format!("{}\n\n{paid}", prose.free),
-        );
+        // The lesson as written. Rebuilding it as `free + paid` served a
+        // region written mid-lesson at the end of it — `ohara::body` keeps the
+        // order now, and the ids below are anchorized over that.
+        let whole = &prose.whole;
 
         // Which entries the reader cannot reach. The free half comes first, so
         // everything past its heading count belongs to the paid half — and
         // when the lesson is unlocked, nothing is locked.
         let free_headings = body::headings(&prose.free).len();
 
-        let toc: Vec<TocEntry> = body::headings(&whole)
+        let toc: Vec<TocEntry> = body::headings(whole)
             .into_iter()
             .enumerate()
             .map(|(at, heading)| TocEntry {
@@ -241,9 +239,12 @@ impl<'b> LessonView<'b> {
             chapter_id: entry.chapter_id,
             sort_order: entry.sort_order,
             html: if unlocked {
-                body::render(&whole)
+                prose.whole_html()
             } else {
-                body::render(&prose.free)
+                // Carries a `<div data-paywall>` where each withheld region
+                // stood, naming what it covered. The prose itself never leaves
+                // this process — see `ohara::body`.
+                prose.free_html()
             },
             toc,
             read_minutes: body::read_minutes(&prose.free),
