@@ -105,15 +105,20 @@ pub(crate) async fn catalogue(
     // Advertised, not applied. The reader types the code at stripe, which is
     // what keeps a spoofable header from being the only thing standing between
     // anybody and a discount.
-    let coupon = country
-        .as_deref()
-        .and_then(|code| state.billing.plans.for_country(code))
-        .map(|tier| {
-            serde_json::json!({
-                "code": tier.code(),
-                "percent": tier.percent(),
-            })
-        });
+    // The country goes in as an option: a tier that names no countries is a
+    // list price with a discount off it, and a request cloudflare put no
+    // header on is not a reason to advertise the undiscounted amount.
+    let coupon =
+        state
+            .billing
+            .plans
+            .for_country(country.as_deref())
+            .map(|tier| {
+                serde_json::json!({
+                    "code": tier.code(),
+                    "percent": tier.percent(),
+                })
+            });
 
     json(
         StatusCode::OK,
