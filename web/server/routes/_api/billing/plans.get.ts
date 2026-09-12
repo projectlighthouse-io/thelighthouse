@@ -10,12 +10,15 @@ interface ApiPlan {
 }
 
 /**
- * What is for sale, and what it costs.
+ * What is for sale, what it costs, and where the asker is.
  *
  * Through nitro rather than straight from the browser, like the other public
- * reads: the amounts are the same for everyone, so this can be fetched during
- * SSR and prerendered into the pricing page instead of appearing a moment
- * after hydration.
+ * reads, so the pricing page carries the amounts in its html rather than
+ * showing them a moment after hydration.
+ *
+ * **`no-store`, and that is not an oversight.** The answer names the caller's
+ * country, so a shared cache holding one country's answer would serve it to
+ * the next country along. It used to be edge-cacheable and is not any more.
  *
  * The reader-specific half of billing — a membership, a checkout, a
  * cancellation — deliberately does *not* come through here. Those carry the
@@ -27,14 +30,42 @@ interface ApiPlan {
  * `lighthouse-prices` reconciles against stripe, so this handler translates
  * naming and nothing else.
  */
-export default defineEventHandler(async () => {
-  const plans = await fromApi<ApiPlan[]>('/api/billing/plans')
+/** The discount a country is offered, if any. Advertised, not applied — the
+ *  reader types `code` at stripe. */
+interface Coupon {
+  code: string
+  percent: number
+}
 
-  return plans.map(plan => ({
-    plan: plan.plan,
-    track: plan.track,
-    recurring: plan.recurring,
-    amount: plan.amount,
-    currency: plan.currency,
-  }))
+interface ApiCatalogue {
+  country: string | null
+  plans: ApiPlan[]
+  coupon: Coupon | null
+}
+
+export default defineEventHandler(async (event) => {
+  setHeader(event, 'cache-control', 'private, no-store')
+
+  // Cloudflare's header, forwarded by hand. Nothing reaches the api over
+  // loopback unless this handler passes it on, and without it every request
+  // looks to the api as though it came from nowhere.
+  const country = getHeader(event, 'cf-ipcountry')
+
+  const answer = await fromApi<ApiCatalogue>(
+    '/api/billing/plans',
+    {},
+    country ? { 'cf-ipcountry': country } : {},
+  )
+
+  return {
+    country: answer.country,
+    plans: answer.plans.map(plan => ({
+      plan: plan.plan,
+      track: plan.track,
+      recurring: plan.recurring,
+      amount: plan.amount,
+      currency: plan.currency,
+    })),
+    coupon: answer.coupon,
+  }
 })
