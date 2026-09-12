@@ -1,17 +1,9 @@
 <script setup lang="ts">
+import type { CatalogueBook, CataloguePlan } from '@/data/Catalogue'
+import { plans, shelf } from '@/data/Catalogue'
 import { faqs } from '@/data/Faqs'
-import type { Book } from '@/types/Content'
 import type { Track } from '@/data/Tracks'
 import { tracks } from '@/data/Tracks'
-
-/** One purchasable plan, as `/api/billing/plans` reports it. */
-interface Offer {
-  plan: string
-  track: string
-  recurring: boolean
-  amount: number | null
-  currency: string | null
-}
 
 const description
   = 'two tracks — foundation, or everything. subscribed yearly, and everything shipped to the track while you are on it.'
@@ -19,52 +11,35 @@ const description
 useSeo({ title: 'Pricing — projectlighthouse', description })
 
 /**
- * What everything costs, from rust.
+ * What everything costs, and what is on each track — compiled in, not fetched.
  *
- * Fetched rather than written here because the amount has exactly one home:
- * the declaration `lighthouse-prices` reconciles against stripe. A number
- * typed into this file is a number that drifts from what is actually charged,
- * and the drift is invisible until somebody compares a receipt with this page.
+ * **This page is prerendered.** `routeRules` in `nuxt.config.ts` says so, and
+ * the web image is built from `web/` alone: no api, no database, no network.
+ * Fetching the amounts during that build therefore could not work, and did
+ * not — the connection was refused, the `.catch` fallback rendered, and the
+ * page shipped with an em dash where each price belongs. Reading a file that is
+ * already on disk cannot fail that way.
  *
- * Through nitro's `/_api`, like the other public reads, so it resolves during
- * SSR and the amounts are in the prerendered html rather than appearing a
- * moment after hydration — which is what a price on a pricing page has to do.
+ * **Still one home for the number.** `lighthouse-prices catalogue` writes
+ * `Catalogue.ts` from the same `pricing.yaml` it reconciles against stripe, so
+ * an amount here is the amount charged. What changed is when it is read, not
+ * where it comes from.
  *
- * Allowed to fail: a build with no api behind it renders the tracks without
- * amounts rather than failing the build.
+ * The cost of compiling it in is that a price or a track changing needs a
+ * rebuild. That is the right trade for this page: a price is a deliberate
+ * decision that ships, unlike a lesson.
  */
-/** What `/_api/billing/plans` answers: the offers, the country Cloudflare
- *  reported, and the coupon that country gets — null until coupons exist. */
-/** The discount a country is offered, if any. Advertised, not applied — the
- *  reader types `code` at stripe. */
-interface Coupon {
-  code: string
-  percent: number
-}
-
-interface Catalogue {
-  country: string | null
-  plans: Offer[]
-  coupon: Coupon | null
-}
-
-const { data: catalogue } = await useAsyncData('billing-plans', () =>
-  $fetch<Catalogue>('/_api/billing/plans')
-    .catch(() => ({ country: null, plans: [], coupon: null } as Catalogue)),
-)
-
-/** The offers alone. The country and the discount slots ride on the same
- *  answer, and nothing on this page reads them yet. */
-const offers = computed<Offer[]>(() => catalogue.value?.plans ?? [])
-
-function offerFor(track: string, recurring: boolean): Offer | undefined {
-  return offers.value.find(
+function offerFor(
+  track: string,
+  recurring: boolean,
+): CataloguePlan | undefined {
+  return plans.find(
     offer => offer.track === track && offer.recurring === recurring,
   )
 }
 
 /** `4900` reads as `$49`; a price nobody knows reads as nothing at all. */
-function priced(offer: Offer | undefined): string | null {
+function priced(offer: CataloguePlan | undefined): string | null {
   if (!offer?.amount) return null
 
   const whole = offer.amount / 100
@@ -73,38 +48,22 @@ function priced(offer: Offer | undefined): string | null {
 }
 
 /**
- * The shelf, for turning a track's book slugs into titles.
- *
- * From the api rather than a copy in `app/data`: that copy drifted — it was two
- * books and every track behind before the home page stopped reading it — and a
- * price page naming a book that no longer exists is worse than one naming none.
- *
- * Server side, unlike the private pages: this is public, the same for everyone,
- * and part of the ranking surface.
- */
-const { data: books } = await useAsyncData<Book[]>(
-  'pricing-books',
-  () => $fetch<Book[]>('/_api/books'),
-  { default: () => [] },
-)
-
-/**
  * Which books are on a track, in that track's reading order.
  *
  * Derived, not listed. `Tracks.ts` used to carry the slugs itself and its own
  * comment conceded the problem — "if the two ever disagree, this file is the
  * one that is wrong", because what a track actually contains is the `tracks:`
- * map in each `book.yaml`, which is what rust grants entitlements from. Reading
- * the same source the grant reads means they cannot disagree.
+ * map in each `book.yaml`. The generated shelf is read straight out of those
+ * same maps, so this and the entitlement rust grants cannot disagree.
  *
  * `all` is deliberately empty: the card for it says "every book on every track,
  * plus the ones on none", which is a claim about the future as much as the
  * present and does not want a list.
  */
-function booksOn(key: Track['key']): Book[] {
+function booksOn(key: Track['key']): CatalogueBook[] {
   if (key === 'all') return []
 
-  return books.value
+  return shelf
     .filter(book => book.tracks[key] !== undefined)
     .sort((a, b) => (a.tracks[key] ?? 0) - (b.tracks[key] ?? 0))
 }
@@ -137,13 +96,13 @@ useJsonLd('offers', {
   'name': 'projectlighthouse',
   'description': 'Books and hands-on projects on systems programming.',
   'brand': { '@type': 'Brand', 'name': SITE.name },
-  'offers': offers.value
+  'offers': plans
     .filter(offer => offer.amount !== null)
     .map(offer => ({
       '@type': 'Offer',
       'name': offer.plan,
       'price': String((offer.amount ?? 0) / 100),
-      'priceCurrency': (offer.currency ?? 'usd').toUpperCase(),
+      'priceCurrency': offer.currency.toUpperCase(),
       'url': `${SITE.url}/pricing`,
       'availability': 'https://schema.org/InStock',
     })),
