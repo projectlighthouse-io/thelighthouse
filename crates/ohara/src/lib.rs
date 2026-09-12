@@ -22,8 +22,6 @@
 //!           01-listen-on-port/
 //!             task.yaml
 //!             task.md
-//!     pricing/
-//!       ppp.yaml
 //! ```
 //!
 //! **The directory names the instance, the file names the type.** Every lesson
@@ -58,8 +56,14 @@
 //!   locale.rs  the languages a lesson can be read in
 //!   body.rs    markdown: the paywall split, and rendering both halves
 //!   price.rs   what a book costs
-//!   ppp.rs     what it costs somewhere poorer
 //! ```
+//!
+//! **Nothing here prices a country.** There was a `ppp.rs` reading
+//! `pricing/ppp.yaml`, written before the plans existed and never wired to a
+//! caller. What a country pays is now declared in `pricing.yaml` beside the
+//! plans, because a discount is a property of the plan being sold and the same
+//! declaration has to reach stripe as a coupon — which this crate, which opens
+//! no sockets, cannot do.
 
 // Two crates read this one and neither reads all of it: the api never syncs and
 // `lighthouse-content` never serves. A field that only one of them wants is
@@ -71,7 +75,6 @@ pub mod book;
 pub mod catalog;
 pub mod lesson;
 pub mod locale;
-pub mod ppp;
 pub mod price;
 pub mod project;
 pub mod status;
