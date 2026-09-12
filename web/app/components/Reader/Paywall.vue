@@ -97,11 +97,26 @@ const offer = computed<Offer | undefined>(
 /** Minor units to a price tag. The arithmetic stays in minor units on the rust
  *  side — this only reads it. */
 function priced(o: Offer | undefined): string | null {
-  if (!o) return null
+  return o ? money(o.amount) : null
+}
 
-  const whole = o.amount / 100
+/**
+ * The discount the reader's country is offered.
+ *
+ * Already on the answer this component fetches — the api reads Cloudflare's
+ * country header and says which coupon it earns — and until now it was read off
+ * the wire and dropped. A reader in a ppp country was being quoted the full
+ * price on the card that asks them to buy.
+ */
+const coupon = computed<Coupon | null>(() => catalogue.value?.coupon ?? null)
 
-  return `$${Number.isInteger(whole) ? whole : whole.toFixed(2)}`
+/** The plan's price once the coupon is applied, or null when there is none. */
+function reduced(o: Offer | undefined): string | null {
+  const percent = coupon.value?.percent
+
+  if (!o || !percent) return null
+
+  return money(afterDiscount(o.amount, percent))
 }
 
 const summary = computed<string>(() =>
@@ -184,7 +199,10 @@ async function buy(): Promise<void> {
             <span class="wall__plan-name">Yearly</span>
             <span class="wall__plan-desc">keep up with everything shipped to the track</span>
           </span>
-          <span class="wall__price"><b>{{ priced(yearly) }}</b><span>/yr</span></span>
+          <span class="wall__price">
+            <s v-if="reduced(yearly)" class="wall__was">{{ priced(yearly) }}</s>
+            <b>{{ reduced(yearly) ?? priced(yearly) }}</b><span>/yr</span>
+          </span>
         </button>
 
         <button
@@ -200,9 +218,17 @@ async function buy(): Promise<void> {
             <span class="wall__plan-name">Lifetime</span>
             <span class="wall__plan-desc">pay once, yours for good</span>
           </span>
-          <span class="wall__price"><b>{{ priced(lifetime) }}</b><span>once</span></span>
+          <span class="wall__price">
+            <s v-if="reduced(lifetime)" class="wall__was">{{ priced(lifetime) }}</s>
+            <b>{{ reduced(lifetime) ?? priced(lifetime) }}</b><span>once</span>
+          </span>
         </button>
       </div>
+
+      <p v-if="coupon" class="wall__ppp">
+        {{ coupon.percent }}% off where you are — enter
+        <code>{{ coupon.code }}</code> at checkout.
+      </p>
 
       <p v-if="reason" class="wall__reason" role="alert">{{ reason }}</p>
 
@@ -410,6 +436,29 @@ async function buy(): Promise<void> {
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--color-quiet);
+}
+
+/* The list price beside the reduced one. Quiet and small: it is context for
+   the number next to it, not a second price being offered. */
+.wall__was {
+    margin-right: 5px;
+    font-family: var(--font-serif);
+    font-size: 15px;
+    color: var(--color-faint);
+}
+
+.wall__ppp {
+    margin: 12px 0 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-quiet);
+}
+
+.wall__ppp code {
+    padding: 1px 5px;
+    border: 1px solid var(--color-stroke);
+    border-radius: 3px;
+    color: var(--color-ink);
 }
 
 .wall__reason {

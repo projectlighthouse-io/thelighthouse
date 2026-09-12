@@ -40,11 +40,54 @@ function offerFor(
 
 /** `4900` reads as `$49`; a price nobody knows reads as nothing at all. */
 function priced(offer: CataloguePlan | undefined): string | null {
-  if (!offer?.amount) return null
+  return offer?.amount ? money(offer.amount) : null
+}
 
-  const whole = offer.amount / 100
+/**
+ * The discount the reader's country is offered, if any.
+ *
+ * **The one thing on this page that cannot be compiled in.** Everything else
+ * here is the same for everybody and is baked at build time; where somebody is
+ * reading from is known only when they ask. So this is the exception, and it is
+ * deliberately the smallest one: a client-side read, after hydration, of the
+ * country and coupon the api works out from Cloudflare's header.
+ *
+ * `server: false` is load-bearing. This page is prerendered, and a server-side
+ * read would run once at build time — in a container with no api and no
+ * country — and bake its answer into a file served to every country alike.
+ *
+ * The tier table is deliberately *not* compiled in beside the prices. Which
+ * countries get what is already in `billing.yaml`, which is what rust answers
+ * from; a second copy in the browser would be a second thing to keep right,
+ * and the one that disagreed would be the one quoting the price.
+ *
+ * Allowed to fail, and silently: no coupon is the full price, which is a
+ * correct page. A reader who would have had a discount and does not see one is
+ * a worse outcome than the api being down, but not a broken page.
+ */
+interface Coupon {
+  code: string
+  percent: number
+}
 
-  return `$${Number.isInteger(whole) ? whole : whole.toFixed(2)}`
+const { data: offered } = await useAsyncData(
+  'pricing-coupon',
+  () => $fetch<{ coupon: Coupon | null }>('/_api/billing/plans')
+    .then(answer => answer.coupon)
+    .catch(() => null),
+  { server: false, default: () => null },
+)
+
+const coupon = computed<Coupon | null>(() => offered.value)
+
+/** What this plan costs the reader once their coupon is applied, or null when
+ *  they have none and the list price is the price. */
+function reduced(offer: CataloguePlan | undefined): string | null {
+  const percent = coupon.value?.percent
+
+  if (!offer?.amount || !percent) return null
+
+  return money(afterDiscount(offer.amount, percent))
 }
 
 /**
@@ -145,6 +188,15 @@ useJsonLd('faq', {
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <p v-if="reason" class="mb-6 text-center text-sm text-ink">{{ reason }}</p>
 
+        <!-- Advertised, not applied. The coupon is a real stripe promotion
+             code and the reader types it at checkout, so the wording has to
+             say that plainly rather than imply the lower price is automatic. -->
+        <p v-if="coupon" class="mb-8 text-center font-mono text-xs text-quiet">
+          {{ coupon.percent }}% off where you are — enter
+          <code class="border-stroke rounded border px-1.5 py-0.5 text-ink">{{ coupon.code }}</code>
+          at checkout.
+        </p>
+
         <div class="mx-auto grid max-w-4xl gap-8 sm:grid-cols-2">
           <div
             v-for="track in tracks"
@@ -158,9 +210,18 @@ useJsonLd('faq', {
             </div>
 
             <div class="mb-6">
-              <div class="flex items-baseline gap-1">
+              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <!-- With a coupon the list price stays on the page, struck
+                     through: the reduced number means nothing without the one
+                     it came down from. -->
+                <span
+                  v-if="reduced(offerFor(track.key, true))"
+                  class="font-editorial text-2xl text-faint line-through"
+                >
+                  {{ priced(offerFor(track.key, true)) }}
+                </span>
                 <span class="font-editorial text-5xl font-bold text-ink">
-                  {{ priced(offerFor(track.key, true)) ?? '—' }}
+                  {{ reduced(offerFor(track.key, true)) ?? priced(offerFor(track.key, true)) ?? '—' }}
                 </span>
                 <span class="text-quiet">/ year</span>
               </div>
