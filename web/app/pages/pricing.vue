@@ -14,7 +14,7 @@ interface Offer {
 }
 
 const description
-  = 'four tracks — foundation, go, rust, or everything. subscribe yearly, or buy a track outright and keep it.'
+  = 'two tracks — foundation, or everything. subscribed yearly, and everything shipped to the track while you are on it.'
 
 useSeo({ title: 'Pricing — projectlighthouse', description })
 
@@ -172,8 +172,8 @@ useJsonLd('faq', {
           </h1>
 
           <p class="mx-auto mt-8 max-w-2xl text-base leading-relaxed text-quiet sm:text-lg">
-            four tracks. subscribe yearly and keep up with everything we ship to it, or buy
-            one outright and keep it for good.
+            two tracks. subscribe yearly and keep up with everything we ship to it for as
+            long as you are on it.
           </p>
           <p class="mx-auto mt-3 max-w-2xl text-center font-mono text-xs text-faint">
             every track includes foundation.
@@ -186,7 +186,7 @@ useJsonLd('faq', {
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <p v-if="reason" class="mb-6 text-center text-sm text-ink">{{ reason }}</p>
 
-        <div class="grid gap-8 lg:grid-cols-4">
+        <div class="mx-auto grid max-w-4xl gap-8 sm:grid-cols-2">
           <div
             v-for="track in tracks"
             :key="track.key"
@@ -204,14 +204,6 @@ useJsonLd('faq', {
                   {{ priced(offerFor(track.key, true)) ?? '—' }}
                 </span>
                 <span class="text-quiet">/ year</span>
-              </div>
-              <div class="mt-1">
-                <span class="text-xs text-quiet">
-                  <template v-if="priced(offerFor(track.key, false))">
-                    or {{ priced(offerFor(track.key, false)) }} once, yours for good
-                  </template>
-                  <template v-else>&nbsp;</template>
-                </span>
               </div>
             </div>
 
@@ -233,14 +225,6 @@ useJsonLd('faq', {
                 @click="buy(offerFor(track.key, true)?.plan)"
               >
                 {{ busy ? 'One moment…' : 'Subscribe' }}
-              </button>
-              <button
-                type="button"
-                :disabled="busy || !offerFor(track.key, false)"
-                class="border-stroke block w-full rounded-md border bg-panel px-5 py-3 text-center text-base font-medium text-ink transition hover:bg-paper-warm disabled:opacity-50"
-                @click="buy(offerFor(track.key, false)?.plan)"
-              >
-                Buy outright
               </button>
             </div>
           </div>
