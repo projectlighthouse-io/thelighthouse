@@ -190,6 +190,17 @@ impl Stripe {
                     field("success_url", back.success.clone()),
                     field("cancel_url", back.cancel.clone()),
                     field("client_reference_id", reference),
+                    // The promo code box on stripe's page. Without it the
+                    // hosted checkout shows none, and a coupon nobody can type
+                    // is a coupon that does not exist — `lighthouse-prices`
+                    // would go on creating tiers at stripe that no reader
+                    // could ever redeem.
+                    //
+                    // It is the whole of how a discount is applied: the api
+                    // advertises the code and never sends it, so a spoofable
+                    // country header cannot be what stands between anybody and
+                    // a cheaper price.
+                    field("allow_promotion_codes", "true"),
                     // Written here and read back on every subscription and
                     // every webhook. It is what lets a delivery about
                     // `sub_123` find the account and the plan without a
@@ -482,6 +493,7 @@ mod tests {
             ))
             .and(body_string_contains("customer=cus_existing"))
             .and(body_string_contains("client_reference_id=41"))
+            .and(body_string_contains("allow_promotion_codes=true"))
             .and(body_string_contains(
                 "subscription_data%5Bmetadata%5D%5Bplan%5D=yearly",
             ))
@@ -509,6 +521,9 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/v1/checkout/sessions"))
             .and(body_string_contains("mode=payment"))
+            // A one-time purchase gets the promo box too — a lifetime plan
+            // sold at a list price is exactly the case that needs it.
+            .and(body_string_contains("allow_promotion_codes=true"))
             // The session's own metadata, which is the only place a one-time
             // purchase records what it was for: there is no subscription
             // afterwards to read it back off.
