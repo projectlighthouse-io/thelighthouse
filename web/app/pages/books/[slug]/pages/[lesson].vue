@@ -78,6 +78,31 @@ const unlockedHtml = ref<string | null>(null)
 const unlockedToc = ref<Heading[] | null>(null)
 
 /**
+ * The paywall card, mounted into the element the api left behind.
+ *
+ * `ohara::body` puts `<div data-paywall data-topics="…">` where the withheld
+ * region stood, so the card lands mid-lesson rather than after it. It is
+ * teleported into that element rather than the body being split around it:
+ * splitting would mean several `[data-lesson-content]` containers, and the note
+ * anchoring walks exactly one.
+ *
+ * One card, like the laravel app, which also mounts only the first.
+ */
+const paywallTopics = ref<string[] | null>(null)
+
+function findPaywall(): void {
+  if (import.meta.server) return
+
+  const el = document.querySelector<HTMLElement>('[data-paywall]')
+
+  // `|` rather than json: the topics are lesson prose, and prose in a json
+  // attribute is a quoting problem waiting to happen.
+  paywallTopics.value = el
+    ? (el.dataset.topics ?? '').split('|').filter(Boolean)
+    : null
+}
+
+/**
  * The whole contents list: the free half's headings, then the paid half's.
  *
  * The sidebar is built from the lesson response, which only ever describes the
@@ -572,6 +597,19 @@ onMounted(loadAnnotations)
 onMounted(unlock)
 watch([lessonSlug, isSignedIn], unlock)
 
+// The element is `v-html`, so it exists only after a paint. Re-checked when the
+// body changes — unlocking replaces it, and the card must go with the region it
+// was standing in for.
+onMounted(async () => {
+  await nextTick()
+  findPaywall()
+})
+
+watch([() => data.value?.html, unlockedHtml], async () => {
+  await nextTick()
+  findPaywall()
+})
+
 /**
  * Prev and next stay on this route, so the component is reused and none of the
  * above runs again on its own. The marks belong to the lesson that is gone.
@@ -700,32 +738,15 @@ useJsonLd('crumbs', () => ({
           <div class="lesson-content" data-lesson-content v-html="readable" />
         </div>
 
-        <div
-          v-if="lesson.locked && !unlockedHtml"
-          class="paywalled mt-12 rounded-md border-2 border-dashed border-rule bg-paper p-8 text-center"
-        >
-          <p class="font-mono text-xs tracking-[0.2em] uppercase text-teal">keep reading</p>
-          <h2 class="mt-3 font-serif text-2xl text-ink">
-            The rest of this chapter is part of {{ book.title }}
-          </h2>
-          <p class="mx-auto mt-3 max-w-md text-mono-body">
-            {{ data.remainingSections }} more sections, and the project that goes with them.
-          </p>
-          <div class="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <NuxtLink
-              to="/pricing"
-              class="rounded-md bg-ink px-5 py-3 text-base font-medium text-on-ink transition hover:bg-ink-hover"
-            >
-              Get the book
-            </NuxtLink>
-            <NuxtLink
-              to="/login"
-              class="rounded-md border border-stroke bg-panel px-5 py-3 text-base font-medium text-ink transition hover:bg-paper-warm"
-            >
-              I already own it
-            </NuxtLink>
-          </div>
-        </div>
+        <!--
+          Into the element the api left where the withheld region stood, so the
+          card reads as the chapter stopping mid-sentence rather than as a
+          footer. Client only: `Teleport` needs the target in the DOM, and the
+          target arrives with `v-html`.
+        -->
+        <Teleport v-if="paywallTopics" to="[data-paywall]">
+          <ReaderPaywall :topics="paywallTopics" :book="book.title" :book-slug="book.slug" />
+        </Teleport>
 
         <!-- Above the thread: carrying on with the book is what most readers
              want at the end of a lesson, and their own notes are what a few of

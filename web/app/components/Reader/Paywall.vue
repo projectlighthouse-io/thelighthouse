@@ -1,0 +1,506 @@
+<script setup lang="ts">
+import type { Book } from '@/types/Content'
+
+/**
+ * The card that stands where a paid region was.
+ *
+ * `ohara::body` leaves a `<div data-paywall data-topics="…">` at the position
+ * the region held, so this lands in the middle of a lesson rather than after
+ * it — the same shape the laravel app has, and the same wording.
+ *
+ * **It sells a track.** The laravel card offers a Pro membership at monthly,
+ * yearly or lifetime with the prices written into the component. This rebuild
+ * sells a track and nothing else, and the amounts come from
+ * `/api/billing/plans` — one number, one place — so the card offers the
+ * cheapest track that actually contains the book being read.
+ */
+const props = withDefaults(defineProps<{
+  topics?: string[]
+  /** Slug of the book this lesson belongs to, for picking the track. */
+  bookSlug?: string
+  /** Its title, so the offer names something concrete. */
+  book?: string
+}>(), {
+  topics: () => [],
+  bookSlug: '',
+  book: '',
+})
+
+/** Three, then "and more" — the card names, it does not list. */
+const named = computed<string[]>(() => props.topics.slice(0, 3))
+const more = computed<boolean>(() => props.topics.length > 3)
+
+/** One purchasable plan, as `/api/billing/plans` reports it. */
+interface Offer {
+  amount: number
+  currency: string
+  plan: string
+  recurring: boolean
+  track: string
+}
+
+/** The whole catalogue answer — the offers, the country the api read from
+ *  Cloudflare, and the coupon that country gets. */
+/** The discount a country is offered, if any. Advertised, not applied — the
+ *  reader types `code` at stripe. */
+interface Coupon {
+  code: string
+  percent: number
+}
+
+interface Catalogue {
+  country: string | null
+  plans: Offer[]
+  coupon: Coupon | null
+}
+
+const { data: catalogue } = await useAsyncData('billing-plans', () =>
+  $fetch<Catalogue>('/_api/billing/plans')
+    .catch(() => ({ country: null, plans: [], coupon: null } as Catalogue)))
+
+const offers = computed<Offer[]>(() => catalogue.value?.plans ?? [])
+
+const { data: books } = await useAsyncData('paywall-books', () =>
+  $fetch<Book[]>('/_api/books').catch(() => [] as Book[]), { default: () => [] })
+
+/**
+ * The tracks that carry this book, plus `all`, which carries everything.
+ *
+ * Read from the api rather than a list here: which books are on a track is the
+ * `tracks:` map in each `book.yaml`, and it is what rust grants entitlements
+ * from. A second copy would be a second thing to keep right.
+ */
+const tracks = computed<string[]>(() => {
+  const book = books.value.find(b => b.slug === props.bookSlug)
+
+  return [...Object.keys(book?.tracks ?? {}), 'all']
+})
+
+/** The cheapest offer of a kind that would actually unlock this lesson. */
+function cheapest(recurring: boolean): Offer | undefined {
+  return offers.value
+    .filter(o => o.recurring === recurring && tracks.value.includes(o.track))
+    .sort((a, b) => a.amount - b.amount)[0]
+}
+
+const yearly = computed<Offer | undefined>(() => cheapest(true))
+const lifetime = computed<Offer | undefined>(() => cheapest(false))
+
+type Choice = 'yearly' | 'lifetime'
+
+const chosen = ref<Choice>('yearly')
+
+const offer = computed<Offer | undefined>(
+  () => (chosen.value === 'lifetime' ? lifetime.value : yearly.value),
+)
+
+/** Minor units to a price tag. The arithmetic stays in minor units on the rust
+ *  side — this only reads it. */
+function priced(o: Offer | undefined): string | null {
+  if (!o) return null
+
+  const whole = o.amount / 100
+
+  return `$${Number.isInteger(whole) ? whole : whole.toFixed(2)}`
+}
+
+const summary = computed<string>(() =>
+  chosen.value === 'lifetime'
+    ? 'pay once, and every future chapter of it is yours'
+    : 'best value — cancel any time')
+
+const { checkout, busy, reason } = useBilling()
+const { isSignedIn } = useReader()
+
+const route = useRoute()
+
+async function buy(): Promise<void> {
+  const plan = offer.value?.plan
+  if (!plan || busy.value) return
+
+  // Back to the lesson afterwards, not to the shop: they were reading.
+  if (!isSignedIn.value) {
+    await navigateTo(`/login?redirect=${encodeURIComponent(route.fullPath)}`)
+    return
+  }
+
+  await checkout(plan)
+}
+</script>
+
+<template>
+  <div class="wall">
+    <!-- The prose above fades out rather than stopping on a line, so the cut
+         reads as more rather than as an ending. -->
+    <div class="wall__fade" aria-hidden="true" />
+
+    <section class="wall__card border-pencil">
+      <p class="wall__eyebrow">keep reading</p>
+
+      <h2 class="wall__title">There's more to this story</h2>
+
+      <p class="wall__sub">
+        <template v-if="named.length">
+          The rest of this chapter covers
+          <template v-for="(topic, i) in named" :key="topic">
+            <span class="wall__topic">{{ topic }}</span
+            ><template v-if="i < named.length - 2">, </template
+            ><template v-else-if="i === named.length - 2"> and </template>
+          </template>
+          <template v-if="more">, and more</template>.
+        </template>
+        <template v-else>
+          The rest of this chapter goes deeper, with working code and the kind
+          of detail that actually sticks.
+        </template>
+        Unlock it — and every other lesson on the track.
+      </p>
+
+      <ul class="wall__perks">
+        <li>
+          <b>{{ books.length }} books</b> — OS internals, networking, Go, Rust, C and DSA
+        </li>
+        <li>
+          <b>Build-your-own projects</b> — Docker, DNS and HTTP servers, checked on your own machine
+        </li>
+        <li>
+          <b>Every future chapter</b> of the track, included as it ships
+        </li>
+      </ul>
+
+      <h3 class="wall__plans-head">Start the voyage</h3>
+
+      <div class="wall__plans">
+        <button
+          v-if="yearly"
+          type="button"
+          class="wall__plan"
+          :class="{ 'wall__plan--on': chosen === 'yearly' }"
+          :aria-pressed="chosen === 'yearly'"
+          @click="chosen = 'yearly'"
+        >
+          <span class="wall__radio" aria-hidden="true" />
+          <span class="wall__plan-body">
+            <span class="wall__plan-name">Yearly</span>
+            <span class="wall__plan-desc">keep up with everything shipped to the track</span>
+          </span>
+          <span class="wall__price"><b>{{ priced(yearly) }}</b><span>/yr</span></span>
+        </button>
+
+        <button
+          v-if="lifetime"
+          type="button"
+          class="wall__plan"
+          :class="{ 'wall__plan--on': chosen === 'lifetime' }"
+          :aria-pressed="chosen === 'lifetime'"
+          @click="chosen = 'lifetime'"
+        >
+          <span class="wall__radio" aria-hidden="true" />
+          <span class="wall__plan-body">
+            <span class="wall__plan-name">Lifetime</span>
+            <span class="wall__plan-desc">pay once, yours for good</span>
+          </span>
+          <span class="wall__price"><b>{{ priced(lifetime) }}</b><span>once</span></span>
+        </button>
+      </div>
+
+      <p v-if="reason" class="wall__reason" role="alert">{{ reason }}</p>
+
+      <div class="wall__cta">
+        <p class="wall__summary">{{ summary }}</p>
+        <div class="wall__actions">
+          <NuxtLink to="/pricing" class="wall__view">view offering</NuxtLink>
+          <button type="button" class="wall__buy" :disabled="busy || !offer" @click="buy">
+            {{ busy ? 'Loading…' : `Get ${book || 'the book'}` }}
+          </button>
+        </div>
+      </div>
+
+      <p class="wall__note">
+        Already a member?
+        <NuxtLink to="/login">Sign in</NuxtLink>
+      </p>
+    </section>
+  </div>
+</template>
+
+<style scoped>
+
+.wall {
+    position: relative;
+    margin: 24px 0;
+}
+
+/* Sits above the card and over the prose before it. `--color-read-bg` rather
+   than white, so it fades into the reader's own ground in either theme. */
+.wall__fade {
+    pointer-events: none;
+    position: absolute;
+    top: -128px;
+    right: 0;
+    left: 0;
+    height: 128px;
+    background: linear-gradient(to bottom, transparent, var(--color-read-bg));
+}
+
+.wall__card {
+    position: relative;
+    border-radius: 8px;
+    background: var(--color-panel);
+    padding: 34px 32px;
+}
+
+.wall__eyebrow {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--color-teal-deep);
+}
+
+.wall__title {
+    margin: 14px 0 0;
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: 30px;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    color: var(--color-ink);
+}
+
+.wall__sub {
+    margin: 12px 0 0;
+    max-width: 40em;
+    font-family: var(--font-serif);
+    font-size: 17px;
+    line-height: 1.62;
+    color: var(--color-read-ink-soft);
+    text-wrap: pretty;
+}
+
+.wall__topic {
+    font-weight: 500;
+    color: var(--color-ink);
+}
+
+.wall__perks {
+    margin: 26px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    font-family: var(--font-serif);
+    font-size: 16px;
+    line-height: 1.45;
+    color: var(--color-read-ink-soft);
+}
+
+.wall__perks b {
+    font-weight: 600;
+    color: var(--color-ink);
+}
+
+.wall__plans-head {
+    margin: 30px 0 12px;
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: 20px;
+    letter-spacing: -0.01em;
+    color: var(--color-ink);
+}
+
+.wall__plans {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.wall__plan {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 14px 18px;
+    border: 1px solid var(--color-rule);
+    border-radius: 6px;
+    background: none;
+    cursor: pointer;
+    text-align: left;
+    transition:
+        border-color 140ms,
+        background 140ms;
+}
+
+.wall__plan:hover {
+    border-color: var(--color-stroke);
+}
+
+.wall__plan--on {
+    border-color: var(--color-teal-deep);
+    background: var(--color-teal-wash);
+}
+
+.wall__radio {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    flex: none;
+    border: 1.5px solid var(--color-stroke);
+    border-radius: 50%;
+    transition: border-color 140ms;
+}
+
+.wall__radio::after {
+    content: '';
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--color-teal-deep);
+    transform: scale(0);
+    transition: transform 160ms;
+}
+
+.wall__plan--on .wall__radio {
+    border-color: var(--color-teal-deep);
+}
+
+.wall__plan--on .wall__radio::after {
+    transform: scale(1);
+}
+
+.wall__plan-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.wall__plan-name {
+    display: block;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--color-ink);
+}
+
+.wall__plan-desc {
+    display: block;
+    margin-top: 2px;
+    font-family: var(--font-serif);
+    font-size: 14px;
+    color: var(--color-quiet);
+}
+
+.wall__price {
+    flex: none;
+    white-space: nowrap;
+    text-align: right;
+}
+
+.wall__price b {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: 21px;
+    color: var(--color-ink);
+}
+
+.wall__price span {
+    margin-left: 3px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-quiet);
+}
+
+.wall__reason {
+    margin: 12px 0 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-pencil-red);
+}
+
+.wall__summary {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 14px;
+    color: var(--color-quiet);
+}
+
+.wall__actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.wall__view {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-quiet);
+    transition: color 140ms;
+}
+
+.wall__view:hover {
+    color: var(--color-ink);
+}
+
+.wall__note {
+    margin: 18px 0 0;
+    font-family: var(--font-serif);
+    font-size: 14px;
+    color: var(--color-quiet);
+}
+
+.wall__note a {
+    color: var(--color-teal-deep);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.wall__cta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.wall__buy {
+    border: 0;
+    cursor: pointer;
+    border-radius: 6px;
+    background: var(--color-ink);
+    padding: 13px 22px;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-on-ink);
+    transition: background 140ms;
+}
+
+.wall__buy:hover:not(:disabled) {
+    background: var(--color-ink-hover);
+}
+
+.wall__buy:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+
+
+@media (max-width: 560px) {
+    .wall__card {
+        padding: 26px 20px;
+    }
+
+    .wall__title {
+        font-size: 24px;
+    }
+
+    .wall__buy {
+        flex: 1 1 auto;
+        text-align: center;
+    }
+}
+</style>
