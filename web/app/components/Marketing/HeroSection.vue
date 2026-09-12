@@ -43,7 +43,14 @@ onBeforeUnmount(() => {
 <template>
   <section class="relative isolate overflow-hidden">
     <div class="mx-auto max-w-7xl px-4 pt-10 pb-12 sm:pb-16 lg:flex lg:px-8">
-      <div class="mx-auto max-w-2xl rounded-md bg-page p-6 lg:mx-0 lg:shrink-0 lg:pt-8">
+      <!--
+        No horizontal padding on a phone. This panel is `bg-page` — near enough
+        invisible against the page it sits on, so its 24px does not read as card
+        padding the way the review and newsletter cards' does. It reads as the
+        hero being indented further than every other band, which it was: 16px of
+        page gutter plus 24px here.
+      -->
+      <div class="mx-auto max-w-2xl rounded-md bg-page px-0 py-6 sm:p-6 lg:mx-0 lg:shrink-0 lg:pt-8">
         <p class="font-mono text-xs tracking-[0.2em] uppercase text-teal sm:mt-12 lg:mt-16">
           {{ kicker }} <span class="italic text-quiet">not just prompt</span>
         </p>
