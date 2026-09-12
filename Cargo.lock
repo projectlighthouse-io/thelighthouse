@@ -1359,6 +1359,7 @@ name = "lighthouse-prices"
 version = "0.1.0"
 dependencies = [
  "dotenvy",
+ "ohara",
  "reqwest",
  "secrecy",
  "serde",

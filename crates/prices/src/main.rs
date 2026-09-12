@@ -36,13 +36,17 @@ use std::{
 };
 
 use secrecy::{ExposeSecret, SecretString};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Where the declaration lives, unless `PRICING` says otherwise.
 const DEFAULT_DECLARATION: &str = "pricing.yaml";
 
 /// Where the api reads its plans from, unless `BILLING_PLANS` says otherwise.
 const DEFAULT_OUTPUT: &str = "billing.yaml";
+
+/// Where the frontend reads the catalogue from, unless `CATALOGUE` says
+/// otherwise. Relative to this repo's root, which is where the binary is run.
+const DEFAULT_CATALOGUE: &str = "web/app/data/Catalogue.ts";
 
 const STRIPE: &str = "https://api.stripe.com";
 
@@ -168,13 +172,26 @@ async fn run() -> Result<(), String> {
 
     let command = std::env::args().nth(1).unwrap_or_default();
 
-    let key: SecretString = std::env::var("STRIPE_SECRET_KEY")
-        .map_err(|_| "STRIPE_SECRET_KEY is not set in .env or the environment")?
-        .into();
-
     let declaration_path = std::env::var("PRICING")
         .unwrap_or_else(|_| DEFAULT_DECLARATION.to_owned());
     let declaration = read(&declaration_path)?;
+
+    // Before the key is even looked for: `catalogue` writes a file out of two
+    // files, and asking for a stripe secret to do that would mean the frontend
+    // could not be built without one.
+    if command == "catalogue" {
+        let output = std::env::var("CATALOGUE")
+            .unwrap_or_else(|_| DEFAULT_CATALOGUE.to_owned());
+
+        let written = catalogue(&declaration, &output)?;
+        println!("wrote {output} — {written}");
+
+        return Ok(());
+    }
+
+    let key: SecretString = std::env::var("STRIPE_SECRET_KEY")
+        .map_err(|_| "STRIPE_SECRET_KEY is not set in .env or the environment")?
+        .into();
 
     let client = reqwest::Client::builder()
         .build()
@@ -209,8 +226,9 @@ async fn run() -> Result<(), String> {
         }
         other => Err(format!(
             "unknown command {other:?}\n\n  \
-             lighthouse-prices status   what stripe has, and where it differs\n  \
-             lighthouse-prices apply    make stripe match, then write the config"
+             lighthouse-prices status     what stripe has, and where it differs\n  \
+             lighthouse-prices apply      make stripe match, then write the config\n  \
+             lighthouse-prices catalogue  write the frontend's build-time catalogue"
         )),
     }
 }
@@ -760,6 +778,158 @@ fn write(
 
     std::fs::write(path, out)
         .map_err(|error| format!("cannot write {path}: {error}"))
+}
+
+// ---------------------------------------------------------------------------
+// the frontend's copy
+// ---------------------------------------------------------------------------
+
+/// One plan, in the shape the pricing page reads it.
+///
+/// Deliberately the same field names `/api/billing/plans` answers with, so the
+/// page's own `Offer` type describes both and swapping a fetch for an import
+/// changed no types. `price` — stripe's id — is *not* here: the page posts a
+/// plan id and the api resolves it, so shipping the price id to a browser
+/// would put a stripe identifier in a public bundle for no gain.
+#[derive(Debug, Serialize)]
+struct WirePlan {
+    plan: String,
+    track: String,
+    recurring: bool,
+    amount: i64,
+    currency: String,
+}
+
+/// A book, reduced to what a price card needs: what it is called, and which
+/// tracks it is on.
+#[derive(Debug, Serialize)]
+struct WireBook {
+    slug: String,
+    title: String,
+    tracks: BTreeMap<String, i32>,
+}
+
+/// Write the catalogue the frontend compiles in.
+///
+/// **Why a file and not a fetch.** `/pricing` is prerendered — `routeRules` in
+/// `nuxt.config.ts` says so — and the web image is built from `web/` alone,
+/// with no api, no database and no network. A page that fetched its prices
+/// during that build got a connection refused and baked its fallback, which is
+/// how the live pricing page came to show an em dash where each amount belongs.
+/// Reading a file that is already on disk cannot fail that way.
+///
+/// **Why it is generated and not written.** The same reason `billing.yaml` is:
+/// the amount has one home, the declaration this reads. A number typed into a
+/// `.ts` file is a number that drifts from what stripe charges, and the drift
+/// is invisible until somebody compares a receipt with the page.
+///
+/// The shelf comes from ohara, filtered the way the api filters it — drafts
+/// hidden — so a book being written does not appear on a price card.
+///
+/// **The ppp tiers are deliberately not written here.** Which country gets what
+/// is already in `billing.yaml`, which is what the api answers from, and the
+/// page asks the api for the reader's own coupon rather than working it out.
+/// Shipping the table to the browser as well would put a second copy of it in a
+/// public bundle, and the copy that drifted would be the one quoting a price.
+///
+/// # Errors
+///
+/// `CONTENT_PATH` unset, ohara refusing anything in it, a plan whose name does
+/// not say its billing period, or the output path not being writable.
+fn catalogue(declaration: &Declaration, path: &str) -> Result<String, String> {
+    let content = std::env::var("CONTENT_PATH").map_err(|_| {
+        "CONTENT_PATH is not set in .env or the environment, and the shelf \
+         comes from it"
+            .to_owned()
+    })?;
+
+    // `Drafts::Hidden`, always. This file is built into a public page, and the
+    // env var that shows drafts locally must not be able to leak an unpublished
+    // title into it.
+    let snapshot = ohara::catalog::Snapshot::load(
+        &ohara::Content::at(&content),
+        ohara::Drafts::Hidden,
+    )
+    .map_err(|error| format!("cannot read {content}: {error}"))?;
+
+    let mut plans = Vec::new();
+
+    for plan in &declaration.plans {
+        let interval = plan.interval()?;
+
+        plans.push(WirePlan {
+            // The track is read from the name the same way `payments::track`
+            // reads it, rather than declared twice. Everything up to the last
+            // underscore, so a track whose own name contains one still works.
+            track: plan
+                .id
+                .rsplit_once('_')
+                .map_or(plan.id.as_str(), |(track, _)| track)
+                .to_owned(),
+            plan: plan.id.clone(),
+            recurring: interval != "once",
+            amount: plan.amount,
+            currency: declaration.currency.clone(),
+        });
+    }
+
+    let shelf: Vec<WireBook> = snapshot
+        .books()
+        .map(|entry| WireBook {
+            slug: entry.book.slug.clone(),
+            title: entry.book.title.clone(),
+            tracks: entry.book.tracks.clone(),
+        })
+        .collect();
+
+    // Through serde_json rather than formatted by hand: json is a subset of
+    // typescript's own literal syntax, and it escapes a title containing a
+    // quote correctly, which `write!` would not.
+    let plans_ts = serde_json::to_string_pretty(&plans)
+        .map_err(|error| format!("cannot encode the plans: {error}"))?;
+    let shelf_ts = serde_json::to_string_pretty(&shelf)
+        .map_err(|error| format!("cannot encode the shelf: {error}"))?;
+
+    let out = format!(
+        "// Generated by `lighthouse-prices catalogue`. Do not edit.\n\
+         //\n\
+         // The amounts are declared in pricing.yaml and the shelf comes from\n\
+         // ohara; both are read at generation time, not at build time, because\n\
+         // the web image is built from `web/` alone and can reach neither.\n\
+         //\n\
+         // Regenerate with `make catalogue` in the thelighthouse repo, and\n\
+         // commit the result — `/pricing` is prerendered, so this file is what\n\
+         // the built page says. A price changed in stripe and not here is a\n\
+         // page advertising the wrong number.\n\n\
+         // One purchasable plan. The same shape `/api/billing/plans` answers\n\
+         // with, so nothing downstream can tell which one it came from.\n\
+         export interface CataloguePlan {{\n  \
+           plan: string\n  track: string\n  recurring: boolean\n  \
+           amount: number\n  currency: string\n\
+         }}\n\n\
+         // A book, and the tracks it is on with its position in each.\n\
+         export interface CatalogueBook {{\n  \
+           slug: string\n  title: string\n  tracks: Record<string, number>\n\
+         }}\n\n\
+         export const plans: CataloguePlan[] = {plans_ts}\n\n\
+         export const shelf: CatalogueBook[] = {shelf_ts}\n"
+    );
+
+    if let Some(parent) = std::path::Path::new(path).parent()
+        && !parent.as_os_str().is_empty()
+        && !parent.is_dir()
+    {
+        return Err(format!(
+            "{} is not a directory — is the web submodule checked out? \
+             `make web` fetches it",
+            parent.display()
+        ));
+    }
+
+    std::fs::write(path, out)
+        .map_err(|error| format!("cannot write {path}: {error}"))?;
+
+    Ok(format!("{} plans, {} books", plans.len(), shelf.len()))
 }
 
 #[cfg(test)]

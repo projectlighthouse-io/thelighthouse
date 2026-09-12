@@ -28,7 +28,8 @@ API_PORT ?= 9000
 .DEFAULT_GOAL := help
 .PHONY: help web up dev down db db-down db-reset psql migrate migrate-status fmt fmt-check \
         lint test build check audit image run login push clean \
-        content content-check content-sync content-db-sync content-reload
+        content content-check content-sync content-db-sync content-reload \
+        prices prices-apply catalogue
 
 help: ## show this
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -188,6 +189,37 @@ content-sync: content content-check ## pull, check, and make the container rerea
 # production.
 content-db-sync: ## upsert ohara's books and lessons into postgres
 	CONTENT_PATH="$(CONTENT_PATH)" cargo run -q -p lighthouse-content -- sync
+
+# ---------------------------------------------------------------------------
+# prices
+# ---------------------------------------------------------------------------
+#
+# `pricing.yaml` is the declaration. Two things are generated from it and
+# neither is edited by hand:
+#
+#   billing.yaml           what the api charges     — needs stripe
+#   web/app/data/Catalogue.ts  what the page advertises — needs ohara
+#
+# They are separate commands because only one of them talks to stripe, and
+# because the frontend has to be buildable without a stripe key. `prices-apply`
+# runs both, which is what keeps the page from advertising a price the api no
+# longer charges.
+
+prices: ## what stripe has, and where it differs from pricing.yaml
+	cargo run -q -p lighthouse-prices -- status
+
+# Writes to stripe. Creates prices and coupons that cannot be deleted, only
+# deactivated — check `make prices` first, and check which key .env holds.
+prices-apply: ## make stripe match pricing.yaml, then regenerate both outputs
+	cargo run -q -p lighthouse-prices -- apply
+	$(MAKE) catalogue
+
+# No stripe key and no network: two files in, one file out. Its output is
+# committed to the web submodule, because `/pricing` is prerendered and the
+# image is built from web/ alone — the build cannot reach pricing.yaml, ohara,
+# or the api.
+catalogue: ## write the frontend's build-time catalogue from pricing.yaml + ohara
+	CONTENT_PATH="$(CONTENT_PATH)" cargo run -q -p lighthouse-prices -- catalogue
 
 # Rereads ohara and swaps the catalogue over in the *running* process. No
 # restart, no dropped request — the alternative is `docker kill -s HUP`, which

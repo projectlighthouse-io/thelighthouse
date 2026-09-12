@@ -13,6 +13,10 @@ workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_norway = "0.9"
+# For `catalogue`, which needs the shelf: a track's books are the `tracks:` map
+# in each book.yaml, so the same parser the api reads them with reads them here.
+# No database and no http come with it — ohara is a file parser.
+ohara = { path = "../ohara" }
 # Same tls story as everywhere else: webpki roots, because the runtime image is
 # alpine. This binary does not ship in it, but sharing the configuration means
 # one thing to get right.
