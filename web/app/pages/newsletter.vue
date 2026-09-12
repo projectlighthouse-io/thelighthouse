@@ -34,7 +34,12 @@ useSeo({
         nothing that is not mine. Unsubscribe from any of them.
       </p>
 
-      <MarketingNewsletterForm class="mt-10" />
+    </div>
+
+    <!-- Its own column, wider than the prose above it: the envelope is a
+         landscape thing and a reading measure squashes it. -->
+    <div class="mx-auto mt-10 max-w-5xl">
+      <MarketingNewsletterForm />
     </div>
   </div>
 </template>

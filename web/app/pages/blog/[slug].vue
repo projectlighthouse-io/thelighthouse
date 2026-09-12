@@ -66,9 +66,13 @@ useJsonLd('post', () => ({
       <!-- eslint-disable-next-line vue/no-v-html -- sanitised server side by SafeMarkdown.renderArticle; the raw markdown is never sent to this page -->
       <div class="lesson-content prose mt-12 max-w-none" v-html="post.html" />
 
-      <!-- After the piece, not before it: somebody who has just finished
-           reading is the one worth asking. -->
-      <MarketingNewsletterForm class="mt-16" />
     </article>
+
+    <!-- After the piece, not before it: somebody who has just finished reading
+         is the one worth asking. Outside the article's measure, because the
+         envelope is landscape and the column is sized for prose. -->
+    <div class="mx-auto max-w-4xl px-4 pb-16 sm:px-6 lg:px-8">
+      <MarketingNewsletterForm />
+    </div>
   </div>
 </template>

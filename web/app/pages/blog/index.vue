@@ -276,7 +276,12 @@ useJsonLd('blog', () => ({
           <span v-else />
         </nav>
 
-        <MarketingNewsletterForm class="mt-16" />
+      </div>
+
+      <!-- Outside the reading column, which is sized for article cards rather
+           than for a landscape envelope. -->
+      <div class="mx-auto mt-16 max-w-4xl px-4 sm:px-6 lg:px-8">
+        <MarketingNewsletterForm />
       </div>
     </section>
   </div>
