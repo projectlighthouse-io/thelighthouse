@@ -93,10 +93,47 @@ async fn every_reader_route_needs_a_reader() {
     }
 }
 
+/// Cloudflare's header, and only in the shape it is documented to take.
+///
+/// `XX` is its "could not tell" and `T1` is Tor; neither is a place, and
+/// passing either on as one would have the frontend price for a country that
+/// does not exist.
 #[tokio::test]
-async fn what_things_cost_is_public_and_cacheable() {
-    // The pricing page has to render for somebody who is not signed in, and
-    // the answer is the same for everyone, so the edge may hold it.
+async fn the_country_comes_from_cloudflare_and_nowhere_else() {
+    let asked = |header: Option<&'static str>| async move {
+        let mut request = Request::builder().uri("/api/billing/plans");
+
+        if let Some(code) = header {
+            request = request.header("CF-IPCountry", code);
+        }
+
+        let response = send(request.body(Body::empty()).unwrap()).await;
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let answer: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+        answer.pointer("/country").cloned().unwrap()
+    };
+
+    assert_eq!(asked(Some("BD")).await, "BD");
+    // Normalised, so a frontend comparing against an uppercase code matches.
+    assert_eq!(asked(Some("gb")).await, "GB");
+
+    for nowhere in [None, Some("XX"), Some("T1"), Some("nonsense"), Some("1")] {
+        assert_eq!(
+            asked(nowhere).await,
+            serde_json::Value::Null,
+            "{nowhere:?} is not a country"
+        );
+    }
+}
+
+#[tokio::test]
+async fn what_things_cost_is_private_because_it_names_a_country() {
+    // The pricing page has to render for somebody who is not signed in, so
+    // this is open — but it names the country the caller asked from, which is
+    // what stops it being shared.
     let response = send(
         Request::builder()
             .uri("/api/billing/plans")
@@ -106,7 +143,9 @@ async fn what_things_cost_is_public_and_cacheable() {
     .await;
 
     assert_eq!(response.status(), StatusCode::OK);
-    assert!(cache_control(&response).contains("s-maxage"));
+    // The answer carries the caller's country, so nothing shared may
+    // hold it — one country's prices served to the next is the failure.
+    assert!(cache_control(&response).contains("no-store"));
 
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
@@ -122,10 +161,16 @@ async fn what_things_cost_is_public_and_cacheable() {
             .clone()
     };
 
-    // `Billing::sample` sells one yearly plan.
-    assert_eq!(at("/0/plan"), "yearly");
-    assert_eq!(at("/0/track"), "yearly");
-    assert_eq!(at("/0/recurring"), true);
+    // `Billing::sample` sells one yearly plan, and the plans moved under a
+    // key of their own when the answer grew a country and a coupon.
+    assert_eq!(at("/plans/0/plan"), "yearly");
+    assert_eq!(at("/plans/0/track"), "yearly");
+    assert_eq!(at("/plans/0/recurring"), true);
+
+    // No header, so nowhere in particular — and a coupon slot with nothing in
+    // it, because coupons are not built.
+    assert_eq!(at("/country"), serde_json::Value::Null);
+    assert_eq!(at("/coupon"), serde_json::Value::Null);
 }
 
 #[tokio::test]

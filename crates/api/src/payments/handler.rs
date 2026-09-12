@@ -44,7 +44,42 @@ fn driver_named<'s>(
 /// The track is given alongside the plan so the page can group the two ways of
 /// buying one thing without splitting the name itself — the api already knows
 /// the rule, and a frontend re-deriving it is a second place to get it wrong.
-pub(crate) async fn catalogue(State(state): State<AppState>) -> Response {
+/// Cloudflare's own country header, and the only one worth reading.
+///
+/// The edge sets it from the address it terminated and **overwrites** whatever
+/// the client sent, so a caller cannot choose their own country by supplying
+/// one. That is only true of traffic that actually came through Cloudflare —
+/// direct to the origin there is no header at all, which reads as unknown.
+const CF_COUNTRY: &str = "cf-ipcountry";
+
+/// The country Cloudflare says this request came from, if it says anything.
+///
+/// `XX` is Cloudflare's "could not tell" and `T1` is Tor; both are answered as
+/// unknown rather than passed on as if they were places. Anything that is not
+/// two ascii letters is refused outright — the header is trusted only in the
+/// shape it is documented to take.
+fn country_of(headers: &HeaderMap) -> Option<String> {
+    let code = headers.get(CF_COUNTRY)?.to_str().ok()?.trim();
+
+    let plausible = code.len() == 2
+        && code.bytes().all(|b| b.is_ascii_alphabetic())
+        && !code.eq_ignore_ascii_case("XX")
+        && !code.eq_ignore_ascii_case("T1");
+
+    plausible.then(|| code.to_ascii_uppercase())
+}
+
+/// What is for sale, and where the asker is.
+///
+/// **`no-store`, where this used to be edge-cached.** The answer now depends on
+/// the caller's country, and a shared cache holding one country's answer serves
+/// it to the next country along. That is the same rule the lesson endpoint
+/// follows for entitlement: the moment a response depends on who is asking, it
+/// stops being cacheable.
+pub(crate) async fn catalogue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
     let plans: Vec<_> = state
         .billing
         .plans
@@ -60,7 +95,35 @@ pub(crate) async fn catalogue(State(state): State<AppState>) -> Response {
         })
         .collect();
 
-    json(StatusCode::OK, plans, CachePolicy::public_content())
+    let country = country_of(&headers);
+
+    // How a country gets a different price: one coupon, declared in
+    // `pricing.yaml` and reconciled at stripe, never a second price list — a
+    // parallel set of amounts would be a second thing to keep in step, and the
+    // point of `lighthouse-prices` is that there is one.
+    //
+    // Advertised, not applied. The reader types the code at stripe, which is
+    // what keeps a spoofable header from being the only thing standing between
+    // anybody and a discount.
+    let coupon = country
+        .as_deref()
+        .and_then(|code| state.billing.plans.for_country(code))
+        .map(|tier| {
+            serde_json::json!({
+                "code": tier.code(),
+                "percent": tier.percent(),
+            })
+        });
+
+    json(
+        StatusCode::OK,
+        serde_json::json!({
+            "country": country,
+            "plans": plans,
+            "coupon": coupon,
+        }),
+        CachePolicy::NoStore,
+    )
 }
 
 /// Where the provider sends the browser back.
