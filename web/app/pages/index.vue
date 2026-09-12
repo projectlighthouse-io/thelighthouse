@@ -4,7 +4,7 @@ import { heroStats, horizonBooks } from '@/data/Home'
 import type { Book, Project } from '@/types/Content'
 
 useSeo({
-  title: 'projectlighthouse — Software Engineering Fundamentals',
+  title: 'Software Engineering Fundamentals — projectlighthouse',
   description: 'Build your own Docker, HTTP server, DNS resolver and more from scratch. Interactive courses on Go, Rust, DSA, networking, and OS fundamentals. Hands-on projects validated on your own machine by an open-source CLI.',
 })
 
@@ -47,46 +47,42 @@ useJsonLd('shelf', () => ({
 const { data: allProjects } = await useAsyncData('home-projects', () =>
   $fetch<Project[]>('/_api/projects'))
 
-const projects = computed<Project[]>(() =>
-  (allProjects.value ?? []).filter(p => !p.isChallenge))
-const challenges = computed<Project[]>(() =>
-  (allProjects.value ?? []).filter(p => p.isChallenge))
+/**
+ * Projects and challenges together, in one row.
+ *
+ * They were two bands with a heading each, and the split asked the reader to
+ * care about a distinction that only matters once you are inside one — a
+ * challenge is a short project. `/projects` still separates them.
+ */
+const projects = computed<Project[]>(() => allProjects.value ?? [])
 </script>
 
 <template>
   <div>
     <MarketingHeroSection :stats="heroStats" />
 
-    <!-- Inside the same 7xl column as every other band: at three cards the
-         shelf fits it, so running full width would only push the books wider
-         than the sections above and below them. -->
+    <!--
+      The heading and the link keep the page's column; the rail does not.
+
+      A marquee that stops at the column edge reads as a box with things moving
+      inside it. Running it to both edges of the window is what makes it read as
+      a shelf passing by, and it is the only band on this page that wants that.
+    -->
     <section class="py-12">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="mx-auto mb-12 max-w-3xl text-center">
           <h2 class="mb-3 font-serif text-4xl text-ink sm:text-5xl">Books</h2>
           <p class="text-mono-body">Carefully crafted books to help you level up your skills</p>
         </div>
+      </div>
 
-        <!-- `HomeShelf`, not the `Shelf` `/books` renders: the same books and
-             the same tabs, laid out three cards wide instead of eleven
-             full-width rows. Two columns halve the band's height, which is
-             what the scroll box was there to do — so the shelf sits on the
-             page in full and the page scrolls, rather than a panel scrolling
-             inside it.
+      <!-- A rail, not the full shelf: browsing moved to the nav's dropdown,
+           which has every book grouped by track and is one click from any
+           page. What is left for this band is to show that there is a shelf
+           and what it looks like. `/books` still lists them all. -->
+      <BookCarousel :books="books" />
 
-             `bg-panel` for the same reason `/books` carries it: the cards tint
-             on hover, and without a ground of their own they do it over the
-             body's dotted paper. -->
-        <!--
-             No horizontal padding on a phone: the page gutter already insets
-             this, and the slab adding its own put the book cards 32px in while
-             every other card on the page sat at 16px. Vertical padding stays —
-             that one is not doubled by anything.
-        -->
-        <div class="rounded-md bg-panel p-6 max-[820px]:px-0 max-[820px]:py-4">
-          <BookHomeShelf :books="books" />
-        </div>
-
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="mt-10 text-center">
           <NuxtLink
             to="/books"
@@ -124,9 +120,8 @@ const challenges = computed<Project[]>(() =>
           or run a short drill on the unix tools that show up in every on-call.
         </p>
 
-        <!-- projects band -->
         <div class="mt-20">
-          <div class="mb-2 font-mono text-xs text-teal">/ 01 · projects</div>
+          <div class="mb-2 font-mono text-xs text-teal">/ projects &amp; challenges</div>
           <div
             class="mb-10 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end"
           >
@@ -134,34 +129,21 @@ const challenges = computed<Project[]>(() =>
               build a <span class="italic text-teal">system</span> from scratch.
             </h3>
             <p class="max-w-sm font-serif text-base text-quiet md:text-right">
-              multi-day builds. each ends with a working thing you can run.
+              multi-day builds and short drills. each ends with a working thing
+              you can run.
               <NuxtLink to="/projects" class="ml-1 italic text-teal">— ship one →</NuxtLink>
             </p>
           </div>
-
-          <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <ProjectCard v-for="project in projects" :key="project.slug" :project="project" />
-          </div>
         </div>
+      </div>
 
-        <!-- challenges band -->
-        <div class="mt-24">
-          <div class="mb-2 font-mono text-xs text-teal">/ 02 · challenges</div>
-          <div
-            class="mb-10 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end"
-          >
-            <h3 class="font-serif text-3xl text-ink sm:text-4xl">
-              drill a <span class="italic text-teal">tool</span> until it's reflex.
-            </h3>
-            <p class="max-w-sm font-serif text-base text-quiet md:text-right">
-              short scenarios. each is about a single unix tool every senior engineer reaches for.
-              <NuxtLink to="/projects" class="ml-1 italic text-teal">— pick one →</NuxtLink>
-            </p>
-          </div>
+      <!-- Full bleed, like the books row: a band that stops at the column edge
+           reads as a box with things moving inside it. Sliding the other way to
+           the books, so the two read as two shelves rather than one long thing
+           scrolling past. -->
+      <ProjectCarousel :projects="projects" />
 
-          <ChallengeList :challenges="challenges" />
-        </div>
-
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="mt-16 text-center">
           <NuxtLink
             to="/projects"
@@ -187,8 +169,14 @@ const challenges = computed<Project[]>(() =>
 
     <!-- Last thing on the page, under the letter — the footer's copy is right
          there too, and one of the two being scrolled past is fine. -->
-    <section class="px-4 pb-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-3xl">
+    <!-- Wider than the reading column above it: the envelope is a landscape
+         thing — address on the left, stamp and button on the right — and it
+         reads cramped in a column sized for prose. -->
+    <!-- `pb-8`, not the `pb-20` the other bands carry: the panel already ends
+         in 44px of its own padding, and stacking 80px more under it left a
+         hole between the envelope and the wordmark. -->
+    <section class="pb-8">
+      <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         <MarketingNewsletterForm />
       </div>
     </section>

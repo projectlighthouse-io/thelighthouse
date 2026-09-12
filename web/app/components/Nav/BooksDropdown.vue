@@ -35,13 +35,12 @@ const pending = ref<boolean>(false)
 const failed = ref<boolean>(false)
 
 /**
- * The tracks, named rather than gathered from the books — the same decision
- * `HomeShelf` makes, and for the same reason: the order of the column is a
- * choice, not whatever the first response happened to contain.
+ * The tracks, named rather than gathered from the books: the order of the
+ * column is a choice, not whatever the first response happened to contain.
  *
- * `foundation`, not `systems`: the content renamed it, and `HomeShelf` has not
- * caught up — its tab for those three books silently vanished, because a tab
- * with a count of zero is filtered out.
+ * `foundation`, not `systems` — the content renamed the track. Anything still
+ * naming the old one shows no tab at all, because a tab with a count of zero
+ * is filtered out, which is how it went unnoticed on the home shelf.
  */
 const TRACKS = ['go', 'rust', 'foundation'] as const
 
