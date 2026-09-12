@@ -49,6 +49,25 @@ pub enum Access {
     Paid,
 }
 
+/// The token a paid region leaves behind in the free body.
+///
+/// Text, not `<div data-paywall>`, because comrak escapes raw html — an element
+/// written into the markdown would be printed rather than parsed. The rendered
+/// paragraph is swapped for the real element afterwards, in
+/// [`Body::free_html`].
+///
+/// Deliberately ugly and deliberately not markdown: whatever an author types,
+/// this is not it.
+const PAYWALL_TOKEN: &str = "LIGHTHOUSE-PAYWALL-BREAK";
+
+/// What a reader is told they are missing, for one region.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Paywall {
+    /// The region's first three `##` headings, which is what the card names.
+    /// Empty when the region has none — the card has wording for that.
+    pub topics: Vec<String>,
+}
+
 /// A lesson with its paid regions lifted out.
 ///
 /// | markdown | free | paid |
@@ -63,8 +82,22 @@ pub enum Access {
 /// — see `docs/rebuild.md`.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Body {
+    /// The free body, with each paid region replaced by [`PAYWALL_TOKEN`] where
+    /// it stood. The token keeps the position the region held, which is what
+    /// puts the paywall card in the middle of a lesson rather than after it.
     pub free: String,
+    /// Every paid region, joined. For counting and for `has_paid_part` — never
+    /// served as prose, because joining them loses where each one belonged.
     pub paid: Option<String>,
+    /// The lesson as written, with the markers removed and nothing else moved.
+    ///
+    /// What an entitled reader reads. Rebuilding it by appending `paid` to
+    /// `free` served a region written in the middle of a lesson at the end of
+    /// it, which is what this field exists to stop.
+    pub whole: String,
+    /// One per region, in the order they appear, aligned with the tokens in
+    /// `free`.
+    pub paywalls: Vec<Paywall>,
 }
 
 impl Body {
@@ -81,10 +114,20 @@ impl Body {
             // Empty free half, exactly as a marker on the first line gives.
             // The lesson still exists — title, description and neighbours all
             // come from the yaml — but none of its prose is served.
-            Access::Paid => Self {
-                free: String::new(),
-                paid: Some(markdown.trim().to_owned()),
-            },
+            Access::Paid => {
+                let whole = markdown.trim().to_owned();
+
+                Self {
+                    // A lesson priced in full is one region covering the file,
+                    // so the free body is the token and nothing else.
+                    free: PAYWALL_TOKEN.to_owned(),
+                    paywalls: vec![Paywall {
+                        topics: topics_in(&whole),
+                    }],
+                    paid: Some(whole.clone()),
+                    whole,
+                }
+            }
         }
     }
 
@@ -103,9 +146,30 @@ impl Body {
     /// rendered page.
     #[must_use]
     pub fn split(markdown: &str) -> Self {
-        let mut free = Vec::new();
-        let mut paid = Vec::new();
+        let mut free: Vec<String> = Vec::new();
+        let mut paid: Vec<String> = Vec::new();
+        let mut whole: Vec<String> = Vec::new();
+        let mut paywalls: Vec<Paywall> = Vec::new();
+        let mut region: Vec<String> = Vec::new();
         let mut inside = false;
+
+        // Closes the open region: records what it was about, and leaves one
+        // token in the free body where it stood.
+        let close = |region: &mut Vec<String>,
+                     paid: &mut Vec<String>,
+                     free: &mut Vec<String>,
+                     paywalls: &mut Vec<Paywall>| {
+            if region.is_empty() {
+                return;
+            }
+
+            let text = region.join("\n");
+            paywalls.push(Paywall {
+                topics: topics_in(&text),
+            });
+            free.push(PAYWALL_TOKEN.to_owned());
+            paid.append(region);
+        };
 
         for line in markdown.lines() {
             match line.trim() {
@@ -114,24 +178,69 @@ impl Body {
                     continue;
                 }
                 PAID_CLOSE => {
+                    close(&mut region, &mut paid, &mut free, &mut paywalls);
+                    region.clear();
                     inside = false;
                     continue;
                 }
                 _ => {}
             }
 
+            // `whole` takes every line either way: it is the lesson as written,
+            // minus the markers.
+            whole.push(line.to_owned());
+
             if inside {
-                paid.push(line);
+                region.push(line.to_owned());
             } else {
-                free.push(line);
+                free.push(line.to_owned());
             }
         }
+
+        // An unclosed region still ends — at the end of the file.
+        close(&mut region, &mut paid, &mut free, &mut paywalls);
 
         Self {
             free: free.join("\n").trim().to_owned(),
             paid: Some(paid.join("\n").trim().to_owned())
                 .filter(|body| !body.is_empty()),
+            whole: whole.join("\n").trim().to_owned(),
+            paywalls,
         }
+    }
+
+    /// The free body as html, with each token swapped for the paywall element
+    /// the reader page mounts a card onto.
+    ///
+    /// The topics ride along in an attribute rather than being fetched: they
+    /// are a fact about this lesson's markdown, and the page already has the
+    /// markdown's html.
+    #[must_use]
+    pub fn free_html(&self) -> String {
+        let mut html = render(&self.free);
+
+        for wall in &self.paywalls {
+            let topics = wall
+                .topics
+                .iter()
+                .map(|t| t.replace('&', "&amp;").replace('"', "&quot;"))
+                .collect::<Vec<_>>()
+                .join("|");
+
+            html = html.replacen(
+                &format!("<p>{PAYWALL_TOKEN}</p>"),
+                &format!(r#"<div data-paywall data-topics="{topics}"></div>"#),
+                1,
+            );
+        }
+
+        html
+    }
+
+    /// The whole lesson as html, in the order it was written.
+    #[must_use]
+    pub fn whole_html(&self) -> String {
+        render(&self.whole)
     }
 
     /// Whether a reader who is not entitled is missing anything.
@@ -159,6 +268,26 @@ static HIGHLIGHTER: OnceLock<SyntectAdapter> = OnceLock::new();
 /// would be unreadable, and the panel is the part that is not negotiable: code
 /// reads as the machine's voice rather than the page's.
 const THEME: &str = "base16-ocean.dark";
+
+/// A region's first three `##` headings, which is what a paywall card names.
+///
+/// `##` only, and only with whitespace after it — `###` is a subheading of
+/// something already named, and listing both reads as repetition. Three,
+/// because the card says "and more" past that rather than growing.
+fn topics_in(markdown: &str) -> Vec<String> {
+    markdown
+        .lines()
+        .filter_map(|line| {
+            let rest = line.trim_start().strip_prefix("##")?;
+
+            // `###` has no space after the two, so this rejects it.
+            let title = rest.strip_prefix(char::is_whitespace)?.trim();
+
+            (!title.is_empty()).then(|| title.to_owned())
+        })
+        .take(3)
+        .collect()
+}
 
 /// Markdown to html, GitHub flavoured, with code coloured.
 ///
@@ -265,8 +394,67 @@ mod tests {
         // is free again, so a withheld example need not be the tail.
         let body = Body::split(MARKED);
 
-        assert_eq!(body.free, "Free part.\n\n\nFree again.");
+        // The token stands where the region did, so the card lands in the
+        // middle of the lesson rather than after it.
+        assert_eq!(
+            body.free,
+            format!("Free part.\n\n{PAYWALL_TOKEN}\n\nFree again.")
+        );
         assert_eq!(body.paid.as_deref(), Some("Paid part."));
+        assert_eq!(body.whole, "Free part.\n\nPaid part.\n\nFree again.");
+        assert_eq!(body.paywalls.len(), 1);
+    }
+
+    #[test]
+    fn a_region_names_its_first_three_headings() {
+        let body = Body::split(
+            "Free.\n<paid>\n## One\ntext\n## Two\n### Not this\n## Three\n## Four\n</paid>",
+        );
+
+        // `###` is a subheading of something already named, and the fourth is
+        // what "and more" on the card stands for.
+        assert_eq!(
+            body.paywalls.first().map(|w| w.topics.clone()),
+            Some(vec!["One".to_owned(), "Two".to_owned(), "Three".to_owned()])
+        );
+    }
+
+    #[test]
+    fn a_region_with_no_headings_names_nothing() {
+        let body = Body::split("Free.\n<paid>\njust prose\n</paid>");
+
+        assert_eq!(body.paywalls.first().map(|w| w.topics.len()), Some(0));
+    }
+
+    /// The bug this replaced: the whole body was rebuilt as `free + paid`, so a
+    /// region written in the middle of a lesson was served at the end of it.
+    #[test]
+    fn an_entitled_reader_gets_the_lesson_in_the_order_it_was_written() {
+        let body = Body::split("One.\n<paid>\nTwo.\n</paid>\nThree.");
+
+        assert_eq!(body.whole, "One.\nTwo.\nThree.");
+    }
+
+    #[test]
+    fn the_free_html_carries_a_paywall_element_where_the_region_stood() {
+        let body = Body::split("Free.\n\n<paid>\n## Deeper\n</paid>\n\nAfter.");
+        let html = body.free_html();
+
+        assert!(
+            html.contains(r#"<div data-paywall data-topics="Deeper"></div>"#)
+        );
+        // The token never survives into a page.
+        assert!(!html.contains(PAYWALL_TOKEN));
+        // And the prose either side of it does.
+        assert!(html.contains("Free.") && html.contains("After."));
+    }
+
+    #[test]
+    fn nothing_paid_leaves_the_html_alone() {
+        let body = Body::split("All free.");
+
+        assert!(!body.free_html().contains("data-paywall"));
+        assert!(body.paywalls.is_empty());
     }
 
     #[test]
@@ -274,8 +462,14 @@ mod tests {
         let body =
             Body::split("A\n<paid>\none\n</paid>\nB\n<paid>\ntwo\n</paid>\nC");
 
-        assert_eq!(body.free, "A\nB\nC");
+        assert_eq!(
+            body.free,
+            format!("A\n{PAYWALL_TOKEN}\nB\n{PAYWALL_TOKEN}\nC")
+        );
         assert_eq!(body.paid.as_deref(), Some("one\ntwo"));
+        // One card per region, and the prose in the order it was written.
+        assert_eq!(body.paywalls.len(), 2);
+        assert_eq!(body.whole, "A\none\nB\ntwo\nC");
     }
 
     #[test]
@@ -291,8 +485,11 @@ mod tests {
     fn a_region_spanning_the_file_withholds_all_of_it() {
         let body = Body::split("<paid>\nAll of it.\n</paid>");
 
-        assert!(body.free.is_empty());
+        // Nothing free but the card, which is the whole point of a lesson
+        // priced in full.
+        assert_eq!(body.free, PAYWALL_TOKEN);
         assert_eq!(body.paid.as_deref(), Some("All of it."));
+        assert_eq!(body.whole, "All of it.");
     }
 
     #[test]
@@ -301,8 +498,10 @@ mod tests {
         // little is prose given away that somebody was meant to pay for.
         let body = Body::split("Free.\n<paid>\nMeant to be paid.");
 
-        assert_eq!(body.free, "Free.");
+        assert_eq!(body.free, format!("Free.\n{PAYWALL_TOKEN}"));
         assert_eq!(body.paid.as_deref(), Some("Meant to be paid."));
+        // The region still closes, so it still gets a card.
+        assert_eq!(body.paywalls.len(), 1);
     }
 
     #[test]
@@ -331,8 +530,9 @@ mod tests {
         assert_eq!(Body::under(MARKED, Access::Free), Body::split(MARKED));
 
         let paid = Body::under(MARKED, Access::Paid);
-        assert!(paid.free.is_empty());
+        assert_eq!(paid.free, PAYWALL_TOKEN);
         assert_eq!(paid.paid.as_deref(), Some(MARKED.trim()));
+        assert_eq!(paid.paywalls.len(), 1);
     }
 
     #[test]
