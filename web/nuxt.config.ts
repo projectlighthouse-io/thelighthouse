@@ -97,7 +97,22 @@ export default defineNuxtConfig({
       },
     },
 
-    '/': { prerender: true },
+    // *Not* prerendered, for the reason `/books/**` is not: the shelf and the
+    // project band on it come from ohara by way of the api, and the web image
+    // is built from `web/` alone — no api, no database, no network. Prerendering
+    // it therefore baked the fallback of every fetch, and the page shipped with
+    // both carousels empty. Nothing about that failure was visible in the build
+    // log: a refused connection is what `useAsyncData` is told to tolerate.
+    //
+    // Same cache-control as `/books/**`, mirroring `public_content()` on the
+    // api, so the document and the two listings in it expire together.
+    '/': {
+      prerender: false,
+      headers: {
+        'cache-control':
+          'public, max-age=0, s-maxage=300, stale-while-revalidate=86400',
+      },
+    },
 
     // *Not* prerendered, unlike everything else public. Books come from ohara,
     // which is reread at runtime on SIGHUP — baking them into files at build
@@ -120,7 +135,18 @@ export default defineNuxtConfig({
       },
     },
 
-    '/projects/**': { prerender: true },
+    // *Not* prerendered, and this one was failing twice over. The listing
+    // baked empty like the home page, and because `crawlLinks` discovers routes
+    // by following links in what it has already rendered, an empty listing
+    // meant no project page was ever found — so `/projects/<slug>` was not
+    // merely stale, it did not exist in the output at all.
+    '/projects/**': {
+      prerender: false,
+      headers: {
+        'cache-control':
+          'public, max-age=0, s-maxage=300, stale-while-revalidate=86400',
+      },
+    },
 
     // *Not* prerendered any more. The blog is articles readers write, so its
     // content changes without a deploy — baking it at build time would mean a
