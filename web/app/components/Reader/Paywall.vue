@@ -30,6 +30,13 @@ const props = withDefaults(defineProps<{
 const named = computed<string[]>(() => props.topics.slice(0, 3))
 const more = computed<boolean>(() => props.topics.length > 3)
 
+/** The discount this plan is offered in the reader's country, if any.
+ *  Advertised, not applied — the reader types `code` at stripe. */
+interface Coupon {
+  code: string
+  percent: number
+}
+
 /** One purchasable plan, as `/api/billing/plans` reports it. */
 interface Offer {
   amount: number
@@ -37,30 +44,22 @@ interface Offer {
   plan: string
   recurring: boolean
   track: string
-  /** Whether the coupon below comes off this plan. A stripe coupon can be
-   *  restricted to particular products, and one that is leaves the rest at
-   *  full price. */
-  discounted: boolean
+  /** The coupon that comes off *this* plan. A stripe coupon is restricted to
+   *  one plan's product, so a discount is a fact about the reader and the
+   *  plan together — never about the reader alone. */
+  coupon: Coupon | null
 }
 
-/** The whole catalogue answer — the offers, the country the api read from
- *  Cloudflare, and the coupon that country gets. */
-/** The discount a country is offered, if any. Advertised, not applied — the
- *  reader types `code` at stripe. */
-interface Coupon {
-  code: string
-  percent: number
-}
-
+/** The whole catalogue answer — the offers, and the country the api read from
+ *  Cloudflare. */
 interface Catalogue {
   country: string | null
   plans: Offer[]
-  coupon: Coupon | null
 }
 
 const { data: catalogue } = await useAsyncData('billing-plans', () =>
   $fetch<Catalogue>('/_api/billing/plans')
-    .catch(() => ({ country: null, plans: [], coupon: null } as Catalogue)))
+    .catch(() => ({ country: null, plans: [] } as Catalogue)))
 
 const offers = computed<Offer[]>(() => catalogue.value?.plans ?? [])
 
@@ -137,27 +136,17 @@ function priced(o: Offer | undefined): string | null {
 }
 
 /**
- * The discount the reader's country is offered.
+ * The plan's price once its coupon is applied, or null when it has none.
  *
- * Already on the answer this component fetches — the api reads Cloudflare's
- * country header and says which coupon it earns — and until now it was read off
- * the wire and dropped. A reader in a ppp country was being quoted the full
- * price on the card that asks them to buy.
- */
-const coupon = computed<Coupon | null>(() => catalogue.value?.coupon ?? null)
-
-/**
- * The plan's price once the coupon is applied, or null when it is not.
- *
- * `o.discounted` is the api's answer for this plan specifically, not for the
- * reader — the coupon may name a subset of the plans. Without it a restricted
- * tier struck a line through every price on the card and quoted a reduced one
- * beside it that stripe would refuse to honour.
+ * Read off the offer rather than off the answer: the api works out which tier
+ * the reader's country earns *on this plan*, and a coupon is restricted to one
+ * plan's product at stripe. Quoting one plan's discount against another's price
+ * is a number stripe would refuse to honour.
  */
 function reduced(o: Offer | undefined): string | null {
-  const percent = coupon.value?.percent
+  const percent = o?.coupon?.percent
 
-  if (!o || !percent || !o.discounted) return null
+  if (!o || !percent) return null
 
   return money(afterDiscount(o.amount, percent))
 }
@@ -276,9 +265,9 @@ async function buy(): Promise<void> {
       <!-- Only against a plan the coupon actually comes off. Shown for the
            selected one, because that is the price the button is about to
            charge. -->
-      <p v-if="coupon && offer?.discounted" class="wall__ppp">
-        {{ coupon.percent }}% off — enter
-        <code>{{ coupon.code }}</code> at checkout.
+      <p v-if="offer?.coupon" class="wall__ppp">
+        {{ offer.coupon.percent }}% off — enter
+        <code>{{ offer.coupon.code }}</code> at checkout.
       </p>
 
       <p v-if="reason" class="wall__reason" role="alert">{{ reason }}</p>

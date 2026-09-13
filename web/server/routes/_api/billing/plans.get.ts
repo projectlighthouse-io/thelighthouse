@@ -1,14 +1,5 @@
 import { fromApi } from '#server/utils/Lighthouse'
 
-/** One purchasable plan, as the api reports it. */
-interface ApiPlan {
-  plan: string
-  track: string
-  recurring: boolean
-  amount: number | null
-  currency: string | null
-}
-
 /**
  * What is for sale, what it costs, and where the asker is.
  *
@@ -27,22 +18,9 @@ interface ApiPlan {
  * nothing to gain by it.
  *
  * **The amounts are not computed here.** They come from the declaration
- * `lighthouse-prices` reconciles against stripe, so this handler translates
- * naming and nothing else.
+ * `lighthouse-prices` reconciles against stripe, and this handler passes the
+ * api's answer through untouched.
  */
-/** The discount a country is offered, if any. Advertised, not applied — the
- *  reader types `code` at stripe. */
-interface Coupon {
-  code: string
-  percent: number
-}
-
-interface ApiCatalogue {
-  country: string | null
-  plans: ApiPlan[]
-  coupon: Coupon | null
-}
-
 export default defineEventHandler(async (event) => {
   setHeader(event, 'cache-control', 'private, no-store')
 
@@ -51,21 +29,10 @@ export default defineEventHandler(async (event) => {
   // looks to the api as though it came from nowhere.
   const country = getHeader(event, 'cf-ipcountry')
 
-  const answer = await fromApi<ApiCatalogue>(
-    '/api/billing/plans',
-    {},
-    country ? { 'cf-ipcountry': country } : {},
-  )
-
-  return {
-    country: answer.country,
-    plans: answer.plans.map(plan => ({
-      plan: plan.plan,
-      track: plan.track,
-      recurring: plan.recurring,
-      amount: plan.amount,
-      currency: plan.currency,
-    })),
-    coupon: answer.coupon,
-  }
+  // Passed through whole. It used to be reshaped field by field, which meant
+  // every field the api grew had to be added here as well — and one was not:
+  // the flag saying whether a plan was discounted was dropped on the way
+  // through, so no reduced price ever rendered. The pages declare the shape
+  // they read; this only forwards the country header.
+  return await fromApi('/api/billing/plans', {}, country ? { 'cf-ipcountry': country } : {})
 })

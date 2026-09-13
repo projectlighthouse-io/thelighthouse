@@ -71,41 +71,40 @@ interface Coupon {
 }
 
 /**
- * The same answer's plan list, kept only for `discounted`.
+ * The same answer's plan list, kept only for the coupons.
  *
- * A stripe coupon can be restricted to particular products, so "50% off" is
- * not a fact about the reader alone — it is a fact about the reader and the
- * plan. The api has already worked out which is which; the amounts and the
- * copy still come from the compiled catalogue.
+ * A stripe coupon is restricted to one plan's product, so "50% off" is not a
+ * fact about the reader alone — it is a fact about the reader and the plan, and
+ * two plans can carry different codes in the same country. The api has already
+ * worked out which is which; the amounts and the copy still come from the
+ * compiled catalogue.
  */
 interface Offered {
   plan: string
-  discounted: boolean
+  coupon: Coupon | null
 }
 
 const { data: offered } = await useAsyncData(
   'pricing-coupon',
-  () => $fetch<{ coupon: Coupon | null, plans: Offered[] }>('/_api/billing/plans')
-    .catch(() => ({ coupon: null, plans: [] as Offered[] })),
-  { server: false, default: () => ({ coupon: null, plans: [] as Offered[] }) },
+  () => $fetch<{ plans: Offered[] }>('/_api/billing/plans')
+    .catch(() => ({ plans: [] as Offered[] })),
+  { server: false, default: () => ({ plans: [] as Offered[] }) },
 )
 
-const coupon = computed<Coupon | null>(() => offered.value?.coupon ?? null)
+/** The coupon that comes off this particular plan, if any. */
+function couponFor(offer: CataloguePlan | undefined): Coupon | null {
+  if (!offer) return null
 
-/** Whether the coupon comes off this particular plan. */
-function discounted(offer: CataloguePlan | undefined): boolean {
-  return !!offer
-    && (offered.value?.plans ?? []).some(
-      p => p.plan === offer.plan && p.discounted,
-    )
+  return (offered.value?.plans ?? []).find(p => p.plan === offer.plan)?.coupon
+    ?? null
 }
 
-/** What this plan costs the reader once their coupon is applied, or null when
- *  the coupon does not touch it and the list price is the price. */
+/** What this plan costs the reader once its coupon is applied, or null when it
+ *  has none and the list price is the price. */
 function reduced(offer: CataloguePlan | undefined): string | null {
-  const percent = coupon.value?.percent
+  const percent = couponFor(offer)?.percent
 
-  if (!offer?.amount || !percent || !discounted(offer)) return null
+  if (!offer?.amount || !percent) return null
 
   return money(afterDiscount(offer.amount, percent))
 }
@@ -208,15 +207,6 @@ useJsonLd('faq', {
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <p v-if="reason" class="mb-6 text-center text-sm text-ink">{{ reason }}</p>
 
-        <!-- Advertised, not applied. The coupon is a real stripe promotion
-             code and the reader types it at checkout, so the wording has to
-             say that plainly rather than imply the lower price is automatic. -->
-        <p v-if="coupon" class="mb-8 text-center font-mono text-xs text-quiet">
-          {{ coupon.percent }}% off — enter
-          <code class="border-stroke rounded border px-1.5 py-0.5 text-ink">{{ coupon.code }}</code>
-          at checkout.
-        </p>
-
         <div class="mx-auto grid max-w-4xl gap-8 sm:grid-cols-2">
           <div
             v-for="track in tracks"
@@ -245,6 +235,23 @@ useJsonLd('faq', {
                 </span>
                 <span class="text-quiet">/ year</span>
               </div>
+
+              <!-- Advertised, not applied. The coupon is a real stripe
+                   promotion code and the reader types it at checkout, so the
+                   wording has to say that plainly rather than imply the lower
+                   price is automatic.
+                   Beside the price it comes off, not above the page: a coupon
+                   is restricted to one plan at stripe, so two cards can carry
+                   different codes — and one banner would put the wrong one over
+                   whichever card it did not belong to. -->
+              <p
+                v-if="couponFor(offerFor(track.key, true))"
+                class="mt-3 font-mono text-xs text-quiet"
+              >
+                {{ couponFor(offerFor(track.key, true))?.percent }}% off — enter
+                <code class="border-stroke rounded border px-1.5 py-0.5 text-ink">{{ couponFor(offerFor(track.key, true))?.code }}</code>
+                at checkout.
+              </p>
             </div>
 
             <ul v-if="booksOn(track.key).length" class="space-y-3 font-mono">
