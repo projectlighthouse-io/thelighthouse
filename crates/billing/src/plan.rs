@@ -103,6 +103,30 @@ pub struct Plan {
     /// an amount shows no amount, which is better than showing a wrong one.
     #[serde(default)]
     pub money: Option<Money>,
+    /// What this plan unlocks, by the application's own name for each thing.
+    ///
+    /// **Carried, never interpreted.** This crate does not know what one of
+    /// these is, cannot check one, and never will — see the note on [`Plans`].
+    /// It is here because `deny_unknown_fields` means a key this type does not
+    /// declare is a startup failure, and the alternative is a second
+    /// configuration file saying which plan unlocks what, parsed separately
+    /// and able to disagree with this one about which plans exist.
+    ///
+    /// Named `books` rather than something this crate could honestly claim to
+    /// understand, because `pricing.yaml` calls them books and one name for one
+    /// thing is worth more here than a boundary kept in the spelling.
+    ///
+    /// Empty with `everything` false is a plan that unlocks nothing. That is a
+    /// real state — a plan declared before its content — and not this crate's
+    /// business to refuse.
+    #[serde(default)]
+    pub books: Vec<String>,
+    /// Whether this plan unlocks everything, including things added later.
+    ///
+    /// Not expressible as a list: the point of it is the things that do not
+    /// exist yet. Also carried and not interpreted.
+    #[serde(default)]
+    pub everything: bool,
 }
 
 /// What a plan costs.
@@ -126,10 +150,12 @@ pub struct Money {
 /// changes far more often than the code that sells it, and a price handle in a
 /// source file makes adding a plan a release.
 ///
-/// Note what is *not* here: which content a plan unlocks. That mapping is the
-/// application's, not this crate's — a plan is a thing charged for, and what
-/// being charged for it entitles somebody to is a question only the
-/// application can answer.
+/// Note what this crate does not *do* with which content a plan unlocks. The
+/// lists ride along on [`Plan::includes`] and [`Plan::everything`] because they
+/// are declared beside the prices and there is no sense in a second file, but
+/// nothing here reads them: a plan is a thing charged for, and what being
+/// charged for it entitles somebody to is a question only the application can
+/// answer. Every decision made from those fields is made above this crate.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Plans {

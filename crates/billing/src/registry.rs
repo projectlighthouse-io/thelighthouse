@@ -230,6 +230,8 @@ mod tests {
             price: "handle".to_owned(),
             interval: crate::plan::Interval::Year,
             money: None,
+            books: Vec::new(),
+            everything: false,
         }
     }
 

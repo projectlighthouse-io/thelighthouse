@@ -477,6 +477,8 @@ mod tests {
             price: "price_yearly".to_owned(),
             interval: crate::plan::Interval::Year,
             money: None,
+            books: Vec::new(),
+            everything: false,
         }
     }
 
@@ -763,6 +765,8 @@ mod tests {
             price: "price_monthly".to_owned(),
             interval: crate::plan::Interval::Month,
             money: None,
+            books: Vec::new(),
+            everything: false,
         };
 
         assert!(
