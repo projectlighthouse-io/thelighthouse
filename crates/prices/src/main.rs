@@ -103,6 +103,21 @@ struct Declared {
     amount: i64,
     /// What a reader sees on the stripe page. Not used to match anything.
     name: String,
+    /// The books this plan unlocks, by slug.
+    ///
+    /// Copied into `billing.yaml` and read there by the api, which is what
+    /// decides who may read what. Nothing here checks the slugs exist: that
+    /// needs the catalogue, and this command does not open the content repo —
+    /// the api validates them at boot, where a bad one is a named startup
+    /// failure rather than a reader who paid for a book they did not get.
+    #[serde(default)]
+    books: Vec<String>,
+    /// Whether this plan unlocks everything, including books not written yet.
+    ///
+    /// The one thing the list cannot say. A plan sets this or names books,
+    /// never both — a list beside it would be a second answer nobody reads.
+    #[serde(default)]
+    everything: bool,
 }
 
 impl Declared {
@@ -272,6 +287,40 @@ fn read(path: &str) -> Result<Declaration, String> {
     // the last plan does not leave the first four already created.
     for plan in &declaration.plans {
         plan.interval()?;
+
+        // A plan that says both has two answers to "what does this unlock",
+        // and the list is the one nobody would read — `everything` wins at the
+        // api and the list would sit there looking authoritative.
+        if plan.everything && !plan.books.is_empty() {
+            return Err(format!(
+                "{path}: {} sells everything and also names books; it can do \
+                 one or the other",
+                plan.id
+            ));
+        }
+
+        // Neither is a price with nothing behind it. The api refuses to boot
+        // on this too — it is caught here as well because here is where
+        // somebody is editing, and the api is where they find out much later.
+        if !plan.everything && plan.books.is_empty() {
+            return Err(format!(
+                "{path}: {} names no books and does not sell everything, so \
+                 it would charge for nothing",
+                plan.id
+            ));
+        }
+
+        // Names in a list that appears twice is a typo worth catching: it
+        // reads as two books and grants one.
+        let mut seen = BTreeSet::new();
+        for slug in &plan.books {
+            if !seen.insert(slug) {
+                return Err(format!(
+                    "{path}: {} names the book {slug:?} twice",
+                    plan.id
+                ));
+            }
+        }
     }
 
     check_ppp(&declaration.ppp, &declaration.plans, path)?;
@@ -924,10 +973,19 @@ fn write(
         let interval = plan.interval()?;
         // Writing to a String cannot fail; the result is discarded rather than
         // unwrapped so this stays a formatting detail.
+        // `books` or `everything`, never both — the declaration refuses that
+        // — and one of the two is always written, so the api never has to read
+        // an absent field as a decision.
+        let unlocks = if plan.everything {
+            "    everything: true\n".to_owned()
+        } else {
+            format!("    books: [{}]\n", plan.books.join(", "))
+        };
+
         let _ = write!(
             out,
             "  - id: {}\n    price: {id}\n    interval: {interval}\n    \
-             money:\n      amount: {}\n      currency: {}\n\n",
+             money:\n      amount: {}\n      currency: {}\n{unlocks}\n",
             plan.id, plan.amount, declaration.currency,
         );
     }
@@ -1126,6 +1184,8 @@ mod tests {
             id: id.to_owned(),
             amount,
             name: id.to_owned(),
+            books: vec!["a-book".to_owned()],
+            everything: false,
         }
     }
 
