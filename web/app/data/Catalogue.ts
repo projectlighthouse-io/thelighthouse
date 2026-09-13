@@ -35,10 +35,10 @@ export const plans: CataloguePlan[] = [
     "currency": "usd"
   },
   {
-    "plan": "all_yearly",
+    "plan": "all_lifetime",
     "track": "all",
-    "recurring": true,
-    "amount": 24900,
+    "recurring": false,
+    "amount": 49900,
     "currency": "usd"
   }
 ]
@@ -47,12 +47,16 @@ export const shelf: CatalogueBook[] = [
   {
     "slug": "c-programming",
     "title": "C Programming",
-    "tracks": {}
+    "tracks": {
+      "foundation": 4
+    }
   },
   {
     "slug": "crack-the-interview",
     "title": "Crack the Interview — 15 Algorithmic Patterns",
-    "tracks": {}
+    "tracks": {
+      "foundation": 10
+    }
   },
   {
     "slug": "dsa-fundamentals",
@@ -67,6 +71,7 @@ export const shelf: CatalogueBook[] = [
     "slug": "go-fundamentals",
     "title": "Go Fundamentals",
     "tracks": {
+      "foundation": 5,
       "go": 1
     }
   },
@@ -74,6 +79,7 @@ export const shelf: CatalogueBook[] = [
     "slug": "go-intermediate",
     "title": "Go Intermediate",
     "tracks": {
+      "foundation": 6,
       "go": 2
     }
   },
@@ -99,6 +105,7 @@ export const shelf: CatalogueBook[] = [
     "slug": "rust-101s",
     "title": "Rust 101s",
     "tracks": {
+      "foundation": 9,
       "rust": 2
     }
   },
@@ -106,6 +113,7 @@ export const shelf: CatalogueBook[] = [
     "slug": "rust-from-zero",
     "title": "Rust from Zero",
     "tracks": {
+      "foundation": 8,
       "rust": 1
     }
   },
@@ -113,6 +121,7 @@ export const shelf: CatalogueBook[] = [
     "slug": "shipping-go-web-services",
     "title": "Shipping Go Web Services",
     "tracks": {
+      "foundation": 7,
       "go": 3
     }
   }
