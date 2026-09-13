@@ -155,13 +155,13 @@ const projects = computed<Project[]>(() => allProjects.value ?? [])
       </div>
     </section>
 
+    <MarketingTestimonialsSection />
+
     <section class="pt-16 pb-12 sm:pt-24">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <MarketingOnTheHorizon :books="horizonBooks" />
       </div>
     </section>
-
-    <MarketingTestimonialsSection />
 
     <MarketingFaqSection />
 
