@@ -1,0 +1,27 @@
+[package]
+name = "lighthouse-subscriber"
+version = "0.1.0"
+edition = "2024"
+description = "Reads and revokes one reader's subscription. Run deliberately, never by the server."
+
+[lints]
+workspace = true
+
+# `derive` but not `macros`, matching the api and `lighthouse-content`:
+# `query!` checks SQL against a live database while compiling, and no build
+# here is allowed to need a running postgres.
+[dependencies]
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls-ring",
+    "postgres",
+    "derive",
+    "chrono",
+    "uuid",
+] }
+chrono = { version = "0.4", default-features = false, features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["serde"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+dotenvy = "0.15"
