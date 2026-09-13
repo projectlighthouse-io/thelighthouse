@@ -86,6 +86,25 @@ function cheapest(recurring: boolean): Offer | undefined {
 const yearly = computed<Offer | undefined>(() => cheapest(true))
 const lifetime = computed<Offer | undefined>(() => cheapest(false))
 
+/**
+ * What an offer unlocks, named on the button that sells it.
+ *
+ * The two buttons are picked independently — cheapest of each kind that covers
+ * this book — so they are routinely not the same bundle. On a foundation book
+ * the yearly is the foundation track and the lifetime is `all`, and before this
+ * the card put $99/yr beside $499 once with nothing saying the second was five
+ * times the catalogue rather than five times the price.
+ *
+ * The slug is what the wire carries. `all` is the one that needs a word rather
+ * than its name, because `track::EVERYTHING` is called `all` in the api and
+ * nothing else on this page says so.
+ */
+function scope(o: Offer | undefined): string {
+  if (!o) return ''
+
+  return o.track === 'all' ? 'everything' : o.track
+}
+
 type Choice = 'yearly' | 'lifetime'
 
 const chosen = ref<Choice>('yearly')
@@ -197,7 +216,7 @@ async function buy(): Promise<void> {
           <span class="wall__radio" aria-hidden="true" />
           <span class="wall__plan-body">
             <span class="wall__plan-name">Yearly</span>
-            <span class="wall__plan-desc">keep up with everything shipped to the track</span>
+            <span class="wall__plan-desc">{{ scope(yearly) }} — and everything shipped to it while you subscribe</span>
           </span>
           <span class="wall__price">
             <s v-if="reduced(yearly)" class="wall__was">{{ priced(yearly) }}</s>
@@ -216,7 +235,7 @@ async function buy(): Promise<void> {
           <span class="wall__radio" aria-hidden="true" />
           <span class="wall__plan-body">
             <span class="wall__plan-name">Lifetime</span>
-            <span class="wall__plan-desc">pay once, yours for good</span>
+            <span class="wall__plan-desc">{{ scope(lifetime) }} — pay once, yours for good</span>
           </span>
           <span class="wall__price">
             <s v-if="reduced(lifetime)" class="wall__was">{{ priced(lifetime) }}</s>
