@@ -82,15 +82,16 @@ pub(crate) async fn catalogue(
 ) -> Response {
     let country = country_of(&headers);
 
-    // The country goes in as an option: a tier that names no countries is a
-    // list price with a discount off it, and a request cloudflare put no
-    // header on is not a reason to advertise the undiscounted amount.
+    // No country, no tier. Every tier names countries — there is no catch-all
+    // — so a request cloudflare put no header on has nothing to look up.
     //
     // Read before the plans, because each of them says whether this tier comes
     // off it. A stripe coupon can be restricted to particular products, and one
     // that is will not touch the rest — so a page told only the percentage
     // would strike out a price nobody can ever pay.
-    let tier = state.billing.plans.for_country(country.as_deref());
+    let tier = country
+        .as_deref()
+        .and_then(|code| state.billing.plans.for_country(code));
 
     let plans: Vec<_> = state
         .billing

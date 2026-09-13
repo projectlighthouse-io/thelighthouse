@@ -79,9 +79,8 @@ struct DeclaredPpp {
     /// Percent off, 1 to 99. A hundred is a free plan, which is a different
     /// decision and not this one.
     percent: u8,
-    /// ISO 3166-1 alpha-2, the same codes cloudflare reports. Empty is every
-    /// country, including a request cloudflare named no country for.
-    #[serde(default)]
+    /// ISO 3166-1 alpha-2, the same codes cloudflare reports. At least one —
+    /// a tier for everybody is not a purchasing-power tier.
     countries: Vec<String>,
     /// The plan ids this tier discounts. Empty is all of them, which is what
     /// every declaration written before this field said.
@@ -338,11 +337,12 @@ fn read(path: &str) -> Result<Declaration, String> {
 /// the api has to pick, which is a decision nobody wrote down — so it is
 /// refused here rather than resolved at request time.
 ///
-/// **A tier naming no countries is offered to everyone.** That is a list price
-/// with a discount off it, not purchasing power, and it is the same two stripe
-/// objects — so it is spelled as an empty country list rather than a second
-/// mechanism. One of them at most, for the reason a country may appear once:
-/// two catch-alls and the api is picking again.
+/// **A tier has to name countries.** There is no catch-all: a tier offered to
+/// everybody is not purchasing power, it is a list price with a discount off
+/// it, and the two are different decisions that should not share a spelling.
+/// An empty list is refused rather than read as "everyone", because the reading
+/// that makes it mean everyone is the one nobody intends when they leave a list
+/// empty by accident.
 fn check_ppp(
     tiers: &[DeclaredPpp],
     plans: &[Declared],
@@ -350,7 +350,6 @@ fn check_ppp(
 ) -> Result<(), String> {
     let mut claimed: BTreeMap<String, String> = BTreeMap::new();
     let mut codes: BTreeSet<String> = BTreeSet::new();
-    let mut universal: Option<&str> = None;
 
     for tier in tiers {
         if tier.code.trim().is_empty() {
@@ -384,15 +383,7 @@ fn check_ppp(
         }
 
         if tier.countries.is_empty() {
-            if let Some(first) = universal {
-                return Err(format!(
-                    "{path}: {first} and {} are both offered to every country",
-                    tier.code
-                ));
-            }
-
-            universal = Some(&tier.code);
-            continue;
+            return Err(format!("{path}: {} names no countries", tier.code));
         }
 
         for country in &tier.countries {
@@ -1231,12 +1222,13 @@ mod tests {
         }
     }
 
-    /// A tier restricted to the plans it names.
+    /// A tier restricted to the plans it names. Every tier names a country —
+    /// there is no other kind.
     fn tier_for(code: &str, plans: &[&str]) -> DeclaredPpp {
         DeclaredPpp {
             code: code.to_owned(),
             percent: 50,
-            countries: Vec::new(),
+            countries: vec!["BD".to_owned()],
             plans: plans.iter().map(|p| (*p).to_owned()).collect(),
         }
     }
@@ -1266,12 +1258,16 @@ mod tests {
     }
 
     #[test]
-    fn a_tier_naming_no_countries_is_offered_to_everyone() {
-        // A list price with a discount off it. Allowed, and it does not claim
-        // a country, so it cannot clash with one that does.
-        let mixed = [tier("EVERYONE", 50, &[]), tier("A", 70, &["BD"])];
+    fn a_tier_naming_no_countries_is_refused() {
+        // No catch-all. A discount for everybody is a list price with a
+        // discount off it, which is a different decision from purchasing
+        // power and must not be spelled as an empty list — least of all by
+        // somebody who emptied one by accident.
+        let refused =
+            check_ppp(&[tier("EVERYONE", 50, &[])], &[], "pricing.yaml")
+                .unwrap_err();
 
-        assert!(check_ppp(&mixed, &[], "pricing.yaml").is_ok());
+        assert!(refused.contains("EVERYONE"), "{refused}");
     }
 
     #[test]
@@ -1318,16 +1314,6 @@ mod tests {
         };
 
         assert_eq!(held.products(), ["prod_a", "prod_b"]);
-    }
-
-    #[test]
-    fn two_tiers_offered_to_everyone_are_refused() {
-        // Same ambiguity as a doubly claimed country: the api would be picking.
-        let clash = [tier("A", 50, &[]), tier("B", 40, &[])];
-
-        let refused = check_ppp(&clash, &[], "pricing.yaml").unwrap_err();
-
-        assert!(refused.contains('A') && refused.contains('B'), "{refused}");
     }
 
     #[test]
