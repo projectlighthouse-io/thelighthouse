@@ -83,6 +83,14 @@ struct DeclaredPpp {
     /// country, including a request cloudflare named no country for.
     #[serde(default)]
     countries: Vec<String>,
+    /// The plan ids this tier discounts. Empty is all of them, which is what
+    /// every declaration written before this field said.
+    ///
+    /// Becomes the coupon's `applies_to[products]` at stripe, so stripe
+    /// enforces it — a reader who types the code against a plan it does not
+    /// name is refused there rather than trusted here.
+    #[serde(default)]
+    plans: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -137,11 +145,24 @@ struct Created {
     id: String,
 }
 
+/// What stripe holds for one plan once `apply` is done with it.
+///
+/// Two ids because they are named by different things: a checkout session
+/// takes the *price*, and a coupon's `applies_to` takes the *product*.
+#[derive(Debug)]
+struct Resolved {
+    price: String,
+    product: String,
+}
+
 /// What has to happen to a plan for stripe to match the declaration.
 #[derive(Debug, PartialEq, Eq)]
 enum Verdict {
     /// Stripe already holds this price, at this amount.
-    Agrees(String),
+    ///
+    /// The product rides along because a coupon's `applies_to` names products,
+    /// not prices, and this is the only place the held one is read.
+    Agrees { id: String, product: String },
     /// No price holds this lookup key.
     Missing,
     /// A price holds the key, at a different amount or currency.
@@ -216,7 +237,8 @@ async fn run() -> Result<(), String> {
                 println!("\npurchasing power");
             }
 
-            let promotions = apply_ppp(&client, &key, &declaration.ppp).await?;
+            let promotions =
+                apply_ppp(&client, &key, &declaration.ppp, &resolved).await?;
 
             let output = std::env::var("BILLING_PLANS")
                 .unwrap_or_else(|_| DEFAULT_OUTPUT.to_owned());
@@ -252,7 +274,7 @@ fn read(path: &str) -> Result<Declaration, String> {
         plan.interval()?;
     }
 
-    check_ppp(&declaration.ppp, path)?;
+    check_ppp(&declaration.ppp, &declaration.plans, path)?;
 
     Ok(declaration)
 }
@@ -272,7 +294,11 @@ fn read(path: &str) -> Result<Declaration, String> {
 /// objects — so it is spelled as an empty country list rather than a second
 /// mechanism. One of them at most, for the reason a country may appear once:
 /// two catch-alls and the api is picking again.
-fn check_ppp(tiers: &[DeclaredPpp], path: &str) -> Result<(), String> {
+fn check_ppp(
+    tiers: &[DeclaredPpp],
+    plans: &[Declared],
+    path: &str,
+) -> Result<(), String> {
     let mut claimed: BTreeMap<String, String> = BTreeMap::new();
     let mut codes: BTreeSet<String> = BTreeSet::new();
     let mut universal: Option<&str> = None;
@@ -294,6 +320,18 @@ fn check_ppp(tiers: &[DeclaredPpp], path: &str) -> Result<(), String> {
                 "{path}: {} is {} percent off, which is not between 1 and 99",
                 tier.code, tier.percent
             ));
+        }
+
+        // A plan the declaration does not sell cannot be discounted, and
+        // naming one is a typo that would otherwise reach stripe as a coupon
+        // restricted to nothing — which discounts nothing, silently.
+        for plan in &tier.plans {
+            if !plans.iter().any(|declared| &declared.id == plan) {
+                return Err(format!(
+                    "{path}: {} applies to {plan}, which is not a declared plan",
+                    tier.code
+                ));
+            }
         }
 
         if tier.countries.is_empty() {
@@ -396,7 +434,10 @@ fn compare(
                 if amount == plan.amount
                     && price.currency == declaration.currency
                 {
-                    Verdict::Agrees(price.id.clone())
+                    Verdict::Agrees {
+                        id: price.id.clone(),
+                        product: price.product.clone(),
+                    }
                 } else {
                     Verdict::Differs {
                         held: amount,
@@ -417,7 +458,9 @@ fn compare(
 fn report(verdicts: &[(String, Verdict)]) {
     for (plan, verdict) in verdicts {
         match verdict {
-            Verdict::Agrees(id) => println!("agrees   {plan:24} {id}"),
+            Verdict::Agrees { id, .. } => {
+                println!("agrees   {plan:24} {id}");
+            }
             Verdict::Missing => {
                 println!("missing  {plan:24} no price holds this key");
             }
@@ -429,7 +472,7 @@ fn report(verdicts: &[(String, Verdict)]) {
 
     let pending = verdicts
         .iter()
-        .filter(|(_, verdict)| !matches!(verdict, Verdict::Agrees(_)))
+        .filter(|(_, verdict)| !matches!(verdict, Verdict::Agrees { .. }))
         .count();
 
     if pending == 0 {
@@ -439,13 +482,13 @@ fn report(verdicts: &[(String, Verdict)]) {
     }
 }
 
-/// Make stripe agree, and give back the price id for every plan.
+/// Make stripe agree, and give back what it now holds for every plan.
 async fn apply(
     client: &reqwest::Client,
     key: &SecretString,
     declaration: &Declaration,
     verdicts: &[(String, Verdict)],
-) -> Result<BTreeMap<String, String>, String> {
+) -> Result<BTreeMap<String, Resolved>, String> {
     let mut resolved = BTreeMap::new();
 
     for (plan, verdict) in verdicts {
@@ -455,11 +498,14 @@ async fn apply(
             .find(|candidate| &candidate.id == plan)
             .ok_or_else(|| format!("{plan} vanished from the declaration"))?;
 
-        let id = match verdict {
-            Verdict::Agrees(id) => {
+        let held = match verdict {
+            Verdict::Agrees { id, product } => {
                 println!("agrees   {plan:24} {id}");
 
-                id.clone()
+                Resolved {
+                    price: id.clone(),
+                    product: product.clone(),
+                }
             }
             Verdict::Missing => {
                 let product = create_product(client, key, declared).await?;
@@ -475,9 +521,11 @@ async fn apply(
 
                 println!("created  {plan:24} {id}");
 
-                id
+                Resolved { price: id, product }
             }
-            Verdict::Differs { held, product, .. } => {
+            Verdict::Differs {
+                held: was, product, ..
+            } => {
                 // The existing product is reused: it is the thing being sold,
                 // and only its price has changed. `transfer_lookup_key` moves
                 // the key onto the new price in the same call that creates it,
@@ -493,15 +541,18 @@ async fn apply(
                 .await?;
 
                 println!(
-                    "repriced {plan:24} {held} -> {} ({id})",
+                    "repriced {plan:24} {was} -> {} ({id})",
                     declared.amount
                 );
 
-                id
+                Resolved {
+                    price: id,
+                    product: product.clone(),
+                }
             }
         };
 
-        resolved.insert(plan.clone(), id);
+        resolved.insert(plan.clone(), held);
     }
 
     Ok(resolved)
@@ -562,28 +613,64 @@ async fn create_price(
 /// unlike a price, so `LIGHTHOUSE-BD` is the coupon and the promotion code
 /// both — one name for the tier everywhere, and nothing to look up.
 ///
-/// **A coupon's percentage cannot be edited.** Stripe allows `name` and
-/// `metadata` and nothing else, so a changed percentage is a different coupon
-/// and needs a different code. That is refused loudly here rather than applied
-/// quietly, because the alternative — deleting the coupon and remaking it —
-/// would revoke the discount from everyone already subscribed on it.
+/// **Neither the percentage nor `applies_to` can be edited.** Stripe allows
+/// `name` and `metadata` and nothing else, so a change to either is a different
+/// coupon and needs a different code. That is refused loudly here rather than
+/// applied quietly, because the alternative — deleting the coupon and remaking
+/// it — would revoke the discount from everyone already subscribed on it.
+///
+/// **`applies_to` names products, not prices.** A repricing makes a new price
+/// against the same product, so a coupon restricted to a plan keeps applying
+/// across price changes without being touched.
 async fn apply_ppp(
     client: &reqwest::Client,
     key: &SecretString,
     tiers: &[DeclaredPpp],
+    resolved: &BTreeMap<String, Resolved>,
 ) -> Result<BTreeMap<String, String>, String> {
     let mut promotion_codes = BTreeMap::new();
 
     for tier in tiers {
+        // Sorted, because this is compared against what stripe answers with
+        // and neither side promises an order.
+        let mut wanted: Vec<String> = tier
+            .plans
+            .iter()
+            .map(|plan| {
+                resolved
+                    .get(plan)
+                    .map(|held| held.product.clone())
+                    .ok_or_else(|| format!("{plan} was never resolved"))
+            })
+            .collect::<Result<_, _>>()?;
+        wanted.sort();
+
         let held: Option<HeldCoupon> =
             maybe_get(client, key, &format!("/v1/coupons/{}", tier.code))
                 .await?;
 
         match held {
             Some(coupon)
-                if coupon.percent_off == Some(f64::from(tier.percent)) =>
+                if coupon.percent_off == Some(f64::from(tier.percent))
+                    && coupon.products() == wanted =>
             {
-                println!("  {} agrees at {}% off", tier.code, tier.percent);
+                println!(
+                    "  {} agrees at {}% off{}",
+                    tier.code,
+                    tier.percent,
+                    scope_of(&tier.plans)
+                );
+            }
+            Some(coupon) if coupon.products() != wanted => {
+                return Err(format!(
+                    "{} applies to {:?} at stripe and {:?} in pricing.yaml. A \
+                     coupon's applies_to cannot be changed — give the new \
+                     restriction its own code, and stripe keeps honouring the \
+                     old one for anybody already on it.",
+                    tier.code,
+                    coupon.products(),
+                    wanted
+                ));
             }
             Some(coupon) => {
                 return Err(format!(
@@ -597,7 +684,7 @@ async fn apply_ppp(
                 ));
             }
             None => {
-                let form = vec![
+                let mut form = vec![
                     ("id".to_owned(), tier.code.clone()),
                     ("percent_off".to_owned(), tier.percent.to_string()),
                     // Forever, because the tier is about where somebody lives
@@ -609,9 +696,24 @@ async fn apply_ppp(
                     ),
                 ];
 
+                // Left off entirely when the tier names no plans: an empty
+                // `applies_to[products]` is not "everything" at stripe, it is a
+                // restriction to nothing.
+                for (i, product) in wanted.iter().enumerate() {
+                    form.push((
+                        format!("applies_to[products][{i}]"),
+                        product.clone(),
+                    ));
+                }
+
                 let _: Created =
                     post(client, key, "/v1/coupons", &form).await?;
-                println!("  {} created at {}% off", tier.code, tier.percent);
+                println!(
+                    "  {} created at {}% off{}",
+                    tier.code,
+                    tier.percent,
+                    scope_of(&tier.plans)
+                );
             }
         }
 
@@ -649,6 +751,40 @@ async fn apply_ppp(
 #[derive(Debug, serde::Deserialize)]
 struct HeldCoupon {
     percent_off: Option<f64>,
+    /// Absent on a coupon that applies to everything, which is how stripe says
+    /// "unrestricted" — not an empty product list.
+    #[serde(default)]
+    applies_to: Option<AppliesTo>,
+}
+
+impl HeldCoupon {
+    /// The products this coupon is restricted to, sorted. Empty is every
+    /// product, matching the declaration's empty `plans`.
+    fn products(&self) -> Vec<String> {
+        let mut products = self
+            .applies_to
+            .as_ref()
+            .map(|to| to.products.clone())
+            .unwrap_or_default();
+        products.sort();
+
+        products
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct AppliesTo {
+    #[serde(default)]
+    products: Vec<String>,
+}
+
+/// `" on all_lifetime"` for a restricted tier, nothing for one that is not.
+fn scope_of(plans: &[String]) -> String {
+    if plans.is_empty() {
+        String::new()
+    } else {
+        format!(" on {}", plans.join(", "))
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -742,7 +878,7 @@ async fn post<T: serde::de::DeserializeOwned>(
 fn write(
     path: &str,
     declaration: &Declaration,
-    resolved: &BTreeMap<String, String>,
+    resolved: &BTreeMap<String, Resolved>,
     promotions: &BTreeMap<String, String>,
 ) -> Result<(), String> {
     let mut out = String::from(
@@ -757,6 +893,7 @@ fn write(
     for plan in &declaration.plans {
         let id = resolved
             .get(&plan.id)
+            .map(|held| &held.price)
             .ok_or_else(|| format!("{} was never resolved", plan.id))?;
 
         let interval = plan.interval()?;
@@ -774,6 +911,11 @@ fn write(
     // without asking stripe on every request. The percentage rides along
     // because the frontend shows the reduced price before anybody types
     // anything; the promotion code is what they type.
+    //
+    // `plans` rides along for the same reason the percentage does. Stripe is
+    // what enforces the restriction, but the page has to know it before the
+    // reader gets there — otherwise it strikes out the price of a plan the
+    // coupon will not touch, which is a number nobody can ever pay.
     if !declaration.ppp.is_empty() {
         out.push_str("ppp:\n");
 
@@ -785,10 +927,11 @@ fn write(
             let _ = write!(
                 out,
                 "  - code: {}\n    promotion: {promotion}\n    percent: {}\n    \
-                 countries: [{}]\n\n",
+                 countries: [{}]\n    plans: [{}]\n\n",
                 tier.code,
                 tier.percent,
                 tier.countries.join(", "),
+                tier.plans.join(", "),
             );
         }
     }
@@ -999,6 +1142,17 @@ mod tests {
             code: code.to_owned(),
             percent,
             countries: countries.iter().map(|c| (*c).to_owned()).collect(),
+            plans: Vec::new(),
+        }
+    }
+
+    /// A tier restricted to the plans it names.
+    fn tier_for(code: &str, plans: &[&str]) -> DeclaredPpp {
+        DeclaredPpp {
+            code: code.to_owned(),
+            percent: 50,
+            countries: Vec::new(),
+            plans: plans.iter().map(|p| (*p).to_owned()).collect(),
         }
     }
 
@@ -1008,7 +1162,7 @@ mod tests {
         // first, which is a decision nobody wrote down.
         let clash = [tier("A", 60, &["BD", "IN"]), tier("B", 40, &["BD"])];
 
-        let refused = check_ppp(&clash, "pricing.yaml").unwrap_err();
+        let refused = check_ppp(&clash, &[], "pricing.yaml").unwrap_err();
 
         assert!(refused.contains("BD"), "{refused}");
         assert!(refused.contains('A') && refused.contains('B'), "{refused}");
@@ -1018,12 +1172,12 @@ mod tests {
     fn tiers_that_do_not_overlap_are_fine() {
         let clean = [tier("A", 60, &["BD", "IN"]), tier("B", 40, &["BR"])];
 
-        assert!(check_ppp(&clean, "pricing.yaml").is_ok());
+        assert!(check_ppp(&clean, &[], "pricing.yaml").is_ok());
     }
 
     #[test]
     fn no_tiers_at_all_is_fine() {
-        assert!(check_ppp(&[], "pricing.yaml").is_ok());
+        assert!(check_ppp(&[], &[], "pricing.yaml").is_ok());
     }
 
     #[test]
@@ -1032,7 +1186,53 @@ mod tests {
         // a country, so it cannot clash with one that does.
         let mixed = [tier("EVERYONE", 50, &[]), tier("A", 70, &["BD"])];
 
-        assert!(check_ppp(&mixed, "pricing.yaml").is_ok());
+        assert!(check_ppp(&mixed, &[], "pricing.yaml").is_ok());
+    }
+
+    #[test]
+    fn a_tier_may_name_the_plans_it_discounts() {
+        let plans =
+            [declared("rust_yearly", 4900), declared("all_lifetime", 1)];
+        let tiers = [tier_for("HALF", &["all_lifetime"])];
+
+        assert!(check_ppp(&tiers, &plans, "pricing.yaml").is_ok());
+    }
+
+    #[test]
+    fn a_tier_naming_a_plan_that_is_not_sold_is_refused() {
+        // Reaching stripe, this would be a coupon restricted to a product that
+        // does not exist — which discounts nothing, and says nothing about it.
+        let plans = [declared("rust_yearly", 4900)];
+        let tiers = [tier_for("HALF", &["all_lifetme"])];
+
+        let refused = check_ppp(&tiers, &plans, "pricing.yaml").unwrap_err();
+
+        assert!(refused.contains("all_lifetme"), "{refused}");
+    }
+
+    #[test]
+    fn a_coupon_with_no_applies_to_is_unrestricted() {
+        // Stripe says "every product" by leaving the field off, not by sending
+        // an empty list — so the two have to read the same way here.
+        let unrestricted = HeldCoupon {
+            percent_off: Some(50.0),
+            applies_to: None,
+        };
+
+        assert!(unrestricted.products().is_empty());
+    }
+
+    #[test]
+    fn a_coupons_products_are_compared_in_a_stable_order() {
+        // Neither side promises an order, so both are sorted before comparing.
+        let held = HeldCoupon {
+            percent_off: Some(50.0),
+            applies_to: Some(AppliesTo {
+                products: vec!["prod_b".to_owned(), "prod_a".to_owned()],
+            }),
+        };
+
+        assert_eq!(held.products(), ["prod_a", "prod_b"]);
     }
 
     #[test]
@@ -1040,7 +1240,7 @@ mod tests {
         // Same ambiguity as a doubly claimed country: the api would be picking.
         let clash = [tier("A", 50, &[]), tier("B", 40, &[])];
 
-        let refused = check_ppp(&clash, "pricing.yaml").unwrap_err();
+        let refused = check_ppp(&clash, &[], "pricing.yaml").unwrap_err();
 
         assert!(refused.contains('A') && refused.contains('B'), "{refused}");
     }
@@ -1050,7 +1250,7 @@ mod tests {
         // A hundred is a free plan, which is a different decision.
         for wrong in [0, 100] {
             assert!(
-                check_ppp(&[tier("A", wrong, &["BD"])], "pricing.yaml")
+                check_ppp(&[tier("A", wrong, &["BD"])], &[], "pricing.yaml")
                     .is_err(),
                 "{wrong} percent was accepted"
             );
@@ -1062,7 +1262,8 @@ mod tests {
         // The shape cloudflare reports, so neither side normalises later.
         for wrong in ["bd", "BGD", "B", "12"] {
             assert!(
-                check_ppp(&[tier("A", 50, &[wrong])], "pricing.yaml").is_err(),
+                check_ppp(&[tier("A", 50, &[wrong])], &[], "pricing.yaml")
+                    .is_err(),
                 "{wrong} was accepted as a country"
             );
         }
@@ -1072,7 +1273,7 @@ mod tests {
     fn two_tiers_cannot_share_a_code() {
         let clash = [tier("A", 60, &["BD"]), tier("A", 40, &["BR"])];
 
-        assert!(check_ppp(&clash, "pricing.yaml").is_err());
+        assert!(check_ppp(&clash, &[], "pricing.yaml").is_err());
     }
 
     #[test]
@@ -1091,7 +1292,10 @@ mod tests {
 
         assert_eq!(
             compare(&declaration(), &held).first().unwrap().1,
-            Verdict::Agrees("price_rust_yearly".to_owned())
+            Verdict::Agrees {
+                id: "price_rust_yearly".to_owned(),
+                product: "prod_1".to_owned(),
+            }
         );
     }
 
