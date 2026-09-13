@@ -131,6 +131,27 @@ export interface ApiLesson {
 }
 
 /**
+ * "There is more here, and this reader cannot see it."
+ *
+ * Two facts, and both routes that answer it need the same pair: `has_paid_part`
+ * is about the *lesson* — something in it is withheld — and `unlocked` is about
+ * the *reader*. They were combined separately in each route and drifted: the
+ * contents list used the lesson half alone, so it went on calling lessons paid
+ * to somebody who opens them and reads the whole thing.
+ *
+ * **An absent `unlocked` is not unlocked.** The book listing is the same bytes
+ * for everybody and is held at the edge, so the api answers it without a
+ * session and there is no reader half to have. Locked is the honest answer for
+ * a response that cannot know, and the page asks again from the browser — where
+ * the cookie goes — to find out otherwise.
+ */
+export function isLocked(
+  lesson: { has_paid_part: boolean, unlocked?: boolean },
+): boolean {
+  return lesson.has_paid_part && !lesson.unlocked
+}
+
+/**
  * Minor units to what a price tag says. Zero is "Free", not "$0.00".
  *
  * Display only — every calculation stays in minor units on the rust side, so

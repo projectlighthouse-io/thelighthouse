@@ -1,13 +1,14 @@
 import type { ApiBookDetail } from '#server/utils/Lighthouse'
-import { fromApi, priceLabel } from '#server/utils/Lighthouse'
+import { fromApi, isLocked, priceLabel } from '#server/utils/Lighthouse'
 
 /**
  * One book and its curriculum.
  *
- * `locked` is the page's word for "there is more behind a paywall here", and
- * it is the lesson's own `has_paid_part` — the same rule the reader page uses.
- * The two must agree: a contents list calling a lesson free while opening it
- * shows a paywall is worse than either answer on its own.
+ * `locked` is `isLocked`, the same rule the reader page answers with — the two
+ * must agree, and the last time each spelled it out for itself they did not.
+ * There is no reader half here: this response is shared and cacheable at the
+ * edge, so it cannot depend on who is asking, and the book page asks again from
+ * the browser to soften it.
  *
  * Deliberately not gated on the book's price. Price decides what happens at
  * checkout; the markers decide what is withheld, and a book being free today
@@ -16,9 +17,6 @@ import { fromApi, priceLabel } from '#server/utils/Lighthouse'
  * The api works `has_paid_part` out while it builds its catalogue, so this
  * reads no markdown — it used to be left `false` precisely because answering
  * it here would have opened every lesson file to render one list.
- *
- * It is deliberately not per reader either. This response is shared and
- * cacheable at the edge, so it cannot depend on who is asking.
  */
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'book')
@@ -47,7 +45,7 @@ export default defineEventHandler(async (event) => {
         title: lesson.title,
         description: lesson.description ?? '',
         chapterId: chapter.id,
-        locked: lesson.has_paid_part,
+        locked: isLocked(lesson),
       })),
     ),
   }

@@ -1,5 +1,5 @@
 import type { ApiLesson } from '#server/utils/Lighthouse'
-import { fromApi } from '#server/utils/Lighthouse'
+import { fromApi, isLocked } from '#server/utils/Lighthouse'
 
 /**
  * A lesson, from ohara by way of the rust api.
@@ -31,11 +31,9 @@ export default defineEventHandler(async (event) => {
       slug: lesson.slug,
       title: lesson.title,
       description: lesson.description ?? '',
-      // "There is more, and this reader cannot see it." Both halves of that
-      // are the api's answer now: `has_paid_part` is a fact about the lesson
-      // and `unlocked` is a fact about the reader, and the api needs the
-      // session cookie to know the second — see the note on forwarding below.
-      locked: lesson.has_paid_part && !lesson.unlocked,
+      // Both halves are the api's answer here — this url is asked with the
+      // session cookie, so `unlocked` is real rather than absent.
+      locked: isLocked(lesson),
     },
     html: lesson.html,
     toc: lesson.toc,
