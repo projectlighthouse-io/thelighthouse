@@ -64,8 +64,35 @@ impl Membership {
     /// unless it says `lifetime`. Null has meant "we were not told when this
     /// period ends" since the table was written, and treating it as unlimited
     /// would hand a manual scholarship row permanent access by accident.
+    ///
+    /// **A cancellation can land before the period does.** Whichever comes
+    /// first is the end — see [`ends_at`](Self::ends_at).
     pub(crate) fn grants_access(&self) -> bool {
         self.grants_access_at(chrono::Utc::now().naive_utc())
+    }
+
+    /// When this membership stops granting, if it ever does.
+    ///
+    /// The earlier of the period and a pending cancellation. Usually they are
+    /// the same instant — cancelling at period end sets `cancel_at` to exactly
+    /// that — but a cancellation can be scheduled for sooner, and then it is
+    /// the one that decides. Taking `period_ends_at` alone would keep a reader
+    /// reading for the whole period they were cancelled out of.
+    ///
+    /// `None` for a lifetime membership, which is the whole point of the flag.
+    pub(crate) fn ends_at(&self) -> Option<NaiveDateTime> {
+        if self.lifetime {
+            return None;
+        }
+
+        match (self.period_ends_at, self.cancel_at) {
+            (Some(period), Some(cancel)) => Some(period.min(cancel)),
+            // A missing period is not "forever" — `lifetime` above is the only
+            // thing that says that — so a cancellation alone still ends it,
+            // and neither leaves nothing to grant from.
+            (Some(one), None) | (None, Some(one)) => Some(one),
+            (None, None) => Some(NaiveDateTime::MIN),
+        }
     }
 
     /// The same question at a stated moment, which is what makes it testable.
@@ -79,11 +106,7 @@ impl Membership {
             return false;
         }
 
-        if self.lifetime {
-            return true;
-        }
-
-        self.period_ends_at.is_some_and(|ends| ends > now)
+        self.ends_at().is_none_or(|ends| ends > now)
     }
 
     /// Whether a cancellation is pending but has not taken effect.
@@ -173,6 +196,42 @@ mod tests {
         assert!(forever.grants_access_at(at(NOW)));
         // Far enough out that any date arithmetic would have expired it.
         assert!(forever.grants_access_at(at("2099-01-01 00:00:00")));
+    }
+
+    #[test]
+    fn a_cancellation_before_the_period_ends_is_what_decides() {
+        // What `revoke --date` writes. Taking the period alone would keep the
+        // reader reading for the whole period they were cancelled out of.
+        let mut cut_short =
+            membership(ACTIVE, Some("2027-09-02 16:16:58"), false);
+        cut_short.cancel_at = Some(at("2026-09-20 00:00:00"));
+
+        assert!(cut_short.grants_access_at(at(NOW)));
+        assert!(!cut_short.grants_access_at(at("2026-10-01 00:00:00")));
+    }
+
+    #[test]
+    fn a_cancellation_after_the_period_does_not_extend_it() {
+        // The earlier of the two, in both directions — a date set beyond the
+        // paid period must not buy the reader time they did not pay for.
+        let mut odd = membership(ACTIVE, Some("2026-09-20 00:00:00"), false);
+        odd.cancel_at = Some(at("2099-01-01 00:00:00"));
+
+        assert!(!odd.grants_access_at(at("2026-10-01 00:00:00")));
+    }
+
+    #[test]
+    fn a_cancellation_with_no_period_still_ends_it() {
+        let mut undated = membership(ACTIVE, None, false);
+        undated.cancel_at = Some(at("2026-09-20 00:00:00"));
+
+        assert!(undated.grants_access_at(at(NOW)));
+        assert!(!undated.grants_access_at(at("2026-10-01 00:00:00")));
+    }
+
+    #[test]
+    fn a_lifetime_membership_has_no_end_to_report() {
+        assert_eq!(membership(ACTIVE, None, true).ends_at(), None);
     }
 
     #[test]
