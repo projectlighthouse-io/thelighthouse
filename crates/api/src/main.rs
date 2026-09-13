@@ -106,9 +106,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // rather than a 500 the first time somebody tries to pay.
     let billing = billing_providers(&config)?;
 
-    // After the catalogue, because it is the catalogue that says which tracks
-    // exist. A plan selling a track no book is on charges a reader and grants
-    // them nothing, and the first report of it would be theirs.
+    // After the catalogue, because it is the catalogue the declared slugs are
+    // checked against. A plan naming a book that does not exist charges a
+    // reader and grants them one book fewer than it promised, and the first
+    // report of it would be theirs.
     payments::validate(&billing.plans, &catalog.current())?;
 
     tracing::info!(

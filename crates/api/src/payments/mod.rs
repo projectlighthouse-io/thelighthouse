@@ -73,7 +73,7 @@ use crate::{
 /// keeps owning its table: one caller elsewhere means one function here, not a
 /// second module writing queries against `memberships`.
 pub(crate) use store::live;
-pub(crate) use track::{covers, of_plan, validate};
+pub(crate) use track::{covers, validate};
 
 /// The reader-facing routes. Absolute paths, so these merge alongside the
 /// others rather than nesting under one prefix.

@@ -56,6 +56,7 @@ pub(crate) enum Access {
 /// that generates a support ticket rather than a page refresh.
 pub(crate) async fn access(
     db: &PgPool,
+    plans: &billing::Plans,
     reader: Option<i64>,
     book: &BookEntry,
 ) -> Result<Access, sqlx::Error> {
@@ -69,7 +70,7 @@ pub(crate) async fn access(
         return Ok(Access::Full);
     }
 
-    if covered(db, user_id, book).await? {
+    if covered(db, plans, user_id, book).await? {
         return Ok(Access::Full);
     }
 
@@ -78,16 +79,17 @@ pub(crate) async fn access(
 
 /// Whether a live subscription covers this book.
 ///
-/// A subscription is to a *track*, so this asks whether the book is on that
-/// track — which the content already says, in `book.yaml`'s `tracks:` map.
-/// There is no list of what a plan includes to keep in step with the
-/// catalogue, and so no way for the two to disagree.
+/// Two questions, in order: is the reader paying for something right now, and
+/// does the thing they are paying for name this book. The plan carries its own
+/// list of slugs — see `payments::track` — so this is a lookup rather than a
+/// derivation, and a plan nobody declares any more covers nothing.
 ///
 /// Only a membership that grants access counts. One in grace — a payment
 /// failed and the provider is retrying — does not, which is the rule the
 /// laravel app had and the one `Membership::grants_access` keeps.
 async fn covered(
     db: &PgPool,
+    plans: &billing::Plans,
     user_id: i64,
     book: &BookEntry,
 ) -> Result<bool, sqlx::Error> {
@@ -100,8 +102,9 @@ async fn covered(
     }
 
     Ok(crate::payments::covers(
-        crate::payments::of_plan(&membership.plan.as_str().into()),
-        &book.book,
+        plans,
+        &membership.plan.as_str().into(),
+        &book.book.slug,
     ))
 }
 
@@ -141,6 +144,17 @@ mod tests {
     // These reach no database: every one of them is a case `access` answers
     // before it would query, which is the point being made about each.
 
+    /// No plans at all, which is what these tests need: every one of them is
+    /// answered before a plan is ever consulted, and an empty set makes that
+    /// the same claim as the lazy pool does about the database.
+    fn no_plans() -> billing::Plans {
+        billing::Plans::from_yaml(
+            "plans:\n  - id: none_yearly\n    price: price_x\n    \
+             interval: year\n",
+        )
+        .expect("the test yaml parses")
+    }
+
     #[tokio::test]
     async fn a_stranger_gets_only_the_free_half() {
         let snapshot = fixture_book();
@@ -152,7 +166,10 @@ mod tests {
             sqlx::postgres::PgPool::connect_lazy("postgres://localhost/unused")
                 .unwrap();
 
-        assert_eq!(access(&db, None, book).await.unwrap(), Access::FreeOnly);
+        assert_eq!(
+            access(&db, &no_plans(), None, book).await.unwrap(),
+            Access::FreeOnly
+        );
     }
 
     #[tokio::test]
@@ -169,6 +186,9 @@ mod tests {
                 .unwrap();
 
         assert!(book.book.price.is_free(), "the fixture must be free");
-        assert_eq!(access(&db, None, book).await.unwrap(), Access::FreeOnly);
+        assert_eq!(
+            access(&db, &no_plans(), None, book).await.unwrap(),
+            Access::FreeOnly
+        );
     }
 }

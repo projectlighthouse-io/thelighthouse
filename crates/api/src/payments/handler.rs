@@ -99,7 +99,13 @@ pub(crate) async fn catalogue(
         .map(|plan| {
             serde_json::json!({
                 "plan": plan.id.as_str(),
-                "track": track::of(plan.id.as_str()),
+                // A grouping for the page, still parsed from the id. What the
+                // plan actually unlocks is `includes`/`everything` below —
+                // these are different questions now and the wire says both.
+                "track": plan.id.as_str().rsplit_once('_')
+                    .map_or(plan.id.as_str(), |(track, _)| track),
+                "books": &plan.books,
+                "everything": plan.everything,
                 "recurring": plan.interval.recurs(),
                 "amount": plan.money.as_ref().map(|money| money.amount),
                 "currency": plan.money.as_ref().map(|money| &money.currency),
@@ -189,18 +195,16 @@ pub(crate) async fn bought(
         return response::not_found();
     }
 
-    let track = bought
+    let snapshot = state.catalog.current();
+    let books: Vec<_> = bought
         .plan
         .as_ref()
-        .map(|plan| track::of(plan.as_str()).to_owned());
-
-    let snapshot = state.catalog.current();
-    let books: Vec<_> = track
-        .as_deref()
-        .map(|track| {
+        .map(|plan| {
             snapshot
                 .books()
-                .filter(|entry| track::covers(track, &entry.book))
+                .filter(|entry| {
+                    track::covers(&state.billing.plans, plan, &entry.book.slug)
+                })
                 .map(|entry| {
                     serde_json::json!({
                         "slug": entry.book.slug,
@@ -215,7 +219,6 @@ pub(crate) async fn bought(
         StatusCode::OK,
         serde_json::json!({
             "plan": bought.plan.as_ref().map(billing::PlanId::as_str),
-            "track": track,
             "paid": bought.paid,
             "books": books,
         }),
@@ -256,20 +259,19 @@ pub(crate) async fn access(
 
     // Only a membership that grants access counts, so a reader in grace is
     // told what they bought without being shown it as readable.
-    let track = membership
+    let held = membership
         .as_ref()
         .filter(|membership| membership.grants_access())
-        .map(|membership| track::of(&membership.plan).to_owned());
+        .map(|membership| PlanId::from(membership.plan.as_str()));
 
     let snapshot = state.catalog.current();
 
     let books: Vec<_> = snapshot
         .books()
         .filter(|entry| {
-            track
-                .as_deref()
-                .is_some_and(|track| track::covers(track, &entry.book))
-                || entry.book.id.is_some_and(|id| owned.contains(&id))
+            held.as_ref().is_some_and(|plan| {
+                track::covers(&state.billing.plans, plan, &entry.book.slug)
+            }) || entry.book.id.is_some_and(|id| owned.contains(&id))
         })
         .map(|entry| {
             serde_json::json!({
@@ -283,7 +285,6 @@ pub(crate) async fn access(
         StatusCode::OK,
         serde_json::json!({
             "plan": membership.as_ref().map(|membership| &membership.plan),
-            "track": track,
             "books": books,
         }),
         CachePolicy::NoStore,
@@ -688,15 +689,15 @@ async fn grant_track(
     user_id: i64,
     plan: &PlanId,
 ) -> Result<(), sqlx::Error> {
-    let track = track::of_plan(plan);
-    let books = track::books(&state.catalog.current(), track);
+    let books =
+        track::books(&state.catalog.current(), &state.billing.plans, plan);
 
     if books.is_empty() {
-        // Nothing to grant means the reader paid for a track that no longer
-        // names any book with an id. Loud, because the money has been taken.
+        // Nothing to grant means the reader paid for a plan that names no book
+        // with an id. Loud, because the money has been taken.
         tracing::error!(
-            %plan, track, user_id,
-            "a purchase granted nothing; the track has no books with ids"
+            %plan, user_id,
+            "a purchase granted nothing; the plan names no books with ids"
         );
         return Ok(());
     }
@@ -704,7 +705,7 @@ async fn grant_track(
     let granted = store::grant(&state.db, user_id, &books).await?;
 
     tracing::info!(
-        %plan, track, user_id,
+        %plan, user_id,
         books = books.len(),
         granted,
         "granted a track"

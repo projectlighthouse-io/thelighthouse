@@ -33,6 +33,7 @@ use crate::books::entitlement::{Access, access};
 /// a paying reader out of work they are in the middle of.
 pub(crate) async fn for_project(
     db: &PgPool,
+    plans: &billing::Plans,
     snapshot: &Snapshot,
     reader: Option<i64>,
     project: &ProjectEntry,
@@ -49,7 +50,7 @@ pub(crate) async fn for_project(
         return Ok(Access::FreeOnly);
     };
 
-    access(db, reader, book).await
+    access(db, plans, reader, book).await
 }
 
 /// Whether this particular task is behind that paywall.
@@ -63,6 +64,17 @@ pub(crate) fn is_paid(task: &TaskEntry, held: Access) -> bool {
 
 #[cfg(test)]
 mod tests {
+
+    /// No plans at all, which is what these tests need: every one of them is
+    /// answered before a plan is ever consulted, and an empty set makes that
+    /// the same claim as the lazy pool does about the database.
+    fn no_plans() -> billing::Plans {
+        billing::Plans::from_yaml(
+            "plans:\n  - id: none_yearly\n    price: price_x\n    \
+             interval: year\n",
+        )
+        .expect("the test yaml parses")
+    }
     use super::*;
     use ohara::{Drafts, fixture};
 
@@ -99,7 +111,9 @@ mod tests {
 
         assert!(project.project.related_book_slug.is_none());
         assert_eq!(
-            for_project(&db, &snapshot, None, project).await.unwrap(),
+            for_project(&db, &no_plans(), &snapshot, None, project)
+                .await
+                .unwrap(),
             Access::Full
         );
     }
@@ -123,7 +137,9 @@ mod tests {
         );
         assert!(snapshot.book("no-such-book").is_none());
         assert_eq!(
-            for_project(&db, &snapshot, Some(1), project).await.unwrap(),
+            for_project(&db, &no_plans(), &snapshot, Some(1), project)
+                .await
+                .unwrap(),
             Access::FreeOnly
         );
         assert!(is_paid(

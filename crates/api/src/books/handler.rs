@@ -130,6 +130,7 @@ pub(crate) async fn lesson(
 
     let unlocked = match access(
         &state.db,
+        &state.billing.plans,
         reader.as_ref().map(|session| session.user_id),
         book_entry,
     )

@@ -332,6 +332,7 @@ pub(crate) async fn record(
 
     let access = match entitlement::for_project(
         &state.db,
+        &state.billing.plans,
         &snapshot,
         Some(holder.user_id),
         project,
@@ -634,12 +635,18 @@ async fn seen_by(
         return Ok(None);
     };
 
-    let access = entitlement::for_project(&state.db, snapshot, reader, project)
-        .await
-        .map_err(|cause| {
-            tracing::error!(%cause, "failed to check entitlement");
-            Box::new(response::server_error())
-        })?;
+    let access = entitlement::for_project(
+        &state.db,
+        &state.billing.plans,
+        snapshot,
+        reader,
+        project,
+    )
+    .await
+    .map_err(|cause| {
+        tracing::error!(%cause, "failed to check entitlement");
+        Box::new(response::server_error())
+    })?;
 
     let (_, board) = run_and_board(state, user_id, project_id).await?;
 
@@ -795,6 +802,7 @@ pub(crate) async fn progress(
 
     let access = match entitlement::for_project(
         &state.db,
+        &state.billing.plans,
         &snapshot,
         Some(session.user_id),
         entry,
