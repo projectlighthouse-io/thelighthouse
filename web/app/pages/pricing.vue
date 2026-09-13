@@ -70,22 +70,42 @@ interface Coupon {
   percent: number
 }
 
+/**
+ * The same answer's plan list, kept only for `discounted`.
+ *
+ * A stripe coupon can be restricted to particular products, so "50% off" is
+ * not a fact about the reader alone — it is a fact about the reader and the
+ * plan. The api has already worked out which is which; the amounts and the
+ * copy still come from the compiled catalogue.
+ */
+interface Offered {
+  plan: string
+  discounted: boolean
+}
+
 const { data: offered } = await useAsyncData(
   'pricing-coupon',
-  () => $fetch<{ coupon: Coupon | null }>('/_api/billing/plans')
-    .then(answer => answer.coupon)
-    .catch(() => null),
-  { server: false, default: () => null },
+  () => $fetch<{ coupon: Coupon | null, plans: Offered[] }>('/_api/billing/plans')
+    .catch(() => ({ coupon: null, plans: [] as Offered[] })),
+  { server: false, default: () => ({ coupon: null, plans: [] as Offered[] }) },
 )
 
-const coupon = computed<Coupon | null>(() => offered.value)
+const coupon = computed<Coupon | null>(() => offered.value?.coupon ?? null)
+
+/** Whether the coupon comes off this particular plan. */
+function discounted(offer: CataloguePlan | undefined): boolean {
+  return !!offer
+    && (offered.value?.plans ?? []).some(
+      p => p.plan === offer.plan && p.discounted,
+    )
+}
 
 /** What this plan costs the reader once their coupon is applied, or null when
- *  they have none and the list price is the price. */
+ *  the coupon does not touch it and the list price is the price. */
 function reduced(offer: CataloguePlan | undefined): string | null {
   const percent = coupon.value?.percent
 
-  if (!offer?.amount || !percent) return null
+  if (!offer?.amount || !percent || !discounted(offer)) return null
 
   return money(afterDiscount(offer.amount, percent))
 }
@@ -192,7 +212,7 @@ useJsonLd('faq', {
              code and the reader types it at checkout, so the wording has to
              say that plainly rather than imply the lower price is automatic. -->
         <p v-if="coupon" class="mb-8 text-center font-mono text-xs text-quiet">
-          {{ coupon.percent }}% off where you are — enter
+          {{ coupon.percent }}% off — enter
           <code class="border-stroke rounded border px-1.5 py-0.5 text-ink">{{ coupon.code }}</code>
           at checkout.
         </p>

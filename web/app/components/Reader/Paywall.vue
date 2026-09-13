@@ -37,6 +37,10 @@ interface Offer {
   plan: string
   recurring: boolean
   track: string
+  /** Whether the coupon below comes off this plan. A stripe coupon can be
+   *  restricted to particular products, and one that is leaves the rest at
+   *  full price. */
+  discounted: boolean
 }
 
 /** The whole catalogue answer — the offers, the country the api read from
@@ -142,11 +146,18 @@ function priced(o: Offer | undefined): string | null {
  */
 const coupon = computed<Coupon | null>(() => catalogue.value?.coupon ?? null)
 
-/** The plan's price once the coupon is applied, or null when there is none. */
+/**
+ * The plan's price once the coupon is applied, or null when it is not.
+ *
+ * `o.discounted` is the api's answer for this plan specifically, not for the
+ * reader — the coupon may name a subset of the plans. Without it a restricted
+ * tier struck a line through every price on the card and quoted a reduced one
+ * beside it that stripe would refuse to honour.
+ */
 function reduced(o: Offer | undefined): string | null {
   const percent = coupon.value?.percent
 
-  if (!o || !percent) return null
+  if (!o || !percent || !o.discounted) return null
 
   return money(afterDiscount(o.amount, percent))
 }
@@ -262,7 +273,10 @@ async function buy(): Promise<void> {
            country or every country, and the declaration now carries one that
            names none — so "where you are" was telling a reader in London that
            their location earned them a discount everybody gets. -->
-      <p v-if="coupon" class="wall__ppp">
+      <!-- Only against a plan the coupon actually comes off. Shown for the
+           selected one, because that is the price the button is about to
+           charge. -->
+      <p v-if="coupon && offer?.discounted" class="wall__ppp">
         {{ coupon.percent }}% off — enter
         <code>{{ coupon.code }}</code> at checkout.
       </p>
