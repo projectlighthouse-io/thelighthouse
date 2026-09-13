@@ -161,6 +161,14 @@ pub struct Ppp {
     /// every country, and every request cloudflare named no country for.
     #[serde(default)]
     countries: Vec<String>,
+    /// The plans this coupon comes off, by our own name for them. Empty is all
+    /// of them.
+    ///
+    /// Stripe holds the same restriction as the coupon's `applies_to` and is
+    /// what enforces it. This copy exists so a page can tell, before sending
+    /// anybody to checkout, which prices the discount actually reduces.
+    #[serde(default)]
+    plans: Vec<String>,
 }
 
 impl Ppp {
@@ -177,6 +185,15 @@ impl Ppp {
     #[must_use]
     pub const fn percent(&self) -> u8 {
         self.percent
+    }
+
+    /// Whether this tier discounts the named plan.
+    ///
+    /// An empty list is every plan, the same way stripe treats a coupon with no
+    /// `applies_to` — so a tier that names nothing answers true for everything.
+    #[must_use]
+    pub fn covers(&self, plan: &str) -> bool {
+        self.plans.is_empty() || self.plans.iter().any(|p| p == plan)
     }
 }
 
@@ -410,6 +427,30 @@ ppp:\n  - code: LH-BD\n    promotion: promo_x\n    percent: 70\n    countries: [
         );
         // The header cloudflare did not send is not a reason to charge more.
         assert_eq!(plans.for_country(None).map(Ppp::code), Some("LH-ALL"));
+    }
+
+    const RESTRICTED: &str = "\
+plans:\n  - id: lifetime\n    price: price_x\n    interval: once\n    money:\n      amount: 49900\n      currency: usd\n\
+ppp:\n  - code: LH-50\n    promotion: promo_x\n    percent: 50\n    countries: []\n    plans: [lifetime]\n";
+
+    #[test]
+    fn a_tier_covers_only_the_plans_it_names() {
+        let plans = Plans::from_yaml(RESTRICTED).unwrap();
+        let tier = plans.for_country(None).unwrap();
+
+        assert!(tier.covers("lifetime"));
+        assert!(!tier.covers("foundation_yearly"));
+    }
+
+    #[test]
+    fn a_tier_naming_no_plans_covers_all_of_them() {
+        // What every plan file written before the field says, and what stripe
+        // means by a coupon with no `applies_to`.
+        let plans = Plans::from_yaml(WITH_TIERS).unwrap();
+        let tier = plans.for_country(Some("BD")).unwrap();
+
+        assert!(tier.covers("anything"));
+        assert!(tier.covers("yearly"));
     }
 
     #[test]

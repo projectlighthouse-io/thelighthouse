@@ -80,6 +80,18 @@ pub(crate) async fn catalogue(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Response {
+    let country = country_of(&headers);
+
+    // The country goes in as an option: a tier that names no countries is a
+    // list price with a discount off it, and a request cloudflare put no
+    // header on is not a reason to advertise the undiscounted amount.
+    //
+    // Read before the plans, because each of them says whether this tier comes
+    // off it. A stripe coupon can be restricted to particular products, and one
+    // that is will not touch the rest — so a page told only the percentage
+    // would strike out a price nobody can ever pay.
+    let tier = state.billing.plans.for_country(country.as_deref());
+
     let plans: Vec<_> = state
         .billing
         .plans
@@ -91,11 +103,11 @@ pub(crate) async fn catalogue(
                 "recurring": plan.interval.recurs(),
                 "amount": plan.money.as_ref().map(|money| money.amount),
                 "currency": plan.money.as_ref().map(|money| &money.currency),
+                "discounted": tier
+                    .is_some_and(|tier| tier.covers(plan.id.as_str())),
             })
         })
         .collect();
-
-    let country = country_of(&headers);
 
     // How a country gets a different price: one coupon, declared in
     // `pricing.yaml` and reconciled at stripe, never a second price list — a
@@ -105,20 +117,12 @@ pub(crate) async fn catalogue(
     // Advertised, not applied. The reader types the code at stripe, which is
     // what keeps a spoofable header from being the only thing standing between
     // anybody and a discount.
-    // The country goes in as an option: a tier that names no countries is a
-    // list price with a discount off it, and a request cloudflare put no
-    // header on is not a reason to advertise the undiscounted amount.
-    let coupon =
-        state
-            .billing
-            .plans
-            .for_country(country.as_deref())
-            .map(|tier| {
-                serde_json::json!({
-                    "code": tier.code(),
-                    "percent": tier.percent(),
-                })
-            });
+    let coupon = tier.map(|tier| {
+        serde_json::json!({
+            "code": tier.code(),
+            "percent": tier.percent(),
+        })
+    });
 
     json(
         StatusCode::OK,

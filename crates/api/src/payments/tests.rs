@@ -171,6 +171,11 @@ async fn what_things_cost_is_private_because_it_names_a_country() {
     // it, because coupons are not built.
     assert_eq!(at("/country"), serde_json::Value::Null);
     assert_eq!(at("/coupon"), serde_json::Value::Null);
+
+    // No tier, so nothing is discounted. The field is always present: a page
+    // reading it as "is this price reduced" must not have to tell a missing
+    // key from a false one.
+    assert_eq!(at("/plans/0/discounted"), false);
 }
 
 #[tokio::test]
