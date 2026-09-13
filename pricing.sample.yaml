@@ -13,6 +13,10 @@
 #
 # `amount` is in minor units — 4900 is $49.00. Changing one is a new stripe
 # price with the lookup key transferred onto it, which `apply` does for you.
+#
+# The billing period is the id's last word. `_yearly` and `_monthly` renew;
+# `_lifetime` is `once` at stripe — one payment, and checkout opens in `payment`
+# mode rather than `subscription`. Anything else is refused.
 
 currency: usd
 
@@ -48,3 +52,42 @@ plans:
   - id: all_lifetime
     amount: 29900
     name: Everything, forever
+
+# Discounts, if any. The whole section is optional and every declaration written
+# before it existed simply leaves it out.
+#
+# One coupon per tier. `code` is what a reader types at checkout and the
+# coupon's id at stripe, so one name identifies the tier everywhere, and `apply`
+# creates the coupon and the promotion code that points at it.
+#
+# `countries` is ISO 3166-1 alpha-2, uppercase — the shape cloudflare reports,
+# so neither side normalises at request time. A country may be claimed by one
+# tier only: two claims and a reader in it has two coupons and the api is
+# picking, which is a decision nobody wrote down.
+#
+# **An empty `countries` is every country.** That is a list price with a
+# discount off it rather than purchasing power, and it also answers for a
+# request cloudflare sent no country header on — a direct hit on the origin
+# would otherwise be quoted the undiscounted amount. At most one of them, for
+# the same reason a country may be claimed once. A tier that names countries
+# still wins for a reader in one.
+#
+# **Advertise-only.** Stripe promotion codes carry no country restriction, so
+# what is declared here decides who is *offered* a discount, never who can use
+# one. Enforcing it would mean applying the coupon to the checkout session in
+# rust instead of printing a string, which is a different change.
+#
+# **A percentage cannot be edited once stripe holds it.** Changing a rate means
+# a new code; `apply` refuses the edit rather than deleting and remaking, which
+# would revoke the discount from everybody already on it. `apply` never deletes,
+# so a tier removed from here stops being offered but stays live at stripe until
+# it is deactivated there by hand.
+ppp:
+  - code: LIGHTHOUSE-PPP-70
+    percent: 70
+    countries: [BD, PK, NG]
+
+  # The catch-all: everyone the tiers above did not name.
+  - code: LIGHTHOUSE-10
+    percent: 10
+    countries: []
