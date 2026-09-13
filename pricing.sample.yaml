@@ -67,40 +67,52 @@ plans:
     name: Everything, forever
     everything: true
 
-# Discounts, if any. The whole section is optional and every declaration written
-# before it existed simply leaves it out.
-#
-# One coupon per tier. `code` is what a reader types at checkout and the
-# coupon's id at stripe, so one name identifies the tier everywhere, and `apply`
-# creates the coupon and the promotion code that points at it.
-#
-# `countries` is ISO 3166-1 alpha-2, uppercase — the shape cloudflare reports,
-# so neither side normalises at request time. A country may be claimed by one
-# tier only: two claims and a reader in it has two coupons and the api is
-# picking, which is a decision nobody wrote down.
-#
-# **There is no catch-all.** A tier naming no countries is refused. A discount
-# offered to everybody is a list price with a discount off it, not purchasing
-# power, and the two are different decisions that should not share a spelling —
-# least of all by way of a list somebody emptied by accident. A country no tier
-# claims is offered nothing, and so is a request cloudflare sent no country
-# header on.
-#
-# **Advertise-only.** Stripe promotion codes carry no country restriction, so
-# what is declared here decides who is *offered* a discount, never who can use
-# one. Enforcing it would mean applying the coupon to the checkout session in
-# rust instead of printing a string, which is a different change.
-#
-# **A percentage cannot be edited once stripe holds it.** Changing a rate means
-# a new code; `apply` refuses the edit rather than deleting and remaking, which
-# would revoke the discount from everybody already on it. `apply` never deletes,
-# so a tier removed from here stops being offered but stays live at stripe until
-# it is deactivated there by hand.
-ppp:
-  - code: LIGHTHOUSE-PPP-70
-    percent: 70
-    countries: [BD, PK, NG]
+    # Discounts, if any. The whole section is optional and every declaration
+    # written before it existed simply leaves it out.
+    #
+    # **Declared inside the plan it comes off.** A stripe coupon is restricted
+    # to one plan's product, and this is where that restriction is written —
+    # there is no list beside the plans saying which ones a tier touches, and so
+    # no second place to keep in step with what stripe holds.
+    #
+    # **One code belongs to one plan.** A coupon is one object with one
+    # percentage, so a code declared under two plans is two entries that can
+    # disagree about the rate — which is the edit stripe refuses. A tier meant
+    # to cover two plans is two codes.
+    #
+    # `code` is what a reader types at checkout and the coupon's id at stripe,
+    # so one name identifies the tier everywhere, and `apply` creates the coupon
+    # and the promotion code that points at it.
+    #
+    # `countries` is ISO 3166-1 alpha-2, uppercase — the shape cloudflare
+    # reports, so neither side normalises at request time. A country may be
+    # claimed by one tier *of this plan* only: two claims and a reader in it has
+    # two coupons off one price and the api is picking, which is a decision
+    # nobody wrote down. The same country on another plan's tiers is fine, and
+    # is the point — BD can be 70% off this and 40% off the yearly.
+    #
+    # **There is no catch-all.** A tier naming no countries is refused. A
+    # discount offered to everybody is a list price with a discount off it, not
+    # purchasing power, and the two are different decisions that should not
+    # share a spelling — least of all by way of a list somebody emptied by
+    # accident. A country no tier claims is offered nothing, and so is a request
+    # cloudflare sent no country header on.
+    #
+    # **Advertise-only.** Stripe promotion codes carry no country restriction,
+    # so what is declared here decides who is *offered* a discount, never who
+    # can use one. Enforcing it would mean applying the coupon to the checkout
+    # session in rust instead of printing a string, which is a different change.
+    #
+    # **A percentage cannot be edited once stripe holds it.** Changing a rate
+    # means a new code; `apply` refuses the edit rather than deleting and
+    # remaking, which would revoke the discount from everybody already on it.
+    # `apply` never deletes, so a tier removed from here stops being offered but
+    # stays live at stripe until it is deactivated there by hand.
+    ppp:
+      - code: LIGHTHOUSE-LIFETIME-70
+        percent: 70
+        countries: [BD, PK, NG]
 
-  - code: LIGHTHOUSE-PPP-40
-    percent: 40
-    countries: [BR, MX, TR]
+      - code: LIGHTHOUSE-LIFETIME-40
+        percent: 40
+        countries: [BR, MX, TR]
