@@ -144,10 +144,19 @@ struct Subscription {
     /// The same thing in words, filled in after the read.
     #[sqlx(skip)]
     status: &'static str,
-    /// Whether this row grants what it was bought for. `grace` deliberately
-    /// does not — only `active` ever counted.
+    /// Whether this row grants what it was bought for, right now.
+    ///
+    /// The api's rule, reproduced rather than imported — `Membership` is
+    /// `pub(crate)` to the api and this crate does not link it. The tests
+    /// beside `grants_access_at` are the ones that pin the rule down; this is
+    /// a report of it, and a disagreement between the two is itself worth
+    /// seeing in the output.
     #[sqlx(skip)]
     grants_access: bool,
+    /// Why, in words. A `false` with no reason is the thing that sends
+    /// somebody back to the database by hand.
+    #[sqlx(skip)]
+    because: &'static str,
     /// Which provider took the money. `manual` for a membership nobody paid
     /// for, which is a row here and never a payment.
     provider: String,
@@ -161,6 +170,9 @@ struct Subscription {
     /// yet over.
     cancel_at: Option<chrono::NaiveDateTime>,
     ended_at: Option<chrono::NaiveDateTime>,
+    /// Bought outright: no end, and none expected. The only thing that makes a
+    /// null `period_ends_at` mean forever rather than "we were not told".
+    lifetime: bool,
 }
 
 #[derive(Debug, FromRow, Serialize)]
@@ -181,6 +193,30 @@ const fn name_of(status: i16) -> &'static str {
     }
 }
 
+/// Whether a row grants access, and the reason to print beside it.
+///
+/// Mirrors `Membership::grants_access_at` in the api: status first, then
+/// `lifetime`, then the end date. Null `period_ends_at` grants nothing — it
+/// means "we were not told", not "forever".
+fn verdict(
+    membership: &Subscription,
+    now: chrono::NaiveDateTime,
+) -> (bool, &'static str) {
+    if membership.code != ACTIVE {
+        return (false, "the status is not active");
+    }
+
+    if membership.lifetime {
+        return (true, "bought outright, so it does not end");
+    }
+
+    match membership.period_ends_at {
+        Some(ends) if ends > now => (true, "the paid period has not ended"),
+        Some(_) => (false, "the paid period has ended"),
+        None => (false, "there is no end date and it is not marked lifetime"),
+    }
+}
+
 const COLUMNS: &str = "
     id,
     plan,
@@ -190,7 +226,8 @@ const COLUMNS: &str = "
     started_at,
     period_ends_at,
     cancel_at,
-    ended_at
+    ended_at,
+    lifetime
 ";
 
 async fn look(db: &PgPool, who: &Who) -> Result<Report, String> {
@@ -224,9 +261,14 @@ async fn look(db: &PgPool, who: &Who) -> Result<Report, String> {
     .await
     .map_err(|error| format!("cannot read memberships: {error}"))?;
 
+    let now = chrono::Utc::now().naive_utc();
+
     for membership in &mut memberships {
         membership.status = name_of(membership.code);
-        membership.grants_access = membership.code == ACTIVE;
+
+        let (grants, because) = verdict(membership, now);
+        membership.grants_access = grants;
+        membership.because = because;
     }
 
     // Split rather than queried twice: one pass over a handful of rows, and
@@ -303,6 +345,73 @@ mod tests {
         assert_eq!(name_of(ENDED), "ended");
         // A status the schema does not define yet must not read as one it does.
         assert_eq!(name_of(9), "unknown");
+    }
+
+    fn row(
+        code: i16,
+        period_ends_at: Option<&str>,
+        lifetime: bool,
+    ) -> Subscription {
+        Subscription {
+            id: 1,
+            plan: "go_yearly".to_owned(),
+            code,
+            status: "",
+            grants_access: false,
+            because: "",
+            provider: "stripe".to_owned(),
+            provider_ref: None,
+            started_at: None,
+            period_ends_at: period_ends_at.map(when),
+            cancel_at: None,
+            ended_at: None,
+            lifetime,
+        }
+    }
+
+    fn when(text: &str) -> chrono::NaiveDateTime {
+        chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S")
+            .expect("a test timestamp")
+    }
+
+    const NOW: &str = "2026-09-13 12:00:00";
+
+    #[test]
+    fn the_verdict_matches_the_rule_the_api_applies() {
+        let now = when(NOW);
+
+        assert!(
+            verdict(&row(ACTIVE, Some("2027-01-01 00:00:00"), false), now).0
+        );
+        assert!(verdict(&row(ACTIVE, None, true), now).0);
+
+        // Lapsed, undated, and not active. None of these grant.
+        assert!(
+            !verdict(&row(ACTIVE, Some("2026-01-01 00:00:00"), false), now).0
+        );
+        assert!(!verdict(&row(ACTIVE, None, false), now).0);
+        assert!(
+            !verdict(&row(GRACE, Some("2027-01-01 00:00:00"), false), now).0
+        );
+        assert!(!verdict(&row(ENDED, None, true), now).0);
+    }
+
+    #[test]
+    fn every_verdict_says_why() {
+        let now = when(NOW);
+
+        for held in [
+            row(ACTIVE, Some("2027-01-01 00:00:00"), false),
+            row(ACTIVE, None, true),
+            row(ACTIVE, Some("2026-01-01 00:00:00"), false),
+            row(ACTIVE, None, false),
+            row(GRACE, None, false),
+        ] {
+            assert!(
+                !verdict(&held, now).1.is_empty(),
+                "{held:?} gave no reason"
+            );
+        }
     }
 
     #[test]
