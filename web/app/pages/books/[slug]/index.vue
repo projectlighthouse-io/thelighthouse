@@ -10,6 +10,48 @@ interface BookDetailResponse {
 const route = useRoute()
 const slug = computed<string>(() => String(route.params.slug))
 
+const { isSignedIn, resolve: resolveReader } = useReader()
+
+/**
+ * Whether this reader already holds the book.
+ *
+ * `lesson.locked` is a fact about the *lesson* — `has_paid_part`, "there is
+ * something behind a paywall here" — and deliberately not about the reader:
+ * this listing is the same bytes for everybody and is held at the edge, so it
+ * cannot know who is asking. Without this the contents list went on calling
+ * lessons "paid" to somebody who opens them and reads the whole thing.
+ *
+ * The same shape the reader page uses to unlock itself: the server-rendered
+ * copy is the anonymous one, and the browser asks again with the cookie. Asked
+ * of `/api` rather than `/_api` for that reason — the cookie has to reach the
+ * api, not nitro.
+ *
+ * Allowed to fail silently. Not knowing leaves the pills as they are, which is
+ * the answer the page already shipped.
+ */
+const held = ref(false)
+
+async function checkHeld(): Promise<void> {
+  held.value = false
+
+  await resolveReader()
+  if (!isSignedIn.value) return
+
+  try {
+    const mine = await $fetch<{ books: { slug: string }[] }>(
+      '/api/billing/access',
+    )
+
+    held.value = (mine.books ?? []).some(b => b.slug === slug.value)
+  }
+  catch {
+    held.value = false
+  }
+}
+
+onMounted(checkHeld)
+watch(slug, checkHeld)
+
 // From ohara, through the rust api. During SSR this calls the handler directly,
 // so it costs no HTTP round trip.
 const { data, error } = await useAsyncData(
@@ -213,7 +255,14 @@ useJsonLd('crumbs', () => ({
           <span>
             <span class="ch-title">
               {{ lesson.title }}
-              <span class="pill" :class="lesson.locked ? 'pill-paid' : 'pill-free'">
+              <!-- Nothing to say to somebody who holds the book: every lesson
+                   in it opens, so a free/paid split is a wall they are not
+                   standing behind. -->
+              <span
+                v-if="!held"
+                class="pill"
+                :class="lesson.locked ? 'pill-paid' : 'pill-free'"
+              >
                 {{ lesson.locked ? 'paid' : 'free' }}
               </span>
             </span>
