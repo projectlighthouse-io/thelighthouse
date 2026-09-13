@@ -645,9 +645,17 @@ async fn apply_ppp(
             .collect::<Result<_, _>>()?;
         wanted.sort();
 
-        let held: Option<HeldCoupon> =
-            maybe_get(client, key, &format!("/v1/coupons/{}", tier.code))
-                .await?;
+        // `expand[]=applies_to`, and it is load bearing. The field is not in
+        // a coupon's default json at all — not null, absent — so without this
+        // every held coupon reads as unrestricted, and a restricted one that
+        // agrees perfectly well is reported as a restriction that changed and
+        // cannot. `apply` refuses itself the second time it is run.
+        let held: Option<HeldCoupon> = maybe_get(
+            client,
+            key,
+            &format!("/v1/coupons/{}?expand[]=applies_to", tier.code),
+        )
+        .await?;
 
         match held {
             Some(coupon)
@@ -684,36 +692,7 @@ async fn apply_ppp(
                 ));
             }
             None => {
-                let mut form = vec![
-                    ("id".to_owned(), tier.code.clone()),
-                    ("percent_off".to_owned(), tier.percent.to_string()),
-                    // Forever, because the tier is about where somebody lives
-                    // rather than when they arrived.
-                    ("duration".to_owned(), "forever".to_owned()),
-                    (
-                        "name".to_owned(),
-                        format!("{}% — purchasing power", tier.percent),
-                    ),
-                ];
-
-                // Left off entirely when the tier names no plans: an empty
-                // `applies_to[products]` is not "everything" at stripe, it is a
-                // restriction to nothing.
-                for (i, product) in wanted.iter().enumerate() {
-                    form.push((
-                        format!("applies_to[products][{i}]"),
-                        product.clone(),
-                    ));
-                }
-
-                let _: Created =
-                    post(client, key, "/v1/coupons", &form).await?;
-                println!(
-                    "  {} created at {}% off{}",
-                    tier.code,
-                    tier.percent,
-                    scope_of(&tier.plans)
-                );
+                create_coupon(client, key, tier, &wanted).await?;
             }
         }
 
@@ -753,6 +732,11 @@ struct HeldCoupon {
     percent_off: Option<f64>,
     /// Absent on a coupon that applies to everything, which is how stripe says
     /// "unrestricted" — not an empty product list.
+    ///
+    /// Also absent on a coupon that *is* restricted, unless the request asked
+    /// for it: this is an expandable field. The read that fills this has to
+    /// send `expand[]=applies_to` or the two cases are indistinguishable, and
+    /// the indistinguishable answer is the wrong one.
     #[serde(default)]
     applies_to: Option<AppliesTo>,
 }
@@ -776,6 +760,47 @@ impl HeldCoupon {
 struct AppliesTo {
     #[serde(default)]
     products: Vec<String>,
+}
+
+/// Mint the coupon, restricted to the products the tier named.
+///
+/// Split out of `apply_ppp` for length, and it reads better here anyway: the
+/// caller decides *whether* to create one, this decides what one looks like.
+async fn create_coupon(
+    client: &reqwest::Client,
+    key: &SecretString,
+    tier: &DeclaredPpp,
+    products: &[String],
+) -> Result<(), String> {
+    let mut form = vec![
+        ("id".to_owned(), tier.code.clone()),
+        ("percent_off".to_owned(), tier.percent.to_string()),
+        // Forever, because the tier is about where somebody lives rather than
+        // when they arrived.
+        ("duration".to_owned(), "forever".to_owned()),
+        (
+            "name".to_owned(),
+            format!("{}% — purchasing power", tier.percent),
+        ),
+    ];
+
+    // Left off entirely when the tier names no plans: an empty
+    // `applies_to[products]` is not "everything" at stripe, it is a restriction
+    // to nothing.
+    for (i, product) in products.iter().enumerate() {
+        form.push((format!("applies_to[products][{i}]"), product.clone()));
+    }
+
+    let _: Created = post(client, key, "/v1/coupons", &form).await?;
+
+    println!(
+        "  {} created at {}% off{}",
+        tier.code,
+        tier.percent,
+        scope_of(&tier.plans)
+    );
+
+    Ok(())
 }
 
 /// `" on all_lifetime"` for a restricted tier, nothing for one that is not.
