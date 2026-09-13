@@ -37,6 +37,12 @@ pub(crate) struct Membership {
     /// shown and the only one `resume` can undo.
     #[serde(serialize_with = "response::as_utc")]
     pub(crate) cancel_at: Option<NaiveDateTime>,
+    /// Bought outright: no end, and none expected.
+    ///
+    /// The only thing that makes a null `period_ends_at` mean forever. Without
+    /// it null means "we were not told", which a manual scholarship row has
+    /// today — and which must not read as lifetime access.
+    pub(crate) lifetime: bool,
 }
 
 impl Membership {
@@ -46,8 +52,38 @@ impl Membership {
     /// and only `ACTIVE` counts here: keeping access through a dunning cycle
     /// is a decision to make on purpose, not one to inherit from a match arm
     /// that grouped two statuses together.
-    pub(crate) const fn grants_access(&self) -> bool {
-        self.status == ACTIVE
+    ///
+    /// **The date is checked, not just the status.** It used to be the status
+    /// alone, which is right only while something keeps the two in step — a
+    /// provider webhook flipping `status` the moment the period lapses. A
+    /// webhook that never arrives, or arrives and fails, left a row that said
+    /// `active` with a `period_ends_at` in the past, and the reader kept the
+    /// whole track indefinitely. The row knew; nothing asked it.
+    ///
+    /// **Null is not forever.** A membership with no end date grants nothing
+    /// unless it says `lifetime`. Null has meant "we were not told when this
+    /// period ends" since the table was written, and treating it as unlimited
+    /// would hand a manual scholarship row permanent access by accident.
+    pub(crate) fn grants_access(&self) -> bool {
+        self.grants_access_at(chrono::Utc::now().naive_utc())
+    }
+
+    /// The same question at a stated moment, which is what makes it testable.
+    ///
+    /// Naive UTC throughout: the columns are `TIMESTAMP(0)` without a zone and
+    /// are written as UTC, so comparing against `Utc::now().naive_utc()` keeps
+    /// both sides in the same frame. A local `now` here would be an offset's
+    /// worth of free or stolen access, depending which way the server leans.
+    pub(crate) fn grants_access_at(&self, now: NaiveDateTime) -> bool {
+        if self.status != ACTIVE {
+            return false;
+        }
+
+        if self.lifetime {
+            return true;
+        }
+
+        self.period_ends_at.is_some_and(|ends| ends > now)
     }
 
     /// Whether a cancellation is pending but has not taken effect.
@@ -74,4 +110,94 @@ fn as_name<S: serde::Serializer>(
         GRACE => "grace",
         _ => "ended",
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn at(text: &str) -> NaiveDateTime {
+        NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S")
+            .expect("a test timestamp")
+    }
+
+    fn membership(
+        status: i16,
+        period_ends_at: Option<&str>,
+        lifetime: bool,
+    ) -> Membership {
+        Membership {
+            plan: "go_yearly".to_owned(),
+            status,
+            provider: "stripe".to_owned(),
+            provider_ref: Some("sub_1".to_owned()),
+            period_ends_at: period_ends_at.map(at),
+            cancel_at: None,
+            lifetime,
+        }
+    }
+
+    const NOW: &str = "2026-09-13 12:00:00";
+
+    #[test]
+    fn a_paid_up_membership_inside_its_period_grants_access() {
+        let live = membership(ACTIVE, Some("2027-09-02 16:16:58"), false);
+
+        assert!(live.grants_access_at(at(NOW)));
+    }
+
+    #[test]
+    fn a_period_that_has_already_ended_grants_nothing() {
+        // The gap this rule was written for. The status alone said `active`,
+        // and it is only ever kept in step by a provider webhook arriving — so
+        // one that did not left the reader holding the track indefinitely.
+        let lapsed = membership(ACTIVE, Some("2026-09-01 00:00:00"), false);
+
+        assert!(!lapsed.grants_access_at(at(NOW)));
+    }
+
+    #[test]
+    fn no_end_date_is_not_forever() {
+        // Null has meant "we were not told when this period ends" since the
+        // table was written, and a manual scholarship row has one. Reading it
+        // as unlimited would grant permanent access by accident.
+        let undated = membership(ACTIVE, None, false);
+
+        assert!(!undated.grants_access_at(at(NOW)));
+    }
+
+    #[test]
+    fn a_lifetime_membership_never_lapses() {
+        let forever = membership(ACTIVE, None, true);
+
+        assert!(forever.grants_access_at(at(NOW)));
+        // Far enough out that any date arithmetic would have expired it.
+        assert!(forever.grants_access_at(at("2099-01-01 00:00:00")));
+    }
+
+    #[test]
+    fn only_active_counts_however_long_is_left() {
+        // Grace is a payment the provider is still retrying. It deliberately
+        // does not grant, and having time left on the clock does not change
+        // that — otherwise the dunning decision would be made by the date.
+        for status in [GRACE, ENDED] {
+            let held = membership(status, Some("2027-09-02 16:16:58"), false);
+            assert!(!held.grants_access_at(at(NOW)), "status {status} granted");
+
+            let forever = membership(status, None, true);
+            assert!(
+                !forever.grants_access_at(at(NOW)),
+                "status {status} granted for life"
+            );
+        }
+    }
+
+    #[test]
+    fn the_moment_the_period_ends_is_over() {
+        // `>` not `>=`: the period ends *at* that instant, and a reader whose
+        // clock lands exactly on it has had what they paid for.
+        let ending = membership(ACTIVE, Some(NOW), false);
+
+        assert!(!ending.grants_access_at(at(NOW)));
+    }
 }

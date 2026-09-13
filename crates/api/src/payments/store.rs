@@ -15,7 +15,8 @@ const COLUMNS: &str = "
     provider,
     provider_ref,
     period_ends_at,
-    cancel_at
+    cancel_at,
+    lifetime
 ";
 
 /// The membership a reader currently has, live or in grace.
