@@ -169,13 +169,13 @@ async fn what_things_cost_is_private_because_it_names_a_country() {
 
     // No header, so nowhere in particular — and a coupon slot with nothing in
     // it, because coupons are not built.
+    //
+    // The coupon hangs off the plan, not the answer: it is restricted to that
+    // plan's product at stripe, so "is this price reduced" is a question about
+    // a plan. The field is always present, so a page does not have to tell a
+    // missing key from a null one.
     assert_eq!(at("/country"), serde_json::Value::Null);
-    assert_eq!(at("/coupon"), serde_json::Value::Null);
-
-    // No tier, so nothing is discounted. The field is always present: a page
-    // reading it as "is this price reduced" must not have to tell a missing
-    // key from a false one.
-    assert_eq!(at("/plans/0/discounted"), false);
+    assert_eq!(at("/plans/0/coupon"), serde_json::Value::Null);
 }
 
 #[tokio::test]

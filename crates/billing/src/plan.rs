@@ -127,6 +127,42 @@ pub struct Plan {
     /// exist yet. Also carried and not interpreted.
     #[serde(default)]
     pub everything: bool,
+    /// The purchasing-power tiers this plan is discounted by.
+    ///
+    /// Here rather than in a list beside the plans because a coupon is a
+    /// billing object restricted to *this* plan's product at stripe, and a
+    /// top-level list had to say which plans it touched — two places to write
+    /// the same restriction, able to disagree.
+    ///
+    /// Absent is none, which is what every plan file written before this field
+    /// said.
+    #[serde(default)]
+    pub ppp: Vec<Ppp>,
+}
+
+impl Plan {
+    /// The tier a country is offered on this plan, if any.
+    ///
+    /// Compared as given: `lighthouse-prices` refuses a declaration whose codes
+    /// are not already uppercase, and the api uppercases what cloudflare sends,
+    /// so neither side normalises at request time.
+    ///
+    /// The first match wins, and there is only ever one — a country claimed by
+    /// two of a plan's tiers is refused when the declaration is read, because a
+    /// reader in it would otherwise be offered whichever tier happened to be
+    /// listed first.
+    ///
+    /// **Every tier names countries.** There is no catch-all: a country no tier
+    /// claimed is offered nothing, and so is a request cloudflare put no country
+    /// header on — the caller has nothing to pass. A discount for everybody is a
+    /// list price with a discount off it, which is a different decision from
+    /// purchasing power and not this one.
+    #[must_use]
+    pub fn for_country(&self, country: &str) -> Option<&Ppp> {
+        self.ppp
+            .iter()
+            .find(|tier| tier.countries.iter().any(|c| c == country))
+    }
 }
 
 /// What a plan costs.
@@ -160,11 +196,6 @@ pub struct Money {
 #[serde(deny_unknown_fields)]
 pub struct Plans {
     plans: Vec<Plan>,
-    /// Purchasing-power tiers. Absent is none, which is what every plan file
-    /// written before this field said — and what a deployment that has not
-    /// declared any still says.
-    #[serde(default)]
-    ppp: Vec<Ppp>,
 }
 
 /// A discount offered to readers in particular countries.
@@ -173,6 +204,10 @@ pub struct Plans {
 /// unlocks, which is the application's question. What is *not* here is how the
 /// country is decided: this crate is told one, and where it came from is the
 /// caller's business.
+///
+/// Declared inside the plan it discounts. One code belongs to one plan, so
+/// there is nothing here saying which plans it covers: the nesting says it,
+/// and stripe holds the same restriction as the coupon's `applies_to`.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Ppp {
@@ -187,14 +222,6 @@ pub struct Ppp {
     /// — `lighthouse-prices` refuses a tier that names none.
     #[serde(default)]
     countries: Vec<String>,
-    /// The plans this coupon comes off, by our own name for them. Empty is all
-    /// of them.
-    ///
-    /// Stripe holds the same restriction as the coupon's `applies_to` and is
-    /// what enforces it. This copy exists so a page can tell, before sending
-    /// anybody to checkout, which prices the discount actually reduces.
-    #[serde(default)]
-    plans: Vec<String>,
 }
 
 impl Ppp {
@@ -211,15 +238,6 @@ impl Ppp {
     #[must_use]
     pub const fn percent(&self) -> u8 {
         self.percent
-    }
-
-    /// Whether this tier discounts the named plan.
-    ///
-    /// An empty list is every plan, the same way stripe treats a coupon with no
-    /// `applies_to` — so a tier that names nothing answers true for everything.
-    #[must_use]
-    pub fn covers(&self, plan: &str) -> bool {
-        self.plans.is_empty() || self.plans.iter().any(|p| p == plan)
     }
 }
 
@@ -244,29 +262,6 @@ impl Plans {
         plans.validate()?;
 
         Ok(plans)
-    }
-
-    /// The tier a country is offered, if any.
-    ///
-    /// Compared as given: `lighthouse-prices` refuses a declaration whose codes
-    /// are not already uppercase, and the api uppercases what cloudflare sends,
-    /// so neither side normalises at request time.
-    ///
-    /// The first match wins, and there is only ever one — a country claimed by
-    /// two tiers is refused when the declaration is read, because a reader in
-    /// it would otherwise be offered whichever tier happened to be listed
-    /// first.
-    ///
-    /// **Every tier names countries.** There is no catch-all: a country no
-    /// tier claimed is offered nothing, and so is a request cloudflare put no
-    /// country header on — the caller has nothing to pass. A discount for
-    /// everybody is a list price with a discount off it, which is a different
-    /// decision from purchasing power and not this one.
-    #[must_use]
-    pub fn for_country(&self, country: &str) -> Option<&Ppp> {
-        self.ppp
-            .iter()
-            .find(|tier| tier.countries.iter().any(|c| c == country))
     }
 
     /// The plan under this name, if it is on sale.
@@ -406,43 +401,68 @@ plans:
     fn selling_nothing_is_a_misconfiguration() {
         assert!(Plans::from_yaml("plans: []").is_err());
     }
-    const WITH_TIERS: &str = "\
-plans:\n  - id: yearly\n    price: price_x\n    interval: year\n    money:\n      amount: 4900\n      currency: usd\n\
-ppp:\n  - code: LH-BD\n    promotion: promo_x\n    percent: 60\n    countries: [BD, IN]\n";
+    const WITH_TIERS: &str = "
+plans:
+  - id: yearly
+    price: price_x
+    interval: year
+    money:
+      amount: 4900
+      currency: usd
+    ppp:
+      - code: LH-BD
+        promotion: promo_x
+        percent: 60
+        countries: [BD, IN]
+";
 
     #[test]
-    fn a_country_finds_its_tier_and_others_find_nothing() {
+    fn a_country_finds_the_plans_tier_and_others_find_nothing() {
         let plans = Plans::from_yaml(WITH_TIERS).unwrap();
+        let yearly = plans.get(&"yearly".into()).unwrap();
 
-        assert_eq!(plans.for_country("BD").map(Ppp::percent), Some(60));
-        assert_eq!(plans.for_country("IN").map(Ppp::code), Some("LH-BD"));
-        assert!(plans.for_country("GB").is_none());
+        assert_eq!(yearly.for_country("BD").map(Ppp::percent), Some(60));
+        assert_eq!(yearly.for_country("IN").map(Ppp::code), Some("LH-BD"));
+        assert!(yearly.for_country("GB").is_none());
         // Compared as given: both sides are uppercase by the time they meet.
-        assert!(plans.for_country("bd").is_none());
+        assert!(yearly.for_country("bd").is_none());
     }
 
-    const RESTRICTED: &str = "\
-plans:\n  - id: lifetime\n    price: price_x\n    interval: once\n    money:\n      amount: 49900\n      currency: usd\n\
-ppp:\n  - code: LH-50\n    promotion: promo_x\n    percent: 50\n    countries: [BD]\n    plans: [lifetime]\n";
+    const TWO_PLANS: &str = "
+plans:
+  - id: lifetime
+    price: price_x
+    interval: once
+    ppp:
+      - code: LH-50
+        promotion: promo_x
+        percent: 50
+        countries: [BD]
+  - id: yearly
+    price: price_y
+    interval: year
+";
 
     #[test]
-    fn a_tier_covers_only_the_plans_it_names() {
-        let plans = Plans::from_yaml(RESTRICTED).unwrap();
-        let tier = plans.for_country("BD").unwrap();
+    fn a_tier_discounts_only_the_plan_it_is_declared_inside() {
+        // What `covers` used to answer. The nesting says it now, so there is
+        // nothing to keep in step with the restriction stripe holds.
+        let plans = Plans::from_yaml(TWO_PLANS).unwrap();
 
-        assert!(tier.covers("lifetime"));
-        assert!(!tier.covers("foundation_yearly"));
-    }
-
-    #[test]
-    fn a_tier_naming_no_plans_covers_all_of_them() {
-        // What every plan file written before the field says, and what stripe
-        // means by a coupon with no `applies_to`.
-        let plans = Plans::from_yaml(WITH_TIERS).unwrap();
-        let tier = plans.for_country("BD").unwrap();
-
-        assert!(tier.covers("anything"));
-        assert!(tier.covers("yearly"));
+        assert!(
+            plans
+                .get(&"lifetime".into())
+                .unwrap()
+                .for_country("BD")
+                .is_some()
+        );
+        assert!(
+            plans
+                .get(&"yearly".into())
+                .unwrap()
+                .for_country("BD")
+                .is_none()
+        );
     }
 
     #[test]
@@ -450,6 +470,12 @@ ppp:\n  - code: LH-50\n    promotion: promo_x\n    percent: 50\n    countries: [
         // Every plan file written before tiers existed says this.
         let plans = Plans::from_yaml(SAMPLE).unwrap();
 
-        assert!(plans.for_country("BD").is_none());
+        assert!(
+            plans
+                .get(&"yearly".into())
+                .unwrap()
+                .for_country("BD")
+                .is_none()
+        );
     }
 }

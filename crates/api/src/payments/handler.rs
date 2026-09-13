@@ -82,22 +82,33 @@ pub(crate) async fn catalogue(
 ) -> Response {
     let country = country_of(&headers);
 
-    // No country, no tier. Every tier names countries — there is no catch-all
-    // — so a request cloudflare put no header on has nothing to look up.
-    //
-    // Read before the plans, because each of them says whether this tier comes
-    // off it. A stripe coupon can be restricted to particular products, and one
-    // that is will not touch the rest — so a page told only the percentage
-    // would strike out a price nobody can ever pay.
-    let tier = country
-        .as_deref()
-        .and_then(|code| state.billing.plans.for_country(code));
-
     let plans: Vec<_> = state
         .billing
         .plans
         .all()
         .map(|plan| {
+            // No country, no tier. Every tier names countries — there is no
+            // catch-all — so a request cloudflare put no header on has nothing
+            // to look up.
+            //
+            // Asked of the plan rather than of the catalogue, because a coupon
+            // is declared inside the plan it comes off and restricted to that
+            // plan's product at stripe. A page told only "this country gets
+            // 70% off" would strike out a price nobody can ever pay.
+            //
+            // Advertised, not applied. The reader types the code at stripe,
+            // which is what keeps a spoofable header from being the only thing
+            // standing between anybody and a discount.
+            let coupon = country
+                .as_deref()
+                .and_then(|code| plan.for_country(code))
+                .map(|tier| {
+                    serde_json::json!({
+                        "code": tier.code(),
+                        "percent": tier.percent(),
+                    })
+                });
+
             serde_json::json!({
                 "plan": plan.id.as_str(),
                 // A grouping for the page, still parsed from the id. What the
@@ -110,33 +121,16 @@ pub(crate) async fn catalogue(
                 "recurring": plan.interval.recurs(),
                 "amount": plan.money.as_ref().map(|money| money.amount),
                 "currency": plan.money.as_ref().map(|money| &money.currency),
-                "discounted": tier
-                    .is_some_and(|tier| tier.covers(plan.id.as_str())),
+                "coupon": coupon,
             })
         })
         .collect();
-
-    // How a country gets a different price: one coupon, declared in
-    // `pricing.yaml` and reconciled at stripe, never a second price list — a
-    // parallel set of amounts would be a second thing to keep in step, and the
-    // point of `lighthouse-prices` is that there is one.
-    //
-    // Advertised, not applied. The reader types the code at stripe, which is
-    // what keeps a spoofable header from being the only thing standing between
-    // anybody and a discount.
-    let coupon = tier.map(|tier| {
-        serde_json::json!({
-            "code": tier.code(),
-            "percent": tier.percent(),
-        })
-    });
 
     json(
         StatusCode::OK,
         serde_json::json!({
             "country": country,
             "plans": plans,
-            "coupon": coupon,
         }),
         CachePolicy::NoStore,
     )

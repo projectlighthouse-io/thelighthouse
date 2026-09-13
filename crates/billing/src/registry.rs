@@ -232,6 +232,7 @@ mod tests {
             money: None,
             books: Vec::new(),
             everything: false,
+            ppp: Vec::new(),
         }
     }
 
