@@ -3,6 +3,10 @@
 //! ```text
 //!   lighthouse-subscriber --email someone@example.com
 //!   lighthouse-subscriber --id 1
+//!
+//!   lighthouse-subscriber revoke --email someone@example.com --now
+//!   lighthouse-subscriber revoke --id 1 --date 2026-12-31T23:59:59Z
+//!   lighthouse-subscriber revoke --id 1 --now --dry-run
 //! ```
 //!
 //! Answers json on stdout: the user, the subscription they currently hold, and
@@ -54,6 +58,23 @@ enum Who {
     Id(i64),
 }
 
+/// What was asked for.
+#[derive(Debug)]
+enum Command {
+    /// Report and change nothing.
+    Look(Who),
+    /// End the membership, at a moment.
+    Revoke {
+        who: Who,
+        /// When it ends. `--now` is this, filled in with the current time —
+        /// there is one notion of "when does it end" and one path that
+        /// handles it.
+        at: chrono::DateTime<chrono::Utc>,
+        /// Say what would happen and touch nothing.
+        dry_run: bool,
+    },
+}
+
 /// Parsed before anything is opened, as the other binaries do: a typo in the
 /// flags should say so without a connection having been made.
 fn who(args: &[String]) -> Result<Who, String> {
@@ -67,9 +88,80 @@ fn who(args: &[String]) -> Result<Who, String> {
     }
 }
 
+/// The whole command line.
+///
+/// `now` is passed in rather than read here so the parse is testable: `--now`
+/// resolves to a moment, and a test that cannot choose the moment cannot check
+/// that it did.
+fn parse(
+    args: &[String],
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<Command, String> {
+    let Some((first, rest)) = args.split_first() else {
+        return Err(USAGE.to_owned());
+    };
+
+    if first != "revoke" {
+        return who(args).map(Command::Look);
+    }
+
+    let mut named: Vec<String> = Vec::new();
+    let mut at: Option<chrono::DateTime<chrono::Utc>> = None;
+    let mut dry_run = false;
+    let mut rest = rest.iter();
+
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--now" => {
+                if at.is_some() {
+                    return Err(
+                        "--now and --date say the same thing twice".to_owned()
+                    );
+                }
+
+                at = Some(now);
+            }
+            "--date" => {
+                if at.is_some() {
+                    return Err(
+                        "--now and --date say the same thing twice".to_owned()
+                    );
+                }
+
+                let value = rest.next().ok_or("--date needs a moment")?;
+                at = Some(moment(value)?);
+            }
+            "--dry-run" => dry_run = true,
+            _ => named.push(arg.clone()),
+        }
+    }
+
+    let who = who(&named)?;
+    let at = at.ok_or("revoke needs --date <rfc3339> or --now")?;
+
+    Ok(Command::Revoke { who, at, dry_run })
+}
+
+/// An rfc3339 moment, which is the only shape accepted.
+///
+/// A bare date would have to invent a time and a zone, and both choices are
+/// wrong for somebody: "the 31st" means one instant in Dhaka and another in
+/// London, and the difference is a day of access. Making the caller say it
+/// means the answer is never guessed.
+fn moment(value: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .map(|when| when.with_timezone(&chrono::Utc))
+        .map_err(|_| {
+            format!(
+                "{value} is not an rfc3339 moment — try 2026-12-31T23:59:59Z"
+            )
+        })
+}
+
 async fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let who = who(&args)?;
+    let now = chrono::Utc::now();
+    let command = parse(&args, now)?;
 
     // Same rule as everywhere else in this workspace: a missing .env is fine —
     // the runtime image ships without one — and an unreadable one is not.
@@ -93,13 +185,143 @@ async fn run() -> Result<(), String> {
             format!("cannot connect to {}: {error}", redacted(&url))
         })?;
 
-    let report = look(&db, &who).await?;
+    let report = match &command {
+        Command::Look(who) => look(&db, who).await?,
+        Command::Revoke { who, at, dry_run } => {
+            revoke(&db, who, *at, *dry_run, now).await?;
+
+            // The state afterwards, read back rather than assembled from what
+            // was just written. A revoke that reported its own intentions
+            // would agree with itself whatever the database did.
+            look(&db, who).await?
+        }
+    };
 
     // Pretty, because a person reads this. Piping it to `jq` still works.
     let json = serde_json::to_string_pretty(&report)
         .map_err(|error| format!("cannot render the answer: {error}"))?;
 
     println!("{json}");
+
+    Ok(())
+}
+
+/// End a membership, at a moment.
+///
+/// **Stripe first, then the row.** If stripe refuses, nothing here has changed
+/// and the two still agree. The other order leaves a row saying cancelled and a
+/// subscription that goes on charging — which is the version somebody finds out
+/// about from a bank statement.
+///
+/// **The row is never deleted.** `ended` is a status the schema has for exactly
+/// this, and history is what makes "why did this reader lose access" answerable
+/// later.
+async fn revoke(
+    db: &PgPool,
+    who: &Who,
+    at: chrono::DateTime<chrono::Utc>,
+    dry_run: bool,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<(), String> {
+    let report = look(db, who).await?;
+
+    let membership = report.subscription.as_ref().ok_or_else(|| {
+        format!("{} holds no membership to revoke", report.user.email)
+    })?;
+
+    // Now or in the past ends it here; a future moment is handed to stripe to
+    // end itself. One comparison decides, so `--now` really is `--date` with
+    // the current time in it.
+    let immediate = at <= now;
+
+    if dry_run {
+        println!(
+            "would {} membership {} ({}) for {}{}",
+            if immediate {
+                "end"
+            } else {
+                "schedule the end of"
+            },
+            membership.id,
+            membership.plan,
+            report.user.email,
+            if immediate {
+                String::new()
+            } else {
+                format!(" at {}", at.to_rfc3339())
+            }
+        );
+
+        return Ok(());
+    }
+
+    // Only when the provider is one. A manual scholarship row has no reference
+    // and nothing to tell anybody about — ending it is this row and no more.
+    if let Some(reference) = membership.provider_ref.as_deref() {
+        at_provider(membership, reference, at, immediate).await?;
+    }
+
+    let naive = at.naive_utc();
+
+    sqlx::query(
+        "UPDATE memberships \
+         SET status = CASE WHEN $2 THEN $3 ELSE status END, \
+             cancel_at = $4, \
+             ended_at = CASE WHEN $2 THEN $4 ELSE ended_at END \
+         WHERE id = $1",
+    )
+    .bind(membership.id)
+    .bind(immediate)
+    .bind(ENDED)
+    .bind(naive)
+    .execute(db)
+    .await
+    .map_err(|error| format!("cannot record the revoke: {error}"))?;
+
+    Ok(())
+}
+
+/// Tell the provider, using the same driver the api uses.
+async fn at_provider(
+    membership: &Subscription,
+    reference: &str,
+    at: chrono::DateTime<chrono::Utc>,
+    immediate: bool,
+) -> Result<(), String> {
+    if membership.provider != "stripe" {
+        return Err(format!(
+            "membership {} is on {}, which this command cannot end — \
+             end it there, then run again once the row is the only thing left",
+            membership.id, membership.provider
+        ));
+    }
+
+    let key = std::env::var("STRIPE_SECRET_KEY").map_err(|_| {
+        "STRIPE_SECRET_KEY is not set, and ending a stripe subscription \
+         needs it"
+            .to_owned()
+    })?;
+
+    let stripe = billing::Stripe::new(billing::StripeConfig {
+        secret_key: key.into(),
+        // Never used: nothing here verifies a webhook. Required by the config,
+        // so it is named rather than left looking like an oversight.
+        webhook_secret: String::new().into(),
+        // Three attempts, backing off, matching the api. A revoke that failed
+        // because stripe hiccuped is one somebody has to notice and redo.
+        strategy: billing::RequestStrategy::ExponentialBackoff(3),
+    })
+    .map_err(|error| format!("cannot reach stripe: {error}"))?;
+
+    let when = if immediate {
+        billing::Cancel::Now
+    } else {
+        billing::Cancel::At(at)
+    };
+
+    billing::Gateway::cancel(&stripe, reference, when)
+        .await
+        .map_err(|error| format!("stripe refused: {error}"))?;
 
     Ok(())
 }
@@ -336,6 +558,145 @@ mod tests {
         ] {
             assert!(who(&wrong).is_err(), "{wrong:?} was accepted");
         }
+    }
+
+    fn now() -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339("2026-09-13T12:00:00Z")
+            .expect("a test moment")
+            .with_timezone(&chrono::Utc)
+    }
+
+    #[test]
+    fn no_subcommand_is_a_read() {
+        assert!(matches!(
+            parse(&args(&["--email", "a@b.c"]), now()),
+            Ok(Command::Look(Who::Email(email))) if email == "a@b.c"
+        ));
+    }
+
+    #[test]
+    fn now_is_the_current_moment_rather_than_a_case_of_its_own() {
+        // The whole point: one notion of when it ends, and one path handling
+        // it. `--now` fills the same field `--date` does.
+        let parsed = parse(&args(&["revoke", "--id", "1", "--now"]), now());
+
+        assert!(matches!(
+            parsed,
+            Ok(Command::Revoke { at, dry_run: false, .. }) if at == now()
+        ));
+    }
+
+    #[test]
+    fn a_date_is_read_as_the_moment_it_names() {
+        let parsed = parse(
+            &args(&["revoke", "--id", "1", "--date", "2026-12-31T23:59:59Z"]),
+            now(),
+        );
+
+        assert!(matches!(
+            parsed,
+            Ok(Command::Revoke { at, .. })
+                if at.to_rfc3339() == "2026-12-31T23:59:59+00:00"
+        ));
+    }
+
+    #[test]
+    fn an_offset_is_honoured_rather_than_dropped() {
+        // Midnight in Dhaka is not midnight in London, and the difference is a
+        // day of access. The zone the caller wrote is the zone that counts.
+        let parsed = parse(
+            &args(&[
+                "revoke",
+                "--id",
+                "1",
+                "--date",
+                "2027-01-01T00:00:00+06:00",
+            ]),
+            now(),
+        );
+
+        assert!(matches!(
+            parsed,
+            Ok(Command::Revoke { at, .. })
+                if at.to_rfc3339() == "2026-12-31T18:00:00+00:00"
+        ));
+    }
+
+    #[test]
+    fn revoking_without_saying_when_is_refused() {
+        let refused =
+            parse(&args(&["revoke", "--id", "1"]), now()).unwrap_err();
+
+        assert!(refused.contains("--date"), "{refused}");
+    }
+
+    #[test]
+    fn saying_when_twice_is_refused() {
+        // Not resolved by taking the last one: two answers means the caller
+        // believes something this cannot confirm.
+        for wrong in [
+            args(&[
+                "revoke",
+                "--id",
+                "1",
+                "--now",
+                "--date",
+                "2027-01-01T00:00:00Z",
+            ]),
+            args(&[
+                "revoke",
+                "--id",
+                "1",
+                "--date",
+                "2027-01-01T00:00:00Z",
+                "--now",
+            ]),
+        ] {
+            assert!(parse(&wrong, now()).is_err(), "{wrong:?} was accepted");
+        }
+    }
+
+    #[test]
+    fn a_date_that_is_not_a_moment_names_itself() {
+        let refused =
+            parse(&args(&["revoke", "--id", "1", "--date", "tuesday"]), now())
+                .unwrap_err();
+
+        assert!(refused.contains("tuesday"), "{refused}");
+    }
+
+    #[test]
+    fn a_bare_date_is_refused_rather_than_given_a_time() {
+        // It would have to invent both a time and a zone, and every choice is
+        // wrong for somebody.
+        assert!(
+            parse(
+                &args(&["revoke", "--id", "1", "--date", "2026-12-31"]),
+                now()
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn dry_run_is_carried_through_wherever_it_is_written() {
+        for order in [
+            args(&["revoke", "--dry-run", "--id", "1", "--now"]),
+            args(&["revoke", "--id", "1", "--now", "--dry-run"]),
+        ] {
+            assert!(
+                matches!(
+                    parse(&order, now()),
+                    Ok(Command::Revoke { dry_run: true, .. })
+                ),
+                "{order:?} lost --dry-run"
+            );
+        }
+    }
+
+    #[test]
+    fn revoking_nobody_is_refused() {
+        assert!(parse(&args(&["revoke", "--now"]), now()).is_err());
     }
 
     #[test]

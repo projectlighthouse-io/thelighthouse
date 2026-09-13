@@ -1373,6 +1373,7 @@ dependencies = [
 name = "lighthouse-subscriber"
 version = "0.1.0"
 dependencies = [
+ "billing",
  "chrono",
  "dotenvy",
  "serde",
