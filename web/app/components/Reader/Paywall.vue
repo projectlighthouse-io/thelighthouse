@@ -225,8 +225,13 @@ async function buy(): Promise<void> {
         </button>
       </div>
 
+      <!-- No claim about where the reader is. The api answers with whichever
+           tier they are offered and does not say whether it named their
+           country or every country, and the declaration now carries one that
+           names none — so "where you are" was telling a reader in London that
+           their location earned them a discount everybody gets. -->
       <p v-if="coupon" class="wall__ppp">
-        {{ coupon.percent }}% off where you are — enter
+        {{ coupon.percent }}% off — enter
         <code>{{ coupon.code }}</code> at checkout.
       </p>
 
@@ -242,7 +247,11 @@ async function buy(): Promise<void> {
         </div>
       </div>
 
-      <p class="wall__note">
+      <!-- Only to somebody who is not. `isSignedIn` was already read here for
+           `buy`, so the card knew and asked anyway — a signed-in reader was
+           being told to sign in, on the one card that is asking them to
+           spend money. -->
+      <p v-if="!isSignedIn" class="wall__note">
         Already a member?
         <NuxtLink to="/login">Sign in</NuxtLink>
       </p>
