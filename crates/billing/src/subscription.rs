@@ -90,4 +90,15 @@ pub enum Cancel {
     /// For a refund, or an account being closed. Not for a reader who changed
     /// their mind.
     Now,
+    /// At a stated moment, whenever that is.
+    ///
+    /// Neither of the two above: the period already paid for may end later or
+    /// sooner than this. What it is for is an end somebody chose — a refund
+    /// taking effect at the end of the month, a scholarship running out on a
+    /// date agreed with the reader.
+    ///
+    /// Must be in the future. Stripe refuses a `cancel_at` that has already
+    /// passed, and the caller is the one that knows whether "now" was meant —
+    /// [`Now`](Self::Now) says that without ambiguity.
+    At(chrono::DateTime<chrono::Utc>),
 }

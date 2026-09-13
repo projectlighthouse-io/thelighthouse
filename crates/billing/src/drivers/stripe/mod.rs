@@ -370,6 +370,16 @@ impl Gateway for Stripe {
                 .await
             }
             Cancel::Now => self.end(subscription).await,
+            // Also not a deletion. Stripe holds the date and ends it itself,
+            // so the answer does not depend on anything here still running
+            // when the moment arrives.
+            Cancel::At(when) => {
+                self.update(
+                    subscription,
+                    &[field("cancel_at", when.timestamp().to_string())],
+                )
+                .await
+            }
         }
     }
 
@@ -665,6 +675,32 @@ mod tests {
         assert!(
             driver(&server, RequestStrategy::Once)
                 .cancel("sub_1", Cancel::Now)
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelling_at_a_date_hands_stripe_the_moment_to_end_it() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/subscriptions/sub_1"))
+            // Unix seconds, which is what `cancel_at` takes. Asserted on the
+            // wire because a date sent in any other shape is accepted by
+            // nothing and would fail only against the real api.
+            .and(body_string_contains("cancel_at=1793577600"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(SUBSCRIPTION),
+            )
+            .mount(&server)
+            .await;
+
+        let when = chrono::DateTime::from_timestamp(1_793_577_600, 0).unwrap();
+
+        assert!(
+            driver(&server, RequestStrategy::Once)
+                .cancel("sub_1", Cancel::At(when))
                 .await
                 .is_ok()
         );
