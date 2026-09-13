@@ -8,8 +8,14 @@
 # after it, so `rust_yearly` sells the rust track, yearly. Nothing else has to
 # be told which is which.
 #
-# Which books a track contains is NOT here. That is the `tracks:` map in each
-# book.yaml, so a book joins a track in the content repo and no price moves.
+# `books` is what the plan unlocks, by slug — the list is the plan's contents
+# and this file is where they are decided. `everything: true` instead, for a
+# plan that includes books not written yet; a plan says one or the other, never
+# both and never neither.
+#
+# The slugs are checked against the catalogue when the api boots, so a typo is a
+# named startup failure rather than a reader who paid for a book they did not
+# get.
 #
 # `amount` is in minor units — 4900 is $49.00. Changing one is a new stripe
 # price with the lookup key transferred onto it, which `apply` does for you.
@@ -24,34 +30,42 @@ plans:
   - id: foundation_yearly
     amount: 4900
     name: Foundation — OS, Networking, DSA
+    books:
+      - os-fundamentals
+      - networking-fundamentals
+      - dsa-fundamentals
 
   - id: foundation_lifetime
     amount: 14900
     name: Foundation, forever
+    books:
+      - os-fundamentals
+      - networking-fundamentals
+      - dsa-fundamentals
 
+  # A track's plans usually include the foundation books as well, and say so:
+  # there is no inheritance between plans, and a list that leaves them out sells
+  # a Go bundle that starts at goroutines.
   - id: go_yearly
     amount: 6900
     name: Go — the Go books and Foundation
-
-  - id: go_lifetime
-    amount: 19900
-    name: Go, forever
-
-  - id: rust_yearly
-    amount: 6900
-    name: Rust — the Rust books and Foundation
-
-  - id: rust_lifetime
-    amount: 19900
-    name: Rust, forever
+    books:
+      - os-fundamentals
+      - networking-fundamentals
+      - dsa-fundamentals
+      - go-fundamentals
+      - go-intermediate
+      - shipping-go-web-services
 
   - id: all_yearly
     amount: 9900
     name: Everything — every book
+    everything: true
 
   - id: all_lifetime
     amount: 29900
     name: Everything, forever
+    everything: true
 
 # Discounts, if any. The whole section is optional and every declaration written
 # before it existed simply leaves it out.
@@ -65,12 +79,12 @@ plans:
 # tier only: two claims and a reader in it has two coupons and the api is
 # picking, which is a decision nobody wrote down.
 #
-# **An empty `countries` is every country.** That is a list price with a
-# discount off it rather than purchasing power, and it also answers for a
-# request cloudflare sent no country header on — a direct hit on the origin
-# would otherwise be quoted the undiscounted amount. At most one of them, for
-# the same reason a country may be claimed once. A tier that names countries
-# still wins for a reader in one.
+# **There is no catch-all.** A tier naming no countries is refused. A discount
+# offered to everybody is a list price with a discount off it, not purchasing
+# power, and the two are different decisions that should not share a spelling —
+# least of all by way of a list somebody emptied by accident. A country no tier
+# claims is offered nothing, and so is a request cloudflare sent no country
+# header on.
 #
 # **Advertise-only.** Stripe promotion codes carry no country restriction, so
 # what is declared here decides who is *offered* a discount, never who can use
@@ -87,7 +101,6 @@ ppp:
     percent: 70
     countries: [BD, PK, NG]
 
-  # The catch-all: everyone the tiers above did not name.
-  - code: LIGHTHOUSE-10
-    percent: 10
-    countries: []
+  - code: LIGHTHOUSE-PPP-40
+    percent: 40
+    countries: [BR, MX, TR]
