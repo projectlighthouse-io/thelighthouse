@@ -107,7 +107,20 @@ function scope(o: Offer | undefined): string {
 
 type Choice = 'yearly' | 'lifetime'
 
-const chosen = ref<Choice>('yearly')
+/**
+ * Whichever kind this book actually has, preferring the yearly.
+ *
+ * Not a constant `'yearly'`: the two buttons each render only if an offer of
+ * that kind covers the book, and there is no longer a yearly that covers every
+ * book — `all` is sold outright. A book on no track but `all` therefore shows
+ * one button, and defaulting to the kind that is not there selects nothing,
+ * leaves `offer` undefined and disables the buy button for good.
+ *
+ * Safe to read here: both offers come from a `useAsyncData` this component
+ * awaits, so they are settled before this runs and the server and the client
+ * start from the same one.
+ */
+const chosen = ref<Choice>(yearly.value ? 'yearly' : 'lifetime')
 
 const offer = computed<Offer | undefined>(
   () => (chosen.value === 'lifetime' ? lifetime.value : yearly.value),
