@@ -26,7 +26,7 @@ CONTAINER ?= thelighthouse
 API_PORT ?= 9000
 
 .DEFAULT_GOAL := help
-.PHONY: help web up dev down db db-down db-reset psql migrate migrate-status fmt fmt-check \
+.PHONY: help web up dev api down db db-down db-reset psql migrate migrate-status fmt fmt-check \
         lint test build check audit image run login push clean \
         content content-check content-sync content-db-sync content-reload \
         prices prices-apply catalogue
@@ -45,7 +45,7 @@ web: ## fetch or update the frontend submodule
 # that fronts it. The api and nuxt you start yourself — caddy proxies to them on
 # the host, so start them in either order and reload the page.
 #
-#   cargo run -p lighthouse-api                     :9000
+#   make api                                        :9000
 #   cd web && HOST=127.0.0.1 PORT=3000 npm run dev  :3000
 #   http://localhost:8000                           ← visit this, never :3000
 #
@@ -55,20 +55,47 @@ web: ## fetch or update the frontend submodule
 up: ## start postgres and caddy, and wait for them
 	docker compose up -d --wait
 	@echo "\n  caddy    http://localhost:$(CADDY_PORT)"
-	@echo "  api      cargo run -p lighthouse-api"
+	@echo "  api      make api"
 	@echo "  nuxt     cd web && HOST=127.0.0.1 PORT=3000 npm run dev\n"
 
 # Both in one terminal, with caddy already in front of them. Ctrl-C stops the
 # pair — `kill 0` signals the whole process group, so nuxt does not survive the
 # api and keep port 3000 for the next run.
 #
+# **The api restarts on a change, like nuxt does.** It did not, and the two
+# behaving differently is a trap: nuxt reloads on every save, so the page in
+# front of you is current while the api answering it can be hours old. What that
+# looks like is not a stale server — it is a bug. A plan that sold ten books
+# served three, because the binary predated plans carrying their own list.
+#
+# `billing.yaml` is watched alongside the code because the api reads it once, at
+# boot. Running `prices apply` therefore changed what stripe charges and left
+# the api quoting the old catalogue until somebody thought to restart it.
+#
+# `--no-vcs-ignores` is what makes that work: `billing.yaml` is generated and so
+# it is in `.gitignore`, and cargo-watch skips ignored files by default — the
+# watch was there and silently did nothing until this was added. `target/` and
+# `.git/` are still ignored; only `--ignore-nothing` would include those.
+#
+# Needs `cargo install cargo-watch`. Nothing else here does, and it is one line
+# to say so rather than a detection shim that guesses what you meant.
+#
 # HOST=127.0.0.1 is not optional; see the note above `up`.
-dev: up ## run the api and nuxt together, behind caddy
+dev: up ## run the api and nuxt together, behind caddy, both reloading
 	@echo "  visit http://localhost:$(CADDY_PORT)\n"
 	@trap 'kill 0' INT TERM; \
-		cargo run -q -p lighthouse-api & \
+		cargo watch -q --no-vcs-ignores \
+			-w crates -w Cargo.toml -w Cargo.lock -w billing.yaml \
+			-x 'run -q -p lighthouse-api' & \
 		(cd web && HOST=127.0.0.1 PORT=3000 npm run dev) & \
 		wait
+
+# The api alone, reloading, for when nuxt is not wanted. Same watch set as
+# `dev` — one of them quietly not restarting is the failure this exists to stop.
+api: ## run the api on its own, reloading on a change
+	cargo watch -q --no-vcs-ignores \
+		-w crates -w Cargo.toml -w Cargo.lock -w billing.yaml \
+		-x 'run -q -p lighthouse-api'
 
 down: ## stop postgres and caddy, keep the data
 	docker compose down
