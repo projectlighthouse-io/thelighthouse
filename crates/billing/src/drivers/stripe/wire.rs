@@ -37,6 +37,12 @@ pub(crate) struct Customer {
     pub(crate) id: String,
 }
 
+/// A billing portal session. Unlike a checkout session its url is never null.
+#[derive(Debug, Deserialize)]
+pub(crate) struct Portal {
+    pub(crate) url: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub(crate) struct Session {
     pub(crate) url: Option<String>,

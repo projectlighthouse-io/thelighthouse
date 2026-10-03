@@ -396,6 +396,23 @@ impl Gateway for Stripe {
         self.move_to(subscription, to).await
     }
 
+    async fn manage(
+        &self,
+        customer: &str,
+        back: &str,
+    ) -> Result<Handoff, Error> {
+        let portal: wire::Portal = self
+            .client
+            .send(
+                Method::POST,
+                "/v1/billing_portal/sessions",
+                &[field("customer", customer), field("return_url", back)],
+            )
+            .await?;
+
+        Ok(Handoff { url: portal.url })
+    }
+
     async fn bought(&self, session: &str) -> Result<Bought, Error> {
         let session: wire::Session = self
             .client
@@ -638,6 +655,31 @@ mod tests {
         let sent = server.received_requests().await.unwrap();
         assert_eq!(sent.len(), 1);
         assert!(!sent.first().unwrap().url.path().contains("customers"));
+    }
+
+    #[tokio::test]
+    async fn managing_opens_a_portal_for_the_customer_and_says_where_to_return()
+    {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/billing_portal/sessions"))
+            .and(body_string_contains("customer=cus_existing"))
+            .and(body_string_contains(
+                "return_url=https%3A%2F%2Fexample.com%2Fsettings%2Fbilling",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                r#"{"url":"https://billing.stripe.com/p/session/bps_1"}"#,
+            ))
+            .mount(&server)
+            .await;
+
+        let handoff = driver(&server, RequestStrategy::Once)
+            .manage("cus_existing", "https://example.com/settings/billing")
+            .await
+            .unwrap();
+
+        assert_eq!(handoff.url, "https://billing.stripe.com/p/session/bps_1");
     }
 
     #[tokio::test]

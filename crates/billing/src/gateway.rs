@@ -113,6 +113,23 @@ pub trait Gateway: std::fmt::Debug + Send + Sync {
         to: &Plan,
     ) -> Result<Subscription, Error>;
 
+    /// Where to send a customer to manage what they pay for themselves.
+    ///
+    /// The provider's own page: cancelling, resuming, changing plan, updating
+    /// a card and reading invoices all happen there, and each change comes
+    /// back as a webhook like any other. `back` is where the provider returns
+    /// the browser when they are done.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Refused`] if the provider does not know the customer, or has
+    /// no portal configured for the account.
+    async fn manage(
+        &self,
+        customer: &str,
+        back: &str,
+    ) -> Result<Handoff, Error>;
+
     /// What a finished checkout was for.
     ///
     /// The reader comes back from the provider carrying a session id and

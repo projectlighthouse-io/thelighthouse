@@ -189,6 +189,16 @@ mod tests {
             Ok(canned())
         }
 
+        async fn manage(
+            &self,
+            _customer: &str,
+            _back: &str,
+        ) -> Result<Handoff, Error> {
+            Ok(Handoff {
+                url: self.answer.to_owned(),
+            })
+        }
+
         async fn bought(&self, _session: &str) -> Result<Bought, Error> {
             Ok(Bought {
                 plan: None,
