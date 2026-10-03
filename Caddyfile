@@ -21,10 +21,9 @@
 {
 	admin off
 
-	# No certificate here. In production TLS is terminated by Cloudflare in front
-	# of the droplet; in development there is none at all. The edge-to-origin hop
-	# still needs its own certificate — see docs/rebuild.md — and that is a
-	# separate change, not something this line is currently getting right.
+	# No certificate here. In production App Platform terminates TLS with its own
+	# certificate, and Cloudflare in front of it with another — run the zone at
+	# Full (strict), never Flexible. In development there is none at all.
 	auto_https off
 	servers {
 		trusted_proxies static private_ranges
