@@ -23,7 +23,6 @@ const footerLinks: NavLink[] = [
   { to: '/books', label: 'books' },
   { to: '/projects', label: 'projects' },
   { to: '/blog', label: 'blog' },
-  { to: '/roadmap', label: 'roadmap' },
   { to: '/connecting-the-dots', label: 'connecting the dots' },
   { to: '/changelog', label: 'changelog' },
   { to: '/newsletter', label: 'newsletter' },

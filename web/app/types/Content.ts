@@ -162,21 +162,6 @@ export interface SyntaxLanguage {
   description: string
 }
 
-export interface RoadmapItem {
-  title: string
-  description: string
-  tags: string[]
-  hot: boolean
-}
-
-export interface RoadmapColumn {
-  label: string
-  headerClass: string
-  dotClass: string
-  cardClass: string
-  items: RoadmapItem[]
-}
-
 export interface ChangelogEntry {
   date: string
   title: string

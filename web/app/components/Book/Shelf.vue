@@ -171,8 +171,7 @@ function dismiss(event: MouseEvent): void {
 
     <div class="mt-10">
       <p v-if="books.length === 0" class="empty">
-        No books published yet — the <NuxtLink to="/roadmap">roadmap</NuxtLink>
-        says what lands next.
+        No books published yet.
       </p>
 
       <template v-else>

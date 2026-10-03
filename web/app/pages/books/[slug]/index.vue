@@ -234,8 +234,7 @@ useJsonLd('crumbs', () => ({
            no chapters for one, so without this the page ends at the hero and
            reads as broken rather than as early. -->
       <p v-if="isEmpty" class="empty">
-        No lessons published yet — this one is still being written. The
-        <NuxtLink to="/roadmap">roadmap</NuxtLink> says what lands next.
+        No lessons published yet — this one is still being written.
       </p>
 
       <!-- No `v-if` on the rows: the api builds a chapter only from the

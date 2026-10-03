@@ -35,7 +35,6 @@ async function entries(): Promise<Entry[]> {
     { path: '/pricing', priority: 0.8, changefreq: 'monthly' },
     { path: '/blog', priority: 0.8, changefreq: 'weekly' },
     { path: '/syntax', priority: 0.7, changefreq: 'monthly' },
-    { path: '/roadmap', priority: 0.5, changefreq: 'weekly' },
     { path: '/changelog', priority: 0.5, changefreq: 'weekly' },
     { path: '/connecting-the-dots', priority: 0.5, changefreq: 'monthly' },
     { path: '/newsletter', priority: 0.4, changefreq: 'yearly' },

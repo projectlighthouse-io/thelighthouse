@@ -268,9 +268,7 @@ watch(() => route.fullPath, () => close())
           </p>
 
           <p v-else-if="books.length === 0" class="p-8 text-sm text-quiet">
-            No books published yet — the
-            <NuxtLink to="/roadmap" class="text-teal-deep underline underline-offset-2">roadmap</NuxtLink>
-            says what lands next.
+            No books published yet.
           </p>
 
           <!--
