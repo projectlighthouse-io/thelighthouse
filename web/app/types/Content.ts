@@ -59,7 +59,6 @@ export interface ProjectPage extends Project {
   longDescription: string
   difficulty: string
   unlockMode: 'open' | 'sequential'
-  relatedBook: string | null
   features: ProjectFeature[]
   tasks: ProjectTask[]
 }

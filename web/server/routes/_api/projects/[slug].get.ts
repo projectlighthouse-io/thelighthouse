@@ -31,7 +31,6 @@ export default defineEventHandler(async (event) => {
     tasksCount: project.task_count,
     isChallenge: project.is_challenge,
     unlockMode: project.unlock_mode,
-    relatedBook: project.related_book_slug,
     features: project.features.map(feature => ({
       title: feature.title,
       description: feature.description ?? '',

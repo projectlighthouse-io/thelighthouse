@@ -190,7 +190,6 @@ export interface ApiProjectSummary {
   featured_order: number
   show_tasks: boolean
   unlock_mode: 'open' | 'sequential'
-  related_book_slug: string | null
   task_count: number
 }
 
