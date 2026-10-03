@@ -122,44 +122,27 @@ export function useBilling() {
     }
   }
 
-  /** Stop a subscription renewing, keeping the period already paid for. */
-  async function cancel(immediately = false): Promise<void> {
-    await change('cancel', { immediately })
-  }
-
-  /** Undo a cancellation that has not taken effect yet. */
-  async function resume(): Promise<void> {
-    await change('resume')
-  }
-
-  /** Move to another track, or to another billing period on the same one. */
-  async function swap(plan: string): Promise<void> {
-    await change('swap', { plan })
-  }
-
   /**
-   * The three that mutate an existing subscription and answer with its new
-   * state — or with 204, when the change ended it.
+   * Hand the browser to the provider's own billing page — cancel, resume,
+   * change plan, card, invoices. Every change there reaches rust by webhook,
+   * so this page has nothing to update; it reloads when the reader comes back.
    */
-  async function change(action: string, body?: object): Promise<void> {
+  async function manage(): Promise<void> {
     if (busy.value) return
 
     busy.value = true
     reason.value = null
 
     try {
-      const updated = await $fetch<Membership | null>(
-        `/api/billing/stripe/${action}`,
-        { method: 'POST', headers: csrfHeader(), body: body ?? {} },
+      const { url } = await $fetch<{ url: string }>(
+        `/api/billing/stripe/manage`,
+        { method: 'POST', headers: csrfHeader() },
       )
 
-      membership.value = updated ?? null
-      resolved.value = true
+      window.location.href = url
     }
     catch (failure) {
       reason.value = reasonFor(failure)
-    }
-    finally {
       busy.value = false
     }
   }
@@ -174,8 +157,6 @@ export function useBilling() {
     track,
     load,
     checkout,
-    cancel,
-    resume,
-    swap,
+    manage,
   }
 }

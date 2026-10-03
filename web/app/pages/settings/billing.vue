@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * What the reader is paying for, and the three things they can do about it.
+ * What the reader is paying for, and a door to Stripe for doing anything about
+ * it.
  *
  * Only subscriptions appear here. A track bought outright has nothing to
  * manage — it does not renew, cannot be cancelled, and the books stay open —
@@ -15,7 +16,7 @@ useSeo({
   noindex: true,
 })
 
-const { membership, resolved, busy, reason, subscribed, ending, track, load, cancel, resume }
+const { membership, resolved, busy, reason, ending, track, load, manage }
   = useBilling()
 
 onMounted(() => load())
@@ -68,7 +69,7 @@ function on(date: string | null): string {
            so saying "active" here would be a lie the reader can see through. -->
       <p v-if="membership.status === 'grace'" class="mt-4 text-sm leading-relaxed text-quiet">
         A payment did not go through, and your books are closed until it does.
-        Update your card with your bank or try again.
+        Update your card under manage billing.
       </p>
       <p v-else-if="ending" class="mt-4 text-sm leading-relaxed text-quiet">
         Ends on {{ on(membership.cancel_at) }}. You keep everything until then.
@@ -79,30 +80,16 @@ function on(date: string | null): string {
 
       <p v-if="reason" class="mt-4 text-sm text-ink">{{ reason }}</p>
 
-      <div class="mt-6 flex gap-3">
-        <button
-          v-if="ending"
-          type="button"
-          :disabled="busy"
-          class="rounded-md bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-ink-hover disabled:opacity-50"
-          @click="resume()"
-        >
-          {{ busy ? 'Working…' : 'Keep it' }}
-        </button>
-        <button
-          v-else-if="subscribed"
-          type="button"
-          :disabled="busy"
-          class="rounded-md border border-rule bg-panel px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-paper-warm disabled:opacity-50"
-          @click="cancel()"
-        >
-          {{ busy ? 'Working…' : 'Cancel' }}
-        </button>
-      </div>
-
-      <p v-if="subscribed && !ending" class="mt-4 text-sm text-quiet">
-        Cancelling stops the renewal. You keep your books until
-        {{ on(membership.period_ends_at) }}.
+      <button
+        type="button"
+        :disabled="busy"
+        class="mt-6 rounded-md bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-ink-hover disabled:opacity-50"
+        @click="manage()"
+      >
+        {{ busy ? 'Opening Stripe…' : 'Manage billing' }}
+      </button>
+      <p class="mt-4 text-sm text-quiet">
+        Cancel, change plan, update your card or download invoices on Stripe.
       </p>
     </div>
   </SettingsShell>
