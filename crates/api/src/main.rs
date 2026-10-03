@@ -19,6 +19,7 @@ mod middleware;
 mod newsletter;
 mod notes;
 mod payments;
+mod profiles;
 mod projects;
 mod request;
 mod response;

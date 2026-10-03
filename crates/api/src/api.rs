@@ -28,7 +28,8 @@ use crate::{
     db,
     limit::RateLimit,
     middleware::{rate::limit_requests, signature::require_signature},
-    newsletter, notes, payments, projects, response, settings, telemetry,
+    newsletter, notes, payments, profiles, projects, response, settings,
+    telemetry,
 };
 
 /// Everything needed to take money: the drivers registered at boot, and the
@@ -167,6 +168,8 @@ pub(crate) fn app(
         .merge(bookmarks::routes(&state))
         .merge(payments::routes(&state))
         .merge(settings::routes(&state))
+        // Public profiles: open to anybody, no session. See `profiles`.
+        .merge(profiles::routes())
         // Deliberately outside the reader gate: an OAuth callback is a browser
         // navigation and cannot carry an HMAC or a session. Those routes
         // authenticate themselves — see `auth`.

@@ -265,6 +265,36 @@ pub(crate) async fn profile(
     .await
 }
 
+/// What anybody may see of a reader: the profile they wrote, plus the name and
+/// avatar their provider sent. Never the email.
+#[derive(Debug, sqlx::FromRow)]
+pub(crate) struct PublicProfile {
+    pub(crate) name: String,
+    pub(crate) avatar_url: Option<String>,
+    #[sqlx(flatten)]
+    pub(crate) profile: Profile,
+}
+
+/// One reader's public profile, by username.
+///
+/// # Errors
+///
+/// The query. `Ok(None)` for a username nobody holds.
+pub(crate) async fn public_profile(
+    db: &PgPool,
+    username: &str,
+) -> Result<Option<PublicProfile>, sqlx::Error> {
+    sqlx::query_as::<_, PublicProfile>(
+        "SELECT name, avatar_url, username, tagline, bio, company, education,
+                location, github_username, linkedin_url, x_url, website_url
+           FROM users
+          WHERE username = $1",
+    )
+    .bind(username)
+    .fetch_optional(db)
+    .await
+}
+
 /// Writes the eight fields a reader may change, and answers the row as it now
 /// stands.
 ///
