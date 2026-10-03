@@ -69,9 +69,7 @@ async fn every_reader_route_needs_a_reader() {
         ("GET", "/api/billing/access"),
         ("GET", "/api/billing/stripe/bought/cs_test_1"),
         ("POST", "/api/billing/stripe/checkout"),
-        ("POST", "/api/billing/stripe/cancel"),
-        ("POST", "/api/billing/stripe/resume"),
-        ("POST", "/api/billing/stripe/swap"),
+        ("POST", "/api/billing/stripe/manage"),
     ];
 
     for (method, uri) in uris {

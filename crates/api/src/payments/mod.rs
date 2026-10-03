@@ -6,9 +6,7 @@
 //!   GET  /api/billing/{provider}/bought/{session}
 //!   GET  /api/billing/membership
 //!   POST /api/billing/{provider}/checkout
-//!   POST /api/billing/{provider}/cancel
-//!   POST /api/billing/{provider}/resume
-//!   POST /api/billing/{provider}/swap
+//!   POST /api/billing/{provider}/manage
 //!   POST /webhooks/{provider}
 //! ```
 //!
@@ -78,7 +76,7 @@ pub(crate) use track::{covers, validate};
 /// The reader-facing routes. Absolute paths, so these merge alongside the
 /// others rather than nesting under one prefix.
 ///
-/// Every route needs a reader; the four that change something also need a CSRF
+/// Every route needs a reader; the two that change something also need a CSRF
 /// token and a place in the write limit. A checkout that could be triggered
 /// cross-site is a reader sent to a payment page they did not ask for.
 pub(crate) fn routes(state: &AppState) -> Router<AppState> {
@@ -94,9 +92,8 @@ pub(crate) fn routes(state: &AppState) -> Router<AppState> {
 
     let writes = Router::new()
         .route("/api/billing/{provider}/checkout", post(handler::checkout))
-        .route("/api/billing/{provider}/cancel", post(handler::cancel))
-        .route("/api/billing/{provider}/resume", post(handler::resume))
-        .route("/api/billing/{provider}/swap", post(handler::swap))
+        // The provider's own page for everything after checkout.
+        .route("/api/billing/{provider}/manage", post(handler::manage))
         .route_layer(from_fn_with_state(state.clone(), throttle))
         .route_layer(from_fn(require_csrf));
 

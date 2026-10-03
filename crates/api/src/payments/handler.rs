@@ -10,11 +10,11 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::Response,
 };
-use billing::{Cancel, Customer, Event, Gateway, PlanId, Subscription};
+use billing::{Customer, Event, Gateway, PlanId, Subscription};
 
 use super::{
     membership::Membership,
-    payload::{Cancellation, ChosenPlan},
+    payload::ChosenPlan,
     refusal::{Refusal, refuse},
     store, track,
 };
@@ -387,168 +387,41 @@ pub(crate) async fn checkout(
     }
 }
 
-/// Stop a subscription renewing, or end it outright.
-pub(crate) async fn cancel(
-    State(state): State<AppState>,
-    Extension(session): Extension<Session>,
-    Path(provider): Path<String>,
-    axum::Json(payload): axum::Json<Cancellation>,
-) -> Response {
-    let when = if payload.immediately {
-        // Forfeits the rest of the paid period, so it is never the default.
-        Cancel::Now
-    } else {
-        Cancel::AtPeriodEnd
-    };
-
-    let (driver, _, reference) =
-        match subject(&state, session.user_id, &provider).await {
-            Subject::Ready(driver, membership, reference) => {
-                (driver, membership, reference)
-            }
-            Subject::Refused(response) => return response,
-        };
-
-    match driver.cancel(&reference, when).await {
-        Ok(updated) => {
-            settled(&state, session.user_id, &provider, &updated).await
-        }
-        Err(error) => {
-            tracing::error!(%error, provider, "failed to cancel");
-            refuse(Refusal::Unavailable)
-        }
-    }
-}
-
-/// Undo a cancellation that has not taken effect yet.
-pub(crate) async fn resume(
-    State(state): State<AppState>,
-    Extension(session): Extension<Session>,
-    Path(provider): Path<String>,
-) -> Response {
-    let (driver, membership, reference) =
-        match subject(&state, session.user_id, &provider).await {
-            Subject::Ready(driver, membership, reference) => {
-                (driver, membership, reference)
-            }
-            Subject::Refused(response) => return response,
-        };
-
-    // Answered here rather than by asking the provider and relaying its
-    // complaint: a subscription that is not ending has nothing to resume, and
-    // that is knowable from the row.
-    if !membership.is_cancelling() {
-        return refuse(Refusal::NotCancelling);
-    }
-
-    match driver.resume(&reference).await {
-        Ok(updated) => {
-            settled(&state, session.user_id, &provider, &updated).await
-        }
-        Err(error) => {
-            tracing::error!(%error, provider, "failed to resume");
-            refuse(Refusal::Unavailable)
-        }
-    }
-}
-
-/// Move to another plan.
-pub(crate) async fn swap(
-    State(state): State<AppState>,
-    Extension(session): Extension<Session>,
-    Path(provider): Path<String>,
-    axum::Json(payload): axum::Json<ChosenPlan>,
-) -> Response {
-    let Some(plan) = state.billing.plans.get(&PlanId::from(payload.plan))
-    else {
-        return refuse(Refusal::UnknownPlan);
-    };
-
-    let (driver, _, reference) =
-        match subject(&state, session.user_id, &provider).await {
-            Subject::Ready(driver, membership, reference) => {
-                (driver, membership, reference)
-            }
-            Subject::Refused(response) => return response,
-        };
-
-    match driver.swap(&reference, plan).await {
-        Ok(updated) => {
-            settled(&state, session.user_id, &provider, &updated).await
-        }
-        Err(error) => {
-            tracing::error!(%error, provider, "failed to swap a plan");
-            refuse(Refusal::Unavailable)
-        }
-    }
-}
-
-/// The three things every lifecycle route needs: the driver, the membership,
-/// and the provider's own reference for it.
+/// Hand the reader to the provider's own billing page.
 ///
-/// An enum rather than `Result<_, Response>` for the reason clippy gives and
-/// `bookmarks::Lesson` already follows: a whole `Response` is 128 bytes, and a
-/// `Result` carries that width through the success path too.
-enum Subject<'s> {
-    Ready(&'s dyn Gateway, Membership, String),
-    /// The response that replaces the work, already logged where it needed to
-    /// be.
-    Refused(Response),
-}
-
-async fn subject<'s>(
-    state: &'s AppState,
-    user_id: i64,
-    provider: &str,
-) -> Subject<'s> {
-    let Some(driver) = driver_named(state, provider) else {
-        return Subject::Refused(response::not_found());
-    };
-
-    let membership = match store::live(&state.db, user_id).await {
-        Ok(Some(membership)) => membership,
-        Ok(None) => return Subject::Refused(refuse(Refusal::NoMembership)),
-        Err(error) => {
-            tracing::error!(%error, "failed to read a membership");
-            return Subject::Refused(response::server_error());
-        }
-    };
-
-    // A scholarship has no reference because nothing was charged. There is
-    // nobody to ask, and inventing one would be asking about somebody else's
-    // subscription.
-    let Some(reference) = membership.provider_ref.clone() else {
-        return Subject::Refused(refuse(Refusal::NotPurchased));
-    };
-
-    Subject::Ready(driver, membership, reference)
-}
-
-/// Record what the provider said, and answer with the membership as it stands.
-///
-/// Written from the provider's answer rather than from what was asked for, so
-/// a change that only partly took effect is stored as what actually happened.
-async fn settled(
-    state: &AppState,
-    user_id: i64,
-    provider: &str,
-    updated: &Subscription,
+/// Cancelling, resuming, changing plan, cards and invoices all happen there,
+/// and each change reaches `memberships` through the webhook like any other.
+/// Anyone the provider has a customer for may go — a reader who bought a track
+/// outright has invoices too.
+pub(crate) async fn manage(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    Path(provider): Path<String>,
 ) -> Response {
-    if let Err(error) =
-        store::record(&state.db, user_id, provider, updated).await
-    {
-        tracing::error!(%error, "failed to record a membership change");
-        return response::server_error();
-    }
+    let Some(driver) = driver_named(&state, &provider) else {
+        return response::not_found();
+    };
 
-    match store::live(&state.db, user_id).await {
-        Ok(Some(membership)) => paid(&membership),
-        Ok(None) => {
-            response::empty(StatusCode::NO_CONTENT, CachePolicy::NoStore)
-        }
+    let customer = match store::customer(&state.db, session.user_id).await {
+        Ok(Some(customer)) => customer,
+        Ok(None) => return refuse(Refusal::NoCustomer),
         Err(error) => {
-            tracing::error!(%error, "failed to read a membership back");
-            response::server_error()
+            tracing::error!(%error, "failed to read a customer");
+            return response::server_error();
+        }
+    };
+
+    let back = format!("{}/settings/billing", state.config.app_url);
+
+    match driver.manage(&customer, &back).await {
+        Ok(handoff) => json(
+            StatusCode::OK,
+            serde_json::json!({ "url": handoff.url }),
+            CachePolicy::NoStore,
+        ),
+        Err(error) => {
+            tracing::error!(%error, provider, "failed to open a billing portal");
+            refuse(Refusal::Unavailable)
         }
     }
 }

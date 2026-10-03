@@ -13,7 +13,6 @@ const COLUMNS: &str = "
     plan,
     status,
     provider,
-    provider_ref,
     period_ends_at,
     cancel_at,
     lifetime

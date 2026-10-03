@@ -23,10 +23,6 @@ pub(crate) struct Membership {
     /// Which provider took the money. `manual` for a membership nobody paid
     /// for — a scholarship — which is a row here and never a payment.
     pub(crate) provider: String,
-    /// The provider's own id for it. Absent for the manual case, where there
-    /// was no transaction to name.
-    #[serde(skip)]
-    pub(crate) provider_ref: Option<String>,
     /// The end of the period already paid for. What a reader keeps after
     /// cancelling, which is why cancelling is not ending.
     #[serde(serialize_with = "response::as_utc")]
@@ -34,7 +30,7 @@ pub(crate) struct Membership {
     /// When a requested cancellation takes effect, if one is pending.
     ///
     /// Set means cancelled but not yet over, which is the state the reader is
-    /// shown and the only one `resume` can undo.
+    /// shown.
     #[serde(serialize_with = "response::as_utc")]
     pub(crate) cancel_at: Option<NaiveDateTime>,
     /// Bought outright: no end, and none expected.
@@ -108,15 +104,6 @@ impl Membership {
 
         self.ends_at().is_none_or(|ends| ends > now)
     }
-
-    /// Whether a cancellation is pending but has not taken effect.
-    ///
-    /// The state `resume` exists to undo. A membership with no pending
-    /// cancellation has nothing to resume, and saying so is better than asking
-    /// the provider and relaying its complaint.
-    pub(crate) const fn is_cancelling(&self) -> bool {
-        self.cancel_at.is_some()
-    }
 }
 
 /// The wire spelling of a status, so the frontend branches on a word rather
@@ -153,7 +140,6 @@ mod tests {
             plan: "go_yearly".to_owned(),
             status,
             provider: "stripe".to_owned(),
-            provider_ref: Some("sub_1".to_owned()),
             period_ends_at: period_ends_at.map(at),
             cancel_at: None,
             lifetime,
