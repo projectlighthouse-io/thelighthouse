@@ -179,6 +179,26 @@ async fn a_lesson_arrives_rendered_with_its_neighbours() {
 }
 
 #[tokio::test]
+async fn a_lesson_is_served_in_the_language_the_url_asks_for() {
+    let en = json("/api/books/fixture-book/lessons/free-lesson").await;
+    let bn = json("/api/books/fixture-book/lessons/free-lesson?lang=bn").await;
+
+    assert_eq!(at(&en, "/locale"), "en");
+    assert_eq!(at(&bn, "/locale"), "bn");
+    assert_eq!(at(&bn, "/locales"), &serde_json::json!(["en", "bn"]));
+    assert_ne!(at(&en, "/html"), at(&bn, "/html"));
+
+    // A language the lesson is not written in, or none at all, reads as
+    // English rather than a 404 — a stale link still lands on the lesson.
+    let fallback =
+        json("/api/books/fixture-book/lessons/split-lesson?lang=bn").await;
+    assert_eq!(at(&fallback, "/locale"), "en");
+    let unknown =
+        json("/api/books/fixture-book/lessons/free-lesson?lang=xx").await;
+    assert_eq!(at(&unknown, "/locale"), "en");
+}
+
+#[tokio::test]
 async fn a_lesson_says_where_it_sits_in_the_book() {
     let lesson = json("/api/books/fixture-book/lessons/split-lesson").await;
 

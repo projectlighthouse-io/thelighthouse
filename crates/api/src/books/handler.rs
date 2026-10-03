@@ -30,6 +30,16 @@ pub(crate) struct Shelf {
     track: Option<String>,
 }
 
+/// Which language to read a lesson in.
+#[derive(Debug, Deserialize)]
+pub(crate) struct Language {
+    /// `en` or `bn`. In the url rather than a cookie because the edge caches by
+    /// url alone: a cookie would serve whichever language was cached first.
+    /// Unknown, or a language this lesson is not written in, reads as English —
+    /// a stale link should still land on the lesson.
+    lang: Option<String>,
+}
+
 /// Every published book, or one track of them.
 ///
 /// **A track is a reading order, so asking for one orders the answer by it.**
@@ -95,6 +105,7 @@ pub(crate) async fn lesson(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path((book, lesson)): Path<(String, String)>,
+    Query(language): Query<Language>,
 ) -> Response {
     let snapshot = state.catalog.current();
 
@@ -104,7 +115,15 @@ pub(crate) async fn lesson(
         return not_found();
     };
 
-    let prose = match state.catalog.body(&book, &lesson, Locale::default()) {
+    let locales = lesson_entry.lesson.locales();
+    let locale = language
+        .lang
+        .as_deref()
+        .and_then(Locale::parse)
+        .filter(|asked| locales.contains(asked))
+        .unwrap_or_default();
+
+    let prose = match state.catalog.body(&book, &lesson, locale) {
         Ok(Some(prose)) => prose,
         Ok(None) => return not_found(),
         Err(cause) => {
@@ -118,7 +137,7 @@ pub(crate) async fn lesson(
     if !prose.has_paid_part() {
         return response::json(
             StatusCode::OK,
-            LessonView::of(book_entry, lesson_entry, &prose, true),
+            LessonView::of(book_entry, lesson_entry, &prose, true, locale),
             CachePolicy::public_content(),
         );
     }
@@ -148,7 +167,7 @@ pub(crate) async fn lesson(
 
     response::json(
         StatusCode::OK,
-        LessonView::of(book_entry, lesson_entry, &prose, unlocked),
+        LessonView::of(book_entry, lesson_entry, &prose, unlocked, locale),
         if unlocked {
             // Carries the paid prose. A shared cache keys on the url alone, so
             // any positive lifetime here would hand this to the next anonymous

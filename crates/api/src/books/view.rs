@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use ohara::{
+    Locale,
     body::{self, Body},
     catalog::{BookEntry, LessonEntry},
     price::Price,
@@ -186,6 +187,11 @@ pub(crate) struct LessonView<'b> {
     previous: Option<LessonRef<'b>>,
     next: Option<LessonRef<'b>>,
     seo: SeoView<'b>,
+    /// The language this body is in — what was asked for, or English when the
+    /// lesson is not written in it.
+    locale: Locale,
+    /// Every language this lesson is written in, for the switcher.
+    locales: Vec<Locale>,
 }
 
 impl<'b> LessonView<'b> {
@@ -194,6 +200,7 @@ impl<'b> LessonView<'b> {
         entry: &'b LessonEntry,
         prose: &Body,
         unlocked: bool,
+        locale: Locale,
     ) -> Self {
         // The contents list describes the whole lesson, whoever is reading —
         // a reader who has not bought it still gets to see what is in it.
@@ -262,6 +269,8 @@ impl<'b> LessonView<'b> {
             previous: LessonRef::of(book, previous),
             next: LessonRef::of(book, next),
             seo: SeoView::of_lesson(entry),
+            locale,
+            locales: entry.lesson.locales(),
         }
     }
 }
