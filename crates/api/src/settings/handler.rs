@@ -8,11 +8,9 @@ use axum::{
 };
 
 use super::{
-    kit,
     refusal::{Refusal, refuse},
     view::{
-        EditNewsletter, EditProfile, MAX_NAME, MintedView, NewToken,
-        NewsletterView, ProfileView, TokenView,
+        EditProfile, MAX_NAME, MintedView, NewToken, ProfileView, TokenView,
     },
 };
 use crate::{
@@ -174,95 +172,6 @@ pub(crate) async fn edit_profile(
         }
         Err(cause) => {
             tracing::error!(%cause, user_id = session.user_id, "failed to update a profile");
-            response::server_error()
-        }
-    }
-}
-
-/// `GET /api/settings/newsletter` — whether this reader is on the list.
-pub(crate) async fn newsletter(
-    State(state): State<AppState>,
-    Extension(session): Extension<Session>,
-) -> Response {
-    match crate::users::newsletter(&state.db, session.user_id).await {
-        Ok(Some((subscribed, _))) => response::json(
-            StatusCode::OK,
-            NewsletterView { subscribed },
-            CachePolicy::NoStore,
-        ),
-        Ok(None) => not_found(),
-        Err(cause) => {
-            tracing::error!(%cause, user_id = session.user_id, "failed to read the newsletter flag");
-            response::server_error()
-        }
-    }
-}
-
-/// `PUT /api/settings/newsletter` — join the list, or leave it.
-///
-/// **Kit is told first, and only about joining.** The write is refused if the
-/// provider will not take the address, so the column never claims a
-/// subscription that would send nothing. Leaving writes the column alone — see
-/// `settings::kit` for why the provider is not asked to remove anybody.
-pub(crate) async fn set_newsletter(
-    State(state): State<AppState>,
-    Extension(session): Extension<Session>,
-    Json(body): Json<EditNewsletter>,
-) -> Response {
-    let current = match crate::users::newsletter(&state.db, session.user_id)
-        .await
-    {
-        Ok(Some(row)) => row,
-        Ok(None) => return not_found(),
-        Err(cause) => {
-            tracing::error!(%cause, user_id = session.user_id, "failed to read the newsletter flag");
-            return response::server_error();
-        }
-    };
-
-    let (was_subscribed, email) = current;
-
-    // Already where the reader is asking to be. Nothing to write, and no reason
-    // to hand Kit a duplicate for a checkbox that was clicked twice.
-    if was_subscribed == body.subscribed {
-        return response::json(
-            StatusCode::OK,
-            NewsletterView {
-                subscribed: was_subscribed,
-            },
-            CachePolicy::NoStore,
-        );
-    }
-
-    if body.subscribed
-        && !kit::subscribe(&state.config.kit_api_key, &email).await
-    {
-        return refuse(Refusal::NewsletterProviderRefused);
-    }
-
-    match crate::users::set_newsletter(
-        &state.db,
-        session.user_id,
-        body.subscribed,
-    )
-    .await
-    {
-        Ok(Some(subscribed)) => {
-            tracing::info!(
-                user_id = session.user_id,
-                subscribed,
-                "newsletter preference written"
-            );
-
-            response::json(
-                StatusCode::OK,
-                NewsletterView { subscribed },
-                CachePolicy::NoStore,
-            )
-        }
-        Ok(None) => not_found(),
-        Err(cause) => {
-            tracing::error!(%cause, user_id = session.user_id, "failed to write the newsletter flag");
             response::server_error()
         }
     }

@@ -4,13 +4,9 @@
 //!   POST /api/newsletter    put an address on the list
 //! ```
 //!
-//! **This is the anonymous half of the newsletter.** `settings::newsletter` is
-//! the other one: a signed-in reader toggling `users.newsletter_enabled`, whose
-//! address comes from their account rather than from a form. Both end at the
-//! same Kit list through the same `settings::kit::subscribe`, and that is the
-//! only thing they share — this one has no session, no reader and no column to
-//! write, because the visitor filling it in may well not have a row in `users`
-//! at all.
+//! **The only way onto the newsletter.** No session, no reader and no column
+//! to write — the visitor filling it in may well not have a row in `users` at
+//! all. The address goes to Kit through `settings::kit::subscribe`.
 //!
 //! Nothing is stored on this side. Kit holds the list; asking it who is on
 //! there is a question for Kit, not for a table here that would immediately

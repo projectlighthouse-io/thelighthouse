@@ -1,19 +1,8 @@
 //! `Kit`, and the one call this site makes to it.
 //!
-//! Kit — `ConvertKit` until they renamed — is where the newsletter list lives.
-//! The list is theirs, not ours: `users.newsletter_enabled` records that a
-//! reader asked, and Kit records who actually gets sent to. Both have to be
-//! written for a subscription to mean anything, which is why the handler
-//! refuses when this call fails rather than saving the flag and reporting a
-//! success the reader would never see an email from.
-//!
-//! **Subscribing is the whole surface.** Turning the toggle off writes the
-//! column and stops there. Kit's v4 api is not asked to unsubscribe anybody,
-//! because the laravel app never asked it either — its
-//! `UnsubscribeFromNewsletter` flips the same column and syncs to `MailerLite`,
-//! a different provider. Sending reads the column, so a reader who turns it
-//! off stops receiving mail; the row at Kit going stale is a known cost, and
-//! reconciling it is a job for whatever ends up doing the sending.
+//! Kit — `ConvertKit` until they renamed — is where the newsletter list lives,
+//! and the list is theirs. **Subscribing is the whole surface**: unsubscribing
+//! is the link in every email Kit sends, which needs nothing from this side.
 //!
 //! The endpoint and header are the ones the laravel integration uses, which is
 //! the only description of this api this repository can check against.

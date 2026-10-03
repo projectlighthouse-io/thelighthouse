@@ -4,8 +4,8 @@ mod store;
 mod username;
 
 pub(crate) use store::{
-    Error, Profile, PublicProfile, find, find_or_create, newsletter, profile,
-    public_profile, set_newsletter, update_profile,
+    Error, Profile, PublicProfile, find, find_or_create, profile,
+    public_profile, update_profile,
 };
 
 /// What the frontend renders chrome from, and what a session points at.

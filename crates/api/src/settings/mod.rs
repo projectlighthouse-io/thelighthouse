@@ -7,9 +7,6 @@
 //!   GET    /api/settings/tokens        the tokens this reader holds
 //!   POST   /api/settings/tokens        mint one, shown once
 //!   DELETE /api/settings/tokens/{id}   revoke one
-//!
-//!   GET    /api/settings/newsletter    whether this reader is on the list
-//!   PUT    /api/settings/newsletter    join it, or leave it
 //! ```
 //!
 //! ```text
@@ -37,12 +34,6 @@
 //! the stolen one does not end. Minting is something a signed-in browser does,
 //! which is also where laravel had it.
 //!
-//! **The newsletter is one boolean.** The page it belongs to used to offer a
-//! checkbox per kind of email against no column, no sender and no endpoint;
-//! there is one list, at Kit, and the only thing to say about it is whether a
-//! reader is on it. `users.newsletter_enabled` is this side's answer and Kit
-//! holds the list — `kit.rs` has why only one direction is sent on.
-//!
 //! **The secret exists in one response and nowhere else.** It is generated,
 //! hashed, the hash is stored, and the plaintext is returned once. Nothing
 //! writes it down, so "show me that token again" has no implementation rather
@@ -58,7 +49,7 @@ mod view;
 use axum::{
     Router,
     middleware::{from_fn, from_fn_with_state},
-    routing::{delete, get, patch, post, put},
+    routing::{delete, get, patch, post},
 };
 
 use crate::{
@@ -78,14 +69,12 @@ use crate::{
 pub(crate) fn routes(state: &AppState) -> Router<AppState> {
     let reads = Router::new()
         .route("/api/settings/profile", get(handler::profile))
-        .route("/api/settings/tokens", get(handler::list))
-        .route("/api/settings/newsletter", get(handler::newsletter));
+        .route("/api/settings/tokens", get(handler::list));
 
     let writes = Router::new()
         .route("/api/settings/profile", patch(handler::edit_profile))
         .route("/api/settings/tokens", post(handler::create))
         .route("/api/settings/tokens/{id}", delete(handler::revoke))
-        .route("/api/settings/newsletter", put(handler::set_newsletter))
         .route_layer(from_fn_with_state(state.clone(), throttle))
         .route_layer(from_fn(require_csrf));
 
