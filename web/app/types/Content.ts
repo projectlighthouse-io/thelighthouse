@@ -239,4 +239,8 @@ export interface LessonResponse {
   percent: number
   previous: { slug: string, title: string } | null
   next: { slug: string, title: string } | null
+  /** The language `html` is in. */
+  locale: string
+  /** Every language this lesson is written in, for the switcher. */
+  locales: string[]
 }

@@ -128,6 +128,10 @@ export interface ApiLesson {
   previous: { slug: string, title: string } | null
   next: { slug: string, title: string } | null
   seo: Record<string, string | null>
+  /** The language `html` is in — what `?lang=` asked for, or `en`. */
+  locale: string
+  /** Every language this lesson is written in. */
+  locales: string[]
 }
 
 /**

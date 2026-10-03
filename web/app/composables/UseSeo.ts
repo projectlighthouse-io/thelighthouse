@@ -15,6 +15,8 @@ export interface SeoInput {
   publishedAt?: string
   /** private pages: keep them out of the index entirely */
   noindex?: boolean
+  /** the content's language. Anything but English is its own url, `?lang=` */
+  lang?: string
 }
 
 const absolute = (path: string): string =>
@@ -31,7 +33,14 @@ export function useSeo(input: MaybeRefOrGetter<SeoInput>) {
   const route = useRoute()
 
   const resolved = computed(() => toValue(input))
-  const canonical = computed(() => `${SITE.url}${route.path === '/' ? '' : route.path}`)
+  // A translation is a page of its own, so it is its own canonical — pointing
+  // it at the English url would tell search engines to drop it.
+  const canonical = computed(() => {
+    const lang = resolved.value.lang
+    const query = lang && lang !== 'en' ? `?lang=${lang}` : ''
+
+    return `${SITE.url}${route.path === '/' ? '' : route.path}${query}`
+  })
   const image = computed(() => absolute(resolved.value.image ?? SITE.ogImage))
 
   useSeoMeta({
@@ -59,6 +68,7 @@ export function useSeo(input: MaybeRefOrGetter<SeoInput>) {
   })
 
   useHead({
+    htmlAttrs: { lang: () => resolved.value.lang ?? 'en' },
     link: [{ rel: 'canonical', href: () => canonical.value }],
   })
 

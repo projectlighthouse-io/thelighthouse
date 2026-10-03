@@ -7,15 +7,20 @@ import '@/assets/css/reader.css'
 const route = useRoute()
 const bookSlug = computed<string>(() => String(route.params.slug))
 const lessonSlug = computed<string>(() => String(route.params.lesson))
+/** `?lang=bn`. In the url, not a cookie, because the edge caches by url. */
+const lang = computed<string>(() => (typeof route.query.lang === 'string' ? route.query.lang : ''))
+const langQuery = computed(() => (lang.value ? { lang: lang.value } : {}))
 
 // Everything the page renders comes back already decided: which body, how far
 // through the book, what comes next. The paid half never enters this component,
 // which is the point — see docs/rebuild.md. During SSR this calls the handler
 // directly, so it costs no HTTP round trip.
 const { data, error } = await useAsyncData(
-  () => `lesson:${bookSlug.value}:${lessonSlug.value}`,
-  () => $fetch<LessonResponse>(`/_api/books/${bookSlug.value}/pages/${lessonSlug.value}`),
-  { watch: [bookSlug, lessonSlug] },
+  () => `lesson:${bookSlug.value}:${lessonSlug.value}:${lang.value}`,
+  () => $fetch<LessonResponse>(`/_api/books/${bookSlug.value}/pages/${lessonSlug.value}`, {
+    query: langQuery.value,
+  }),
+  { watch: [bookSlug, lessonSlug, lang] },
 )
 
 /**
@@ -44,6 +49,18 @@ if (error.value) {
 if (!data.value) {
   throw createError({ statusCode: 404, statusMessage: 'Lesson not found', fatal: true })
 }
+
+/** Each language in its own script, so a reader finds theirs by sight. */
+const LANGUAGE_NAMES: Record<string, string> = { en: 'English', bn: 'বাংলা' }
+
+// Every translation names the others, so search engines serve the right one.
+useHead({
+  link: () => (data.value?.locales ?? []).map(code => ({
+    rel: 'alternate',
+    hreflang: code,
+    href: `${SITE.url}${route.path}${code === 'en' ? '' : `?lang=${code}`}`,
+  })),
+})
 
 const book = computed(() => data.value?.book)
 const lesson = computed(() => data.value?.lesson)
@@ -134,7 +151,7 @@ async function unlock(): Promise<void> {
       html: string
       toc: Heading[]
       unlocked: boolean
-    }>(`/api/books/${bookSlug.value}/lessons/${lessonSlug.value}`)
+    }>(`/api/books/${bookSlug.value}/lessons/${lessonSlug.value}`, { query: langQuery.value })
 
     if (!full.unlocked) return
 
@@ -595,7 +612,7 @@ onMounted(loadAnnotations)
 // After the free half is in the DOM, and again whenever the reader moves to
 // another lesson or their session resolves.
 onMounted(unlock)
-watch([lessonSlug, isSignedIn], unlock)
+watch([lessonSlug, lang, isSignedIn], unlock)
 
 // The element is `v-html`, so it exists only after a paint. Re-checked when the
 // body changes — unlocking replaces it, and the card must go with the region it
@@ -633,6 +650,7 @@ useSeo(() => ({
   title: `${lesson.value?.title} — ${book.value?.title}`,
   description: lesson.value?.description ?? '',
   type: 'article',
+  lang: data.value?.locale,
   image: book.value?.thumbnailUrl,
 }))
 
@@ -704,6 +722,17 @@ useJsonLd('crumbs', () => ({
           remove
         </button>
 
+        <span v-if="data.locales.length > 1" class="reader-subbar__rt">
+          <NuxtLink
+            v-for="code in data.locales"
+            :key="code"
+            :to="{ query: code === 'en' ? {} : { lang: code } }"
+            :hreflang="code"
+            :aria-current="code === data.locale ? 'true' : undefined"
+            :class="code === data.locale ? 'text-ink' : 'text-faint hover:text-ink'"
+            style="margin-right: 8px"
+          >{{ LANGUAGE_NAMES[code] ?? code }}</NuxtLink>
+        </span>
         <span class="reader-subbar__rt">{{ data.readMinutes }} min read</span>
       </div>
     </div>
