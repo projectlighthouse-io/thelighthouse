@@ -45,7 +45,6 @@ pub(crate) struct ProjectSummary<'p> {
     featured_order: i16,
     show_tasks: bool,
     unlock_mode: UnlockMode,
-    related_book_slug: Option<&'p str>,
     task_count: usize,
 }
 
@@ -66,7 +65,6 @@ impl<'p> ProjectSummary<'p> {
             featured_order: project.featured_order,
             show_tasks: project.show_tasks,
             unlock_mode: project.unlock_mode,
-            related_book_slug: project.related_book_slug.as_deref(),
             task_count: entry.tasks().count(),
         }
     }

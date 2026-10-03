@@ -15,7 +15,6 @@ is_challenge: false
 is_featured: false
 featured_order: 0
 show_tasks: true
-related_book_slug: fixture-book
 features:
   - title: Deliberately thin
     description: Enough to parse, and nothing anyone would read.

@@ -1,7 +1,6 @@
 id: 4b2f8e17-3a56-4d09-91c8-6e0d5a7f2b34
 slug: pointed-at-nothing
-name: Pointed At A Book Nobody Wrote
-short_description: Its related book is not in the catalogue.
+name: A Published Project
+short_description: Published, beside the draft one.
 status: published
 blueprint_path: blueprint.bp
-related_book_slug: no-such-book

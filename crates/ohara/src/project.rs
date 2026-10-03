@@ -53,12 +53,6 @@ pub struct Project {
     /// Whether the project's page lists its tasks, or only pitches the project.
     #[serde(default = "yes")]
     pub show_tasks: bool,
-    /// The book that teaches what this project asks for, if there is one.
-    ///
-    /// Named `related_book_slug` and not `related_course_slug`: courses became
-    /// books everywhere else in this repo, and one field still saying
-    /// otherwise is how a rename ends up half done.
-    pub related_book_slug: Option<String>,
     #[serde(default)]
     pub features: Vec<Feature>,
     /// The blueprint file, relative to this project's folder.

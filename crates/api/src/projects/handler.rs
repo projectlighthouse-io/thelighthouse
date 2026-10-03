@@ -164,12 +164,10 @@ pub(crate) async fn show(
         }
     };
 
-    let tasks =
-        match tasks_of(&state, &snapshot, entry, reader(holder.as_ref())).await
-        {
-            Ok(tasks) => tasks,
-            Err(failed) => return *failed,
-        };
+    let tasks = match tasks_of(&state, entry, reader(holder.as_ref())).await {
+        Ok(tasks) => tasks,
+        Err(failed) => return *failed,
+    };
 
     response::json(
         StatusCode::OK,
@@ -193,7 +191,7 @@ pub(crate) async fn tasks(
         return not_found();
     };
 
-    match tasks_of(&state, &snapshot, entry, reader(holder.as_ref())).await {
+    match tasks_of(&state, entry, reader(holder.as_ref())).await {
         Ok(tasks) => {
             response::json(StatusCode::OK, tasks, CachePolicy::NoStore)
         }
@@ -230,14 +228,7 @@ pub(crate) async fn task(
         }
     };
 
-    let seen = match seen_by(
-        &state,
-        &snapshot,
-        project,
-        reader(holder.as_ref()),
-    )
-    .await
-    {
+    let seen = match seen_by(&state, project, reader(holder.as_ref())).await {
         Ok(seen) => seen,
         Err(failed) => return *failed,
     };
@@ -330,21 +321,14 @@ pub(crate) async fn record(
         return refuse(Refusal::TaskNotInProject);
     };
 
-    let access = match entitlement::for_project(
-        &state.db,
-        &state.billing.plans,
-        &snapshot,
-        Some(holder.user_id),
-        project,
-    )
-    .await
-    {
-        Ok(access) => access,
-        Err(cause) => {
-            tracing::error!(%cause, "failed to check entitlement");
-            return response::server_error();
-        }
-    };
+    let access =
+        match entitlement::for_reader(&state.db, Some(holder.user_id)).await {
+            Ok(access) => access,
+            Err(cause) => {
+                tracing::error!(%cause, "failed to check entitlement");
+                return response::server_error();
+            }
+        };
 
     if is_paid(held, access) {
         return refuse(Refusal::TaskNotEntitled);
@@ -627,7 +611,6 @@ struct Seen {
 
 async fn seen_by(
     state: &AppState,
-    snapshot: &Snapshot,
     project: &ProjectEntry,
     reader: Option<i64>,
 ) -> Result<Option<Seen>, Failed> {
@@ -635,18 +618,13 @@ async fn seen_by(
         return Ok(None);
     };
 
-    let access = entitlement::for_project(
-        &state.db,
-        &state.billing.plans,
-        snapshot,
-        reader,
-        project,
-    )
-    .await
-    .map_err(|cause| {
-        tracing::error!(%cause, "failed to check entitlement");
-        Box::new(response::server_error())
-    })?;
+    let access =
+        entitlement::for_reader(&state.db, reader)
+            .await
+            .map_err(|cause| {
+                tracing::error!(%cause, "failed to check entitlement");
+                Box::new(response::server_error())
+            })?;
 
     let (_, board) = run_and_board(state, user_id, project_id).await?;
 
@@ -659,11 +637,10 @@ async fn seen_by(
 /// for an anonymous caller.
 async fn tasks_of<'p>(
     state: &AppState,
-    snapshot: &Snapshot,
     project: &'p ProjectEntry,
     reader: Option<i64>,
 ) -> Result<Vec<TaskView<'p>>, Failed> {
-    let seen = seen_by(state, snapshot, project, reader).await?;
+    let seen = seen_by(state, project, reader).await?;
 
     Ok(project
         .tasks()
@@ -800,21 +777,14 @@ pub(crate) async fn progress(
         return not_found();
     };
 
-    let access = match entitlement::for_project(
-        &state.db,
-        &state.billing.plans,
-        &snapshot,
-        Some(session.user_id),
-        entry,
-    )
-    .await
-    {
-        Ok(access) => access,
-        Err(cause) => {
-            tracing::error!(%cause, "failed to check entitlement");
-            return response::server_error();
-        }
-    };
+    let access =
+        match entitlement::for_reader(&state.db, Some(session.user_id)).await {
+            Ok(access) => access,
+            Err(cause) => {
+                tracing::error!(%cause, "failed to check entitlement");
+                return response::server_error();
+            }
+        };
 
     let (run, board) =
         match run_and_board(&state, session.user_id, project_id).await {

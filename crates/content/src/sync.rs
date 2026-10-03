@@ -287,9 +287,7 @@ async fn lesson(
 ///
 /// Three columns and two timestamps, which is the entire row. Everything a
 /// reader sees — the headline, the pitch, the features, the difficulty, the
-/// runner image, the unlock mode — is served from `project.yaml`, and the link
-/// to a book is `related_book_slug` in that same file rather than a foreign key
-/// here that could disagree with it.
+/// runner image, the unlock mode — is served from `project.yaml`.
 async fn project(
     tx: &mut PgConnection,
     entry: &ProjectEntry,
