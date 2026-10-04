@@ -1,0 +1,22 @@
+/* 4px grid. 32px is the interval the source page labels on its own hero;
+   96px is the standing gap between sections. */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-24: 96px;
+
+  /* semantic intervals */
+  --gap-section: var(--space-24);
+  --gap-heading-figure: var(--space-12);
+  --gap-heading-cta: var(--space-8);
+  --gap-paragraph: var(--space-6);
+  --pad-card: var(--space-6);
+  --gap-grid: var(--space-4);
+}

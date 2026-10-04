@@ -1,0 +1,27 @@
+/* Two weights only: 400 and 500. Headings are 500 with negative tracking —
+   never 600 or 700. Sans for everything, serif for tone, mono for machinery. */
+:root {
+  --weight-regular: 400;
+  --weight-medium: 500;
+
+  --text-display: 500 56px/60px var(--font-sans);
+  --text-display-serif: italic 400 56px/60px var(--font-serif);
+  --text-h1: 500 32px/40px var(--font-sans);
+  --text-h2: 500 24px/32px var(--font-sans);
+  --text-h3: 500 18px/26px var(--font-sans);
+  --text-body: 400 17px/29px var(--font-sans);
+  --text-body-serif: italic 400 17px/29px var(--font-serif);
+  --text-body-sm: 400 15px/24px var(--font-sans);
+  --text-caption: 400 13px/20px var(--font-sans);
+  --text-quote: 400 19px/30px var(--font-serif);
+  --text-code: 400 13px/21px var(--font-mono);
+  --text-label-mono: 400 12px/16px var(--font-mono);
+
+  --tracking-display: -0.025em;
+  --tracking-h1: -0.015em;
+  --tracking-h2: -0.01em;
+  --tracking-title: -0.005em;
+
+  --measure-text: 730px;
+  --measure-figure: 960px;
+}

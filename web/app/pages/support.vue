@@ -19,24 +19,23 @@ useJsonLd('support', {
 </script>
 
 <template>
-  <section class="py-16">
-    <div class="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8">
-      <div class="mb-10 text-center">
-        <h1 class="mb-4 font-mono text-4xl font-medium text-ink">support</h1>
-      </div>
+  <article class="page lh-text lh-gap">
+    <header class="lh-head">
+      <p class="lh-eyebrow">support</p>
+      <h1 class="lh-h1">Write to me</h1>
+    </header>
 
-      <div class="text-mono-body mx-auto max-w-2xl space-y-6">
-        <p>
-          If something isn't working, you have a question, or you just want to say hi&mdash;send an
-          email to
-          <a
-            href="mailto:thearyanahmed@projectlighthouse.io"
-            class="border-b border-stroke font-medium text-ink transition hover:border-quiet"
-          >thearyanahmed@projectlighthouse.io</a>.
-        </p>
-
-        <p>I read every email and typically reply within a day or two.</p>
-      </div>
+    <div class="lesson-content body">
+      <p>
+        If something isn't working, you have a question, or you just want to say hi — send an
+        email to
+        <a href="mailto:thearyanahmed@projectlighthouse.io">thearyanahmed@projectlighthouse.io</a>.
+      </p>
+      <p>I read every email and typically reply within a day or two.</p>
     </div>
-  </section>
+  </article>
 </template>
+
+<style scoped>
+.body { margin-top: var(--space-12); }
+</style>

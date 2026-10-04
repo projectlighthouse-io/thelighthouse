@@ -7,80 +7,40 @@ const label = computed<string>(() => (isDark.value ? 'Switch to light mode' : 'S
 </script>
 
 <template>
-  <!-- Theme is client state, so the server has nothing correct to render. The
-       fallback holds the same box so the header does not shift on hydration. -->
+  <!-- Not rendered anywhere yet: dark mode waits on a checked palette. When it
+       lands, this goes in SiteHeader's right zone. -->
   <ClientOnly>
     <button
       type="button"
-      class="flex size-9 cursor-pointer items-center justify-center rounded-md text-quiet transition-colors hover:text-ink"
+      class="toggle"
       :title="label"
       :aria-label="label"
       :aria-pressed="isDark"
       @click="toggle"
     >
-      <Transition name="icon" mode="out-in">
-        <svg
-          v-if="isDark"
-          key="sun"
-          class="size-4"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          aria-hidden="true"
-        >
-          <circle cx="12" cy="12" r="4" />
-          <path
-            d="M12 2v2M12 20v2M5 5l1.5 1.5M17.5 17.5L19 19M2 12h2M20 12h2M5 19l1.5-1.5M17.5 6.5L19 5"
-          />
-        </svg>
-
-        <svg
-          v-else
-          key="moon"
-          class="size-4"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
-        </svg>
-      </Transition>
+      {{ isDark ? 'light' : 'dark' }}
     </button>
 
     <template #fallback>
-      <span class="size-9" aria-hidden="true" />
+      <span class="toggle" aria-hidden="true" />
     </template>
   </ClientOnly>
 </template>
 
 <style scoped>
-.icon-enter-active,
-.icon-leave-active {
-  transition:
-    opacity 160ms ease,
-    transform 160ms ease;
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: var(--transition-control);
 }
 
-.icon-enter-from {
-  opacity: 0;
-  transform: rotate(-90deg) scale(0.6);
-}
-
-.icon-leave-to {
-  opacity: 0;
-  transform: rotate(90deg) scale(0.6);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .icon-enter-active,
-  .icon-leave-active {
-    transition: none;
-  }
-}
+.toggle:hover { color: var(--ink); background: var(--surface-sunken); }
 </style>

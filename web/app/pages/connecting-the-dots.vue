@@ -18,18 +18,15 @@ useJsonLd('about', {
 </script>
 
 <template>
-  <div class="reader-shell">
-    <div class="legal-layout">
-      <article class="reader-article">
-        <div class="reader-eyebrow">how it fits together</div>
-        <h1>Connecting the dots</h1>
-        <p class="reader-dek">
-          Books teach the idea. Projects make you build it. luxctl checks your work. That is the
-          whole loop.
-        </p>
+  <article class="page lh-text lh-gap">
+    <header class="lh-head">
+      <p class="lh-eyebrow">how it fits together</p>
+      <h1 class="lh-h1">Connecting the dots</h1>
+      <p class="lh-sub">Books teach the idea. Projects make you build it. luxctl checks your work. That is the
+          whole loop.</p>
+    </header>
 
-        <div class="reader-prose mt-11">
-          <div class="lesson-content">
+    <div class="lesson-content body">
             <p>
               Every book here starts from something you can hold in your head — two computers and a
               wire, a process and its memory, a byte on a disk — and builds up from there. No
@@ -61,23 +58,10 @@ useJsonLd('about', {
               An open-source CLI that fetches your project, runs the validator locally, and reports
               back. Nothing you write leaves your machine — only the result does.
             </p>
-          </div>
-        </div>
-      </article>
     </div>
-  </div>
+  </article>
 </template>
 
 <style scoped>
-.legal-layout {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 72px 40px 96px;
-}
-
-@media (max-width: 880px) {
-  .legal-layout {
-    padding: 40px 20px 80px;
-  }
-}
+.body { margin-top: var(--space-12); }
 </style>

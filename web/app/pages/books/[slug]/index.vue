@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { Book, Chapter, LessonSummary } from '@/types/Content'
+import type { Book, Chapter, LessonSummary, TocSection } from '@/types/Content'
+import { bookTopics } from '@/data/BookTopics'
 
 interface BookDetailResponse {
   book: Book
@@ -9,48 +10,6 @@ interface BookDetailResponse {
 
 const route = useRoute()
 const slug = computed<string>(() => String(route.params.slug))
-
-const { isSignedIn, resolve: resolveReader } = useReader()
-
-/**
- * Whether this reader already holds the book.
- *
- * `lesson.locked` is a fact about the *lesson* — `has_paid_part`, "there is
- * something behind a paywall here" — and deliberately not about the reader:
- * this listing is the same bytes for everybody and is held at the edge, so it
- * cannot know who is asking. Without this the contents list went on calling
- * lessons "paid" to somebody who opens them and reads the whole thing.
- *
- * The same shape the reader page uses to unlock itself: the server-rendered
- * copy is the anonymous one, and the browser asks again with the cookie. Asked
- * of `/api` rather than `/_api` for that reason — the cookie has to reach the
- * api, not nitro.
- *
- * Allowed to fail silently. Not knowing leaves the pills as they are, which is
- * the answer the page already shipped.
- */
-const held = ref(false)
-
-async function checkHeld(): Promise<void> {
-  held.value = false
-
-  await resolveReader()
-  if (!isSignedIn.value) return
-
-  try {
-    const mine = await $fetch<{ books: { slug: string }[] }>(
-      '/api/billing/access',
-    )
-
-    held.value = (mine.books ?? []).some(b => b.slug === slug.value)
-  }
-  catch {
-    held.value = false
-  }
-}
-
-onMounted(checkHeld)
-watch(slug, checkHeld)
 
 // From ohara, through the rust api. During SSR this calls the handler directly,
 // so it costs no HTTP round trip.
@@ -105,9 +64,6 @@ const book = computed(() => data.value?.book)
 const lessons = computed<LessonSummary[]>(() => data.value?.lessons ?? [])
 const chapters = computed<Chapter[]>(() => data.value?.chapters ?? [])
 
-const lessonsFor = (chapter: Chapter): LessonSummary[] =>
-  lessons.value.filter(l => l.chapterId === chapter.id)
-
 /** running lesson number across the whole book, not per chapter */
 const numberOf = (lesson: LessonSummary): string =>
   String(lessons.value.indexOf(lesson) + 1).padStart(2, '0')
@@ -129,19 +85,45 @@ const firstLesson = computed<string | null>(
 /** A book whose lessons are all still drafts. Renders a note, not a blank. */
 const isEmpty = computed<boolean>(() => lessons.value.length === 0)
 
-/**
- * What the slideshow shows.
- *
- * `images` is the book's own list and the thumbnail is the fallback, so a book
- * whose yaml has no `images:` yet still shows its cover rather than a gap. A
- * book with neither shows nothing at all — the component renders no frame.
- */
-const covers = computed<string[]>(() => {
-  const listed = book.value?.images ?? []
-  if (listed.length) return listed
+const sections = computed<TocSection[]>(() => chapters.value.map((chapter, i) => ({
+  key: chapter.id,
+  eyebrow: `chapter ${String(i + 1).padStart(2, '0')}`,
+  title: chapter.title,
+  rows: lessons.value
+    .filter(lesson => lesson.chapterId === chapter.id)
+    .map(lesson => ({
+      n: numberOf(lesson),
+      title: lesson.title,
+      blurb: lesson.description,
+      to: `/books/${slug.value}/pages/${lesson.slug}`,
+      locked: lesson.locked,
+    })),
+})))
 
-  return book.value?.thumbnailUrl ? [book.value.thumbnailUrl] : []
+/**
+ * "book 06 — go · rust": where the book sits on the shelf, and the tracks
+ * that carry it. The shelf's order is the api's, through the same listing
+ * the books page renders.
+ */
+const { data: shelf } = await useShelf()
+
+const eyebrow = computed<string>(() => {
+  const at = (shelf.value ?? []).findIndex(b => b.slug === slug.value)
+  const number = at === -1 ? 'book' : `book ${String(at + 1).padStart(2, '0')}`
+  const onTracks = Object.keys(book.value?.tracks ?? {})
+
+  return onTracks.length ? `${number} — ${onTracks.join(' · ')}` : number
 })
+
+const topics = computed<string[]>(() => bookTopics[slug.value] ?? [])
+
+// Get Pro only where there is something to unlock, and never to a reader who
+// already has it.
+const { load: loadAccess, owns } = useAccess()
+onMounted(loadAccess)
+
+const hasPro = computed<boolean>(() => lessons.value.some(lesson => lesson.locked))
+const showPro = computed<boolean>(() => hasPro.value && !owns(slug.value))
 
 useSeo(() => ({
   title: `${book.value?.title} — projectlighthouse`,
@@ -173,152 +155,61 @@ useJsonLd('crumbs', () => ({
 </script>
 
 <template>
-  <div v-if="book" class="book mx-auto max-w-[1040px] bg-panel">
-    <!-- `bg-panel`, not `bg-white`: the token is #ffffff in light and the dark
-         panel in dark, so this slab inverts with the theme rather than staying
-         a sheet of white on a dark page.
+  <div v-if="book" class="book">
+    <DetailHead
+      :eyebrow="eyebrow"
+      :title="book.title"
+      :description="book.description"
+      :topics="topics"
+      :cover="book.thumbnailUrl || undefined"
+      :cover-alt="`${book.title} cover`"
+    >
+      <template v-if="firstLesson || showPro" #actions>
+        <UiButton
+          v-if="firstLesson"
+          variant="inverse"
+          size="lg"
+          cta="pro"
+          :to="`/books/${book.slug}/pages/${firstLesson}`"
+        >
+          Start reading →
+        </UiButton>
+        <!-- `owns` is false until the browser asks, so the server and the
+             first client render agree and the button only ever disappears. -->
+        <UiButton v-if="showPro" variant="ghost" size="lg" cta="free" flame to="/pricing">
+          Get Pro
+        </UiButton>
+      </template>
+    </DetailHead>
 
-         The breadcrumb that used to sit above the title is gone. `/books` is
-         one click away in the nav on every viewport, and the trail was a mono
-         line of chrome above a display face that has to be the first thing
-         read. The BreadcrumbList in the script stays: search results still
-         want the trail, and that markup is what they read, not this. -->
-    <header class="px-10 pt-11 max-[820px]:px-6 max-[820px]:pt-10">
-      <!-- One column until 1080px, then the images take a fixed 232px beside
-           the title. Fixed rather than fractional so the measure of the dek is
-           set by the dek, not by how wide the window happens to be. -->
-      <div
-        class="grid grid-cols-1 items-start gap-14"
-        :class="covers.length ? 'min-[1081px]:grid-cols-[minmax(0,1fr)_232px]' : ''"
-      >
-        <div>
-          <h1 class="masthead-title">
-            {{ book.title }}
-          </h1>
-
-          <p class="masthead-dek">
-            {{ book.description }}
-          </p>
-
-          <div v-if="firstLesson" class="mt-6">
-            <NuxtLink
-              :to="`/books/${book.slug}/pages/${firstLesson}`"
-              class="start"
-            >
-              Start reading
-              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path
-                  d="M3 8h9M8.5 4l4 4-4 4"
-                  stroke="currentColor"
-                  stroke-width="1.4"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </NuxtLink>
-          </div>
-        </div>
-
-        <!-- The book's own images, not its thumbnail: `images` is what it has to
-             show, and falls back to the one image every book has. -->
-        <BookCoverSlideshow :images="covers" :title="book.title" />
-      </div>
-    </header>
-
-    <!-- 720px, and left under the title rather than centred. The rows are a
-         numbered list read top to bottom, so their left edge lines up with the
-         masthead's; centring them would set the whole page adrift of the one
-         vertical the title establishes. -->
-    <main class="mt-[34px] max-w-[720px] px-10 pb-[90px] max-[820px]:px-6">
+    <div id="toc" class="lh-figure toc-wrap">
       <!-- A published book whose lessons are all still drafts. The api sends
-           no chapters for one, so without this the page ends at the hero and
+           no chapters for one, so without this the page ends at the head and
            reads as broken rather than as early. -->
-      <p v-if="isEmpty" class="empty">
-        No lessons published yet — this one is still being written.
+      <p v-if="isEmpty" class="lh-sub empty">
+        No lessons published yet — this one is still being written. The
+        <NuxtLink to="/roadmap" class="lh-inline">roadmap</NuxtLink> says what lands next.
       </p>
 
-      <!-- No `v-if` on the rows: the api builds a chapter only from the
-           lessons it has, so a chapter that reaches here always has some. -->
-      <section v-for="chapter in chapters" v-else :key="chapter.id" class="part">
-        <h2 class="part-title">
-          {{ chapter.title }}
-        </h2>
+      <TocList v-else :sections="sections" />
+    </div>
 
-        <NuxtLink
-          v-for="lesson in lessonsFor(chapter)"
-          :key="lesson.slug"
-          :to="`/books/${book.slug}/pages/${lesson.slug}`"
-          class="ch"
-        >
-          <span class="ch-no">{{ numberOf(lesson) }}</span>
-          <span>
-            <span class="ch-title">
-              {{ lesson.title }}
-              <!-- Nothing to say to somebody who holds the book: every lesson
-                   in it opens, so a free/paid split is a wall they are not
-                   standing behind. -->
-              <span
-                v-if="!held"
-                class="pill"
-                :class="lesson.locked ? 'pill-paid' : 'pill-free'"
-              >
-                {{ lesson.locked ? 'paid' : 'free' }}
-              </span>
-            </span>
-            <span v-if="lesson.description" class="ch-desc">
-              {{ lesson.description }}
-            </span>
-          </span>
-        </NuxtLink>
-      </section>
-    </main>
+    <div class="end" aria-hidden="true">
+      <img src="/lighthouse.svg" alt="" width="20" height="20">
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* What is left here is this page's own: the start button and the empty state.
- * The chapter and lesson rows moved to `assets/css/contents.css` when the
- * project page started drawing the same list. */
+.toc-wrap { margin-top: var(--space-24); }
 
-.start {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border-radius: 6px;
-    padding: 9px 15px;
-    font-size: 12.5px;
-    font-weight: 500;
-    background: var(--color-read-ink);
-    color: var(--color-on-ink);
-    transition:
-        background 140ms,
-        color 140ms;
+.empty { padding: 0 var(--space-4); }
+
+.end {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-24);
 }
 
-.start:hover {
-    background: var(--color-teal-deep);
-}
-
-.start svg {
-    width: 13px;
-    height: 13px;
-}
-
-.empty {
-    font-family: 'Newsreader', Georgia, serif;
-    font-optical-sizing: auto;
-    font-size: 15.5px;
-    line-height: 1.55;
-    color: var(--color-read-mute);
-    border-top: 1px solid var(--color-read-line);
-    padding-top: 18px;
-    margin: 0;
-}
-
-.empty a {
-    color: var(--color-teal-deep);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-}
-
+.end img { width: 20px; height: 20px; opacity: 0.35; }
 </style>

@@ -5,6 +5,12 @@ const activeTag = ref<string>('all')
 
 const tags = computed<string[]>(() => ['all', ...new Set(changelog.map(e => e.tag))].sort())
 
+const tagOptions = computed(() => tags.value.map(tag => ({
+  key: tag,
+  label: tag,
+  count: tag === 'all' ? changelog.length : changelog.filter(e => e.tag === tag).length,
+})))
+
 const shown = computed(() =>
   activeTag.value === 'all' ? changelog : changelog.filter(e => e.tag === activeTag.value),
 )
@@ -32,40 +38,37 @@ useJsonLd('changelog', {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
-    <div class="text-center">
-      <h1 class="mb-4 font-serif text-4xl tracking-tight text-ink sm:text-5xl">Changelog</h1>
-      <p class="text-mono-body">{{ changelog.length }} changes, newest first.</p>
+  <div class="changelog lh-text lh-gap">
+    <div class="lh-head">
+      <p class="lh-eyebrow">changelog</p>
+      <h1 class="lh-h1">What changed</h1>
+      <p class="lh-sub">{{ changelog.length }} changes, newest first.</p>
     </div>
 
-    <div class="mt-10 flex flex-wrap justify-center gap-2">
-      <button
-        v-for="tag in tags"
-        :key="tag"
-        type="button"
-        class="cursor-pointer rounded-md px-4 py-1.5 font-mono text-xs"
-        :class="activeTag === tag ? 'border-pencil-solid-black text-ink' : 'text-quiet hover:text-ink'"
-        @click="activeTag = tag"
-      >
-        {{ tag }}
-      </button>
+    <div class="filter">
+      <SegmentedFilter v-model="activeTag" :options="tagOptions" label="filter by tag" />
     </div>
 
-    <ol class="mt-12">
-      <li
-        v-for="(entry, i) in shown"
-        :key="`${entry.date}-${i}`"
-        class="border-b border-dashed border-rule-soft py-6 last:border-b-0"
-      >
-        <div class="flex flex-wrap items-baseline gap-3 font-mono text-xs text-faint">
-          <time>{{ entry.date }}</time>
-          <span class="text-teal">#{{ entry.tag }}</span>
-        </div>
-        <h2 class="mt-2 font-editorial text-lg text-ink font-semibold">
-          {{ entry.title }}
-        </h2>
-        <p class="mt-2 text-sm leading-relaxed text-quiet">{{ entry.description }}</p>
+    <ol class="list">
+      <li v-for="(entry, i) in shown" :key="`${entry.date}-${i}`">
+        <PostRow
+          :eyebrow="`${entry.date} · #${entry.tag}`"
+          :title="entry.title"
+          :caption="entry.description"
+        />
       </li>
     </ol>
   </div>
 </template>
+
+<style scoped>
+.filter { margin-top: var(--space-8); }
+
+.list {
+  margin: var(--space-8) calc(var(--space-4) * -1) 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+</style>

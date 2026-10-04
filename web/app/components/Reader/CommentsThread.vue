@@ -146,18 +146,7 @@ const since = (iso: string | null): string => {
           <header class="note-comment__head">
             <span class="note-comment__who">{{ reader?.name ?? 'You' }}</span>
 
-            <svg
-              v-if="!note.isPublic"
-              class="note-comment__lock"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              aria-label="Private note"
-            >
-              <rect x="4" y="10" width="16" height="10" rx="2" />
-              <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-            </svg>
+            <span v-if="!note.isPublic" class="note-comment__lock">private</span>
 
             <span class="note-comment__dot">·</span>
             <span class="note-comment__when">{{ since(note.createdAt) }}</span>
@@ -166,24 +155,17 @@ const since = (iso: string | null): string => {
               <button
                 type="button"
                 class="note-comment__act"
-                aria-label="Edit note"
                 @click="startEdit(note)"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M4 20h4l10-10-4-4L4 16z" />
-                  <path d="M13.5 6.5l4 4" />
-                </svg>
+                edit
               </button>
               <button
                 type="button"
                 class="note-comment__act note-comment__act--danger"
-                aria-label="Delete note"
                 :disabled="savingId === note.id"
                 @click="emit('remove', note)"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M5 7h14M10 7V5h4v2M6 7l1 13h10l1-13" />
-                </svg>
+                delete
               </button>
             </div>
           </header>

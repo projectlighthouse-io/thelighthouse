@@ -65,160 +65,154 @@ useSeo({
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
-    <h1 class="mb-2 font-serif text-3xl tracking-tight text-ink sm:text-4xl">My notes</h1>
-    <p class="text-mono-body mb-8">
-      every passage you highlighted, with whatever you wrote next to it.
-    </p>
-
+  <AccountShell title="My notes" sub="Every passage you highlighted, with whatever you wrote next to it.">
+    <label class="lh-sr" for="notes-search">search your notes</label>
     <input
+      id="notes-search"
       v-model="search"
       type="search"
       placeholder="search your notes…"
-      class="w-full rounded-md border border-rule bg-panel px-4 py-2.5 font-mono text-sm text-ink placeholder:text-faint focus:border-stroke focus:outline-none"
+      class="lh-input"
     >
 
     <!-- Nothing at all until the first answer. An empty state drawn while the
          request is still out is a lie shown to everybody who has notes. -->
-    <div v-if="!loaded" class="mt-10 py-16 text-center">
-      <p class="text-sm text-quiet">Loading…</p>
+    <p v-if="!loaded" class="lh-sub state">Loading…</p>
+
+    <div v-else-if="failed" class="lh-card state empty">
+      <p class="lh-sub">Your notes could not be loaded.</p>
+      <UiButton variant="inverse" size="md" @click="load">Try again</UiButton>
     </div>
 
-    <div v-else-if="failed" class="border-pencil-light mt-10 rounded-md bg-panel py-16 text-center">
-      <p class="text-sm text-quiet">Your notes could not be loaded.</p>
-      <button
-        type="button"
-        class="mt-4 rounded-md bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-ink-hover"
-        @click="load"
-      >
-        Try again
-      </button>
+    <div v-else-if="notes.length === 0" class="lh-card state empty">
+      <p class="lh-sub">{{ search ? 'No notes match that.' : 'No notes yet.' }}</p>
+      <p v-if="!search" class="lh-hint">Select any passage while reading to save it here.</p>
     </div>
 
-    <div
-      v-else-if="notes.length === 0"
-      class="border-pencil-light mt-10 rounded-md bg-panel py-16 text-center"
-    >
-      <p class="text-sm text-quiet">
-        {{ search ? 'No notes match that.' : 'No notes yet.' }}
-      </p>
-      <p v-if="!search" class="mx-auto mt-3 max-w-sm text-sm text-quiet">
-        Select any passage while reading to save it here.
-      </p>
-    </div>
-
-    <div v-else :class="['mt-10 space-y-6', pending && 'opacity-60']">
-      <article
-        v-for="note in notes"
-        :key="note.id"
-        class="border-pencil-light rounded-md bg-panel px-5 py-4"
-      >
-        <div class="flex items-baseline gap-3">
-          <NuxtLink
-            :to="`/books/${note.bookSlug}/lessons/${note.lessonSlug}`"
-            class="font-mono text-xs text-quiet transition hover:text-ink"
-          >
+    <div v-else class="list" :class="{ 'is-pending': pending }">
+      <article v-for="note in notes" :key="note.id" class="lh-card note">
+        <div class="top">
+          <NuxtLink :to="`/books/${note.bookSlug}/pages/${note.lessonSlug}`" class="lh-mono lh-link">
             {{ note.bookSlug }} — {{ note.lessonSlug }}
           </NuxtLink>
 
           <!-- Only the states worth flagging get a label. "private" is the one
                that changes what a reader would say next; "reply" explains why a
-               note has no passage of its own. A "public" badge on most rows
-               would be noise. -->
-          <span v-if="!note.isPublic" class="ml-auto font-mono text-xs text-faint">private</span>
-          <span v-else-if="note.parentId" class="ml-auto font-mono text-xs text-faint">reply</span>
+               note has no passage of its own. -->
+          <span v-if="!note.isPublic" class="lh-mono lh-faint">private</span>
+          <span v-else-if="note.parentId" class="lh-mono lh-faint">reply</span>
         </div>
 
-        <blockquote
-          v-if="note.selectedText"
-          class="mt-3 border-l-2 border-rule pl-4 font-serif text-ink"
-        >
-          {{ note.selectedText }}
-        </blockquote>
+        <blockquote v-if="note.selectedText" class="passage">{{ note.selectedText }}</blockquote>
 
-        <div v-if="editing === note.id" class="mt-3">
-          <textarea
-            v-model="draft"
-            rows="3"
-            :maxlength="MAX_NOTE"
-            class="w-full rounded-md border border-rule bg-page px-3 py-2 font-mono text-sm text-ink focus:border-stroke focus:outline-none"
-          />
+        <div v-if="editing === note.id" class="edit">
+          <textarea v-model="draft" rows="3" :maxlength="MAX_NOTE" class="lh-input" aria-label="your note" />
 
-          <div class="mt-2 flex items-center gap-3">
-            <button
-              type="button"
-              :disabled="saving"
-              class="rounded-md bg-ink px-4 py-1.5 text-sm font-medium text-on-ink transition hover:bg-ink-hover disabled:opacity-40"
-              @click="save(note.id)"
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              class="font-mono text-xs text-quiet transition hover:text-ink"
-              @click="stopEditing"
-            >
-              Cancel
-            </button>
-            <span class="ml-auto font-mono text-xs text-faint">
-              {{ draft.trim().length }}/{{ MAX_NOTE }}
-            </span>
+          <div class="edit-row">
+            <UiButton variant="inverse" size="sm" :disabled="saving" @click="save(note.id)">Save</UiButton>
+            <button type="button" class="act" @click="stopEditing">Cancel</button>
+            <span class="lh-mono lh-faint lh-num count">{{ draft.trim().length }}/{{ MAX_NOTE }}</span>
           </div>
         </div>
 
-        <p v-else-if="note.noteContent" class="text-mono-body mt-3">
-          {{ note.noteContent }}
-        </p>
+        <p v-else-if="note.noteContent" class="lh-sub body">{{ note.noteContent }}</p>
 
-        <p v-if="refused && editing === note.id" class="mt-2 font-mono text-xs text-pencil-red">
-          {{ refused }}
-        </p>
+        <p v-if="refused && editing === note.id" class="lh-error" role="alert">{{ refused }}</p>
 
-        <div class="mt-3 flex items-center gap-4">
-          <p class="font-mono text-xs text-faint">{{ on(note.createdAt) }}</p>
+        <div class="foot">
+          <span class="lh-mono lh-faint">{{ on(note.createdAt) }}</span>
 
-          <div v-if="editing !== note.id" class="ml-auto flex items-center gap-4">
-            <button
-              type="button"
-              class="font-mono text-xs text-quiet transition hover:text-ink"
-              @click="startEditing(note.id, note.noteContent)"
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              class="font-mono text-xs text-quiet transition hover:text-pencil-red"
-              @click="discard(note.id)"
-            >
-              Delete
-            </button>
-          </div>
+          <span v-if="editing !== note.id" class="acts">
+            <button type="button" class="act" @click="startEditing(note.id, note.noteContent)">Edit</button>
+            <button type="button" class="act" @click="discard(note.id)">Delete</button>
+          </span>
         </div>
       </article>
 
-      <div v-if="pages > 1" class="flex items-center justify-between pt-2">
-        <button
-          type="button"
-          :disabled="page <= 1"
-          class="rounded-md border border-rule px-4 py-2 font-mono text-sm text-ink transition hover:border-stroke disabled:opacity-40"
-          @click="goTo(page - 1)"
-        >
-          Previous
-        </button>
-
-        <span class="font-mono text-xs text-quiet">
-          page {{ page }} of {{ pages }} — {{ total }} notes
-        </span>
-
-        <button
-          type="button"
-          :disabled="page >= pages"
-          class="rounded-md border border-rule px-4 py-2 font-mono text-sm text-ink transition hover:border-stroke disabled:opacity-40"
-          @click="goTo(page + 1)"
-        >
-          Next
-        </button>
+      <div v-if="pages > 1" class="pager">
+        <UiButton variant="ghost" size="md" :disabled="page <= 1" @click="goTo(page - 1)">← Previous</UiButton>
+        <span class="lh-mono lh-muted lh-num">page {{ page }} of {{ pages }} — {{ total }} notes</span>
+        <UiButton variant="ghost" size="md" :disabled="page >= pages" @click="goTo(page + 1)">Next →</UiButton>
       </div>
     </div>
-  </div>
+  </AccountShell>
 </template>
+
+<style scoped>
+.state { margin-top: var(--space-8); }
+
+.empty {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.list {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  transition: opacity var(--duration) var(--ease-out);
+}
+
+.list.is-pending { opacity: 0.6; }
+
+.note {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.top,
+.foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.passage {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font: var(--text-quote);
+  font-size: 16px;
+  line-height: 26px;
+  color: var(--ink);
+}
+
+.body { white-space: pre-wrap; }
+
+.edit {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.edit-row,
+.acts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.count { margin-left: auto; }
+
+.act {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.act:hover { color: var(--ink); }
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+</style>

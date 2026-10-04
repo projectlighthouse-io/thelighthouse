@@ -23,29 +23,28 @@ const or = (value: string | null | undefined): string => value || '—'
 </script>
 
 <template>
-  <SettingsShell>
-    <h2 class="font-serif text-2xl text-ink">Profile</h2>
-    <p class="mt-2 text-sm leading-relaxed text-quiet">Your name and email come from the provider you signed in with.</p>
+  <AccountShell title="Profile" sub="Your name and email come from the provider you signed in with.">
+    <div class="lh-card">
+      <dl class="lh-facts">
+        <dt>name</dt>
+        <dd>{{ or(reader?.name) }}</dd>
+        <dt>username</dt>
+        <dd>{{ reader?.username ? `@${reader.username}` : '—' }}</dd>
+        <dt>email</dt>
+        <dd>{{ or(reader?.email) }}</dd>
+        <dt>signed in with</dt>
+        <dd>{{ or(reader?.provider) }}</dd>
+      </dl>
+    </div>
 
-    <dl class="mt-8 overflow-hidden rounded-lg border border-rule">
-      <div class="flex items-baseline justify-between gap-4 border-b border-rule px-4 py-3">
-        <dt class="shrink-0 text-xs font-medium tracking-wider uppercase text-faint">name</dt>
-        <dd class="min-w-0 truncate text-sm text-ink">{{ or(reader?.name) }}</dd>
-      </div>
-      <div class="flex items-baseline justify-between gap-4 border-b border-rule px-4 py-3">
-        <dt class="shrink-0 text-xs font-medium tracking-wider uppercase text-faint">email</dt>
-        <dd class="min-w-0 truncate text-sm text-ink">{{ or(reader?.email) }}</dd>
-      </div>
-      <div class="flex items-baseline justify-between gap-4 px-4 py-3">
-        <dt class="shrink-0 text-xs font-medium tracking-wider uppercase text-faint">signed in with</dt>
-        <dd class="min-w-0 truncate text-sm text-ink capitalize">{{ or(reader?.provider) }}</dd>
-      </div>
-    </dl>
-
-    <p class="mt-10 text-sm text-quiet">
+    <p class="lh-hint note">
       To change your name or avatar, change it with your provider and sign in again.
       What other learners see is on
-      <NuxtLink to="/settings/public-profile" class="underline">public profile</NuxtLink>.
+      <NuxtLink to="/settings/public-profile" class="lh-inline">public profile</NuxtLink>.
     </p>
-  </SettingsShell>
+  </AccountShell>
 </template>
+
+<style scoped>
+.note { margin-top: var(--space-6); }
+</style>

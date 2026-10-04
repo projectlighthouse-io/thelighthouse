@@ -1,26 +1,21 @@
 <script setup lang="ts">
 import type { Note } from '@/composables/UseNotes'
-import type { LessonResponse } from '@/types/Content'
+import type { Chapter, LessonResponse, LessonSummary } from '@/types/Content'
 // only this route needs the reader system
 import '@/assets/css/reader.css'
 
 const route = useRoute()
 const bookSlug = computed<string>(() => String(route.params.slug))
 const lessonSlug = computed<string>(() => String(route.params.lesson))
-/** `?lang=bn`. In the url, not a cookie, because the edge caches by url. */
-const lang = computed<string>(() => (typeof route.query.lang === 'string' ? route.query.lang : ''))
-const langQuery = computed(() => (lang.value ? { lang: lang.value } : {}))
 
 // Everything the page renders comes back already decided: which body, how far
 // through the book, what comes next. The paid half never enters this component,
 // which is the point — see docs/rebuild.md. During SSR this calls the handler
 // directly, so it costs no HTTP round trip.
 const { data, error } = await useAsyncData(
-  () => `lesson:${bookSlug.value}:${lessonSlug.value}:${lang.value}`,
-  () => $fetch<LessonResponse>(`/_api/books/${bookSlug.value}/pages/${lessonSlug.value}`, {
-    query: langQuery.value,
-  }),
-  { watch: [bookSlug, lessonSlug, lang] },
+  () => `lesson:${bookSlug.value}:${lessonSlug.value}`,
+  () => $fetch<LessonResponse>(`/_api/books/${bookSlug.value}/pages/${lessonSlug.value}`),
+  { watch: [bookSlug, lessonSlug] },
 )
 
 /**
@@ -50,20 +45,29 @@ if (!data.value) {
   throw createError({ statusCode: 404, statusMessage: 'Lesson not found', fatal: true })
 }
 
-/** Each language in its own script, so a reader finds theirs by sight. */
-const LANGUAGE_NAMES: Record<string, string> = { en: 'English', bn: 'বাংলা' }
-
-// Every translation names the others, so search engines serve the right one.
-useHead({
-  link: () => (data.value?.locales ?? []).map(code => ({
-    rel: 'alternate',
-    hreflang: code,
-    href: `${SITE.url}${route.path}${code === 'en' ? '' : `?lang=${code}`}`,
-  })),
-})
-
 const book = computed(() => data.value?.book)
 const lesson = computed(() => data.value?.lesson)
+
+/**
+ * "chapter 03 · lesson 12". The lesson response says where the lesson falls
+ * in the book; which chapter it is in comes from the book's contents — the
+ * same request, and the same cache key, as the book page.
+ */
+const { data: contents } = await useAsyncData(
+  () => `book:${bookSlug.value}`,
+  () => $fetch<{ chapters: Chapter[], lessons: LessonSummary[] }>(`/_api/books/${bookSlug.value}`)
+    .catch(() => null),
+  { watch: [bookSlug] },
+)
+
+const eyebrow = computed<string>(() => {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  const lessonNo = `lesson ${pad(data.value?.position ?? 1)}`
+  const chapterId = contents.value?.lessons.find(l => l.slug === lessonSlug.value)?.chapterId
+  const chapterAt = contents.value?.chapters.findIndex(c => c.id === chapterId) ?? -1
+
+  return chapterAt === -1 ? lessonNo : `chapter ${pad(chapterAt + 1)} · ${lessonNo}`
+})
 
 /**
  * The half of the lesson a reader has to have bought.
@@ -77,7 +81,7 @@ const lesson = computed(() => data.value?.lesson)
  * A 404 is the ordinary answer for a reader who has not bought it, so it is
  * not logged or shown — the paywall below is what it looks like.
  */
-interface Heading { id: string, text: string, locked: boolean }
+interface Heading { id: string, text: string, locked?: boolean }
 
 /**
  * The whole lesson, once the api has been asked as *this reader*.
@@ -93,31 +97,6 @@ interface Heading { id: string, text: string, locked: boolean }
  */
 const unlockedHtml = ref<string | null>(null)
 const unlockedToc = ref<Heading[] | null>(null)
-
-/**
- * The paywall card, mounted into the element the api left behind.
- *
- * `ohara::body` puts `<div data-paywall data-topics="…">` where the withheld
- * region stood, so the card lands mid-lesson rather than after it. It is
- * teleported into that element rather than the body being split around it:
- * splitting would mean several `[data-lesson-content]` containers, and the note
- * anchoring walks exactly one.
- *
- * One card, like the laravel app, which also mounts only the first.
- */
-const paywallTopics = ref<string[] | null>(null)
-
-function findPaywall(): void {
-  if (import.meta.server) return
-
-  const el = document.querySelector<HTMLElement>('[data-paywall]')
-
-  // `|` rather than json: the topics are lesson prose, and prose in a json
-  // attribute is a quoting problem waiting to happen.
-  paywallTopics.value = el
-    ? (el.dataset.topics ?? '').split('|').filter(Boolean)
-    : null
-}
 
 /**
  * The whole contents list: the free half's headings, then the paid half's.
@@ -151,7 +130,7 @@ async function unlock(): Promise<void> {
       html: string
       toc: Heading[]
       unlocked: boolean
-    }>(`/api/books/${bookSlug.value}/lessons/${lessonSlug.value}`, { query: langQuery.value })
+    }>(`/api/books/${bookSlug.value}/lessons/${lessonSlug.value}`)
 
     if (!full.unlocked) return
 
@@ -195,14 +174,11 @@ const readable = computed(() => unlockedHtml.value ?? data.value?.html ?? '')
 const activeId = ref<string>(data.value?.toc?.[0]?.id ?? '')
 
 /**
- * Where a heading counts as reached — just past the 110px `scroll-margin-top`
+ * Where a heading counts as reached — just past the 24px `scroll-margin-top`
  * the reader's headings carry, so a heading jumped to by its anchor lands on
  * the reading side of the line rather than a pixel above it.
  */
-const TOP_LINE = 116
-
-/** Percent of the page scrolled, for the progress bar. */
-const read = ref(0)
+const TOP_LINE = 32
 
 /**
  * The last heading to have crossed the line, or the last heading outright once
@@ -213,15 +189,6 @@ const read = ref(0)
  * measuring the rest.
  */
 const syncFromScroll = (): void => {
-  // How far down the document the reader is, for the bar across the top. Not
-  // `data.percent`: that is where this lesson sits in the book, which does not
-  // change while the page is open — the bar sat still because it was showing a
-  // number that never moves.
-  const scrollable = document.documentElement.scrollHeight - window.innerHeight
-  read.value = scrollable > 0
-    ? Math.min(100, Math.max(0, (window.scrollY / scrollable) * 100))
-    : 100
-
   const last = toc.value.at(-1)
 
   if (!last) return
@@ -612,20 +579,7 @@ onMounted(loadAnnotations)
 // After the free half is in the DOM, and again whenever the reader moves to
 // another lesson or their session resolves.
 onMounted(unlock)
-watch([lessonSlug, lang, isSignedIn], unlock)
-
-// The element is `v-html`, so it exists only after a paint. Re-checked when the
-// body changes — unlocking replaces it, and the card must go with the region it
-// was standing in for.
-onMounted(async () => {
-  await nextTick()
-  findPaywall()
-})
-
-watch([() => data.value?.html, unlockedHtml], async () => {
-  await nextTick()
-  findPaywall()
-})
+watch([lessonSlug, isSignedIn], unlock)
 
 /**
  * Prev and next stay on this route, so the component is reused and none of the
@@ -650,7 +604,6 @@ useSeo(() => ({
   title: `${lesson.value?.title} — ${book.value?.title}`,
   description: lesson.value?.description ?? '',
   type: 'article',
-  lang: data.value?.locale,
   image: book.value?.thumbnailUrl,
 }))
 
@@ -689,62 +642,14 @@ useJsonLd('crumbs', () => ({
 
 <template>
   <div v-if="data && book && lesson" class="reader-shell">
-    <div class="reader-progress"><span :style="{ width: `${read}%` }" /></div>
-
-    <div class="reader-subbar">
-      <div class="reader-subbar__inner">
-        <NuxtLink class="reader-subbar__book" :to="`/books/${book.slug}`">
-          {{ book.title }}
-        </NuxtLink>
-        <span class="reader-subbar__sep">›</span>
-        <span class="reader-subbar__cur">{{ lesson.title }}</span>
-        <span class="reader-subbar__spacer" />
-
-        <!-- Only once there is one. A control that is present and inert most of
-             the time reads as broken rather than as empty. -->
-        <button
-          v-if="currentBookmark"
-          type="button"
-          class="reader-iconbtn is-active"
-          @click="goToBookmark"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-            <path d="M6 3h12v18l-6-4.5L6 21z" />
-          </svg>
-          your bookmark
-        </button>
-        <button
-          v-if="currentBookmark"
-          type="button"
-          class="reader-iconbtn"
-          @click="removeBookmark"
-        >
-          remove
-        </button>
-
-        <span v-if="data.locales.length > 1" class="reader-subbar__rt">
-          <NuxtLink
-            v-for="code in data.locales"
-            :key="code"
-            :to="{ query: code === 'en' ? {} : { lang: code } }"
-            :hreflang="code"
-            :aria-current="code === data.locale ? 'true' : undefined"
-            :class="code === data.locale ? 'text-ink' : 'text-faint hover:text-ink'"
-            style="margin-right: 8px"
-          >{{ LANGUAGE_NAMES[code] ?? code }}</NuxtLink>
-        </span>
-        <span class="reader-subbar__rt">{{ data.readMinutes }} min read</span>
-      </div>
+    <div class="reader-progress" aria-hidden="true">
+      <span :style="{ width: `${data.percent}%` }" />
     </div>
 
-    <!-- No aside: this lesson has nothing to put in the third column. -->
-    <div class="reader-layout reader-layout--no-aside">
-      <!-- The aside stays in the dom even with nothing to list: it is the
-           first cell of `.reader-layout`'s `232px minmax(0, 796px) 184px`
-           grid, and removing it slides the article into the 232px column. -->
-      <aside class="reader-toc">
-        <div v-if="toc.length" class="reader-toc__label">On this page</div>
-        <nav v-if="toc.length" class="reader-toc__list">
+    <div class="reader-layout">
+      <aside v-if="toc.length" class="reader-toc" aria-label="on this page">
+        <span class="lh-eyebrow">on this page</span>
+        <nav class="reader-toc__list">
           <component
             :is="item.locked ? 'span' : 'a'"
             v-for="item in toc"
@@ -759,47 +664,71 @@ useJsonLd('crumbs', () => ({
       </aside>
 
       <article class="reader-article">
-        <h1>{{ lesson.title }}</h1>
-        <p v-if="lesson.description" class="reader-dek">{{ lesson.description }}</p>
+        <header class="reader-head">
+          <p class="lh-eyebrow">
+            <NuxtLink :to="`/books/${book.slug}`" class="lh-link">{{ book.title }}</NuxtLink>
+            · {{ eyebrow }}
+          </p>
+          <h1 class="lh-h1">{{ lesson.title }}</h1>
+          <p v-if="lesson.description" class="lh-lede">{{ lesson.description }}</p>
 
-        <div class="reader-prose" style="margin-top: 44px">
+          <div class="reader-meta">
+            <span class="lh-num">{{ data.readMinutes }} min read</span>
+            <span class="lh-num">{{ data.position }} of {{ data.total }}</span>
+            <!-- Only once there is one. A control that is present and inert
+                 most of the time reads as broken rather than as empty. -->
+            <template v-if="currentBookmark">
+              <button type="button" @click="goToBookmark">your bookmark →</button>
+              <button type="button" @click="removeBookmark">remove bookmark</button>
+            </template>
+          </div>
+        </header>
+
+        <div class="reader-body">
           <!-- eslint-disable-next-line vue/no-v-html -- authored markdown, rendered server side -->
           <div class="lesson-content" data-lesson-content v-html="readable" />
         </div>
 
-        <!--
-          Into the element the api left where the withheld region stood, so the
-          card reads as the chapter stopping mid-sentence rather than as a
-          footer. Client only: `Teleport` needs the target in the DOM, and the
-          target arrives with `v-html`.
-        -->
-        <Teleport v-if="paywallTopics" to="[data-paywall]">
-          <ReaderPaywall :topics="paywallTopics" :book="book.title" :book-slug="book.slug" />
-        </Teleport>
+        <div v-if="lesson.locked && !unlockedHtml" class="reader-paywall paywalled">
+          <hr class="lh-dashed">
+          <span class="lh-eyebrow">pro · {{ data.remainingSections }} more sections</span>
+          <h2 class="lh-h2">The rest of this lesson is part of {{ book.title }}</h2>
+          <p class="lh-sub">
+            The remaining sections, and the project that goes with them, come with a plan
+            that includes this book.
+          </p>
+          <div class="reader-paywall__actions">
+            <UiButton variant="inverse" size="lg" cta="pro" flame to="/pricing">Get Pro</UiButton>
+            <UiButton
+              v-if="!isSignedIn"
+              variant="ghost"
+              size="lg"
+              cta="free"
+              :to="`/login?redirect=${encodeURIComponent(route.fullPath)}`"
+            >
+              I already own it
+            </UiButton>
+          </div>
+        </div>
 
-        <!-- Above the thread: carrying on with the book is what most readers
-             want at the end of a lesson, and their own notes are what a few of
-             them want. Stacked on a phone — two lesson titles do not fit side
-             by side. -->
-        <div
-          class="mt-12 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center sm:gap-4"
-        >
-          <NuxtLink
+        <nav class="reader-pager" aria-label="lessons">
+          <UiButton
             v-if="data.previous"
+            variant="ghost"
+            size="lg"
             :to="`/books/${book.slug}/pages/${data.previous.slug}`"
-            class="btn-chalk text-sm text-ink"
           >
             ← {{ data.previous.title }}
-          </NuxtLink>
-          <span v-else />
-          <NuxtLink
+          </UiButton>
+          <UiButton
             v-if="data.next"
+            variant="ghost"
+            size="lg"
             :to="`/books/${book.slug}/pages/${data.next.slug}`"
-            class="btn-chalk text-sm text-ink"
           >
             {{ data.next.title }} →
-          </NuxtLink>
-        </div>
+          </UiButton>
+        </nav>
 
         <ReaderCommentsThread
           :notes="inReadingOrder"
@@ -818,11 +747,9 @@ useJsonLd('crumbs', () => ({
           @sign-in="signIn"
         />
       </article>
-
     </div>
 
-    <!-- The three floating pieces. Outside `.reader-layout` because all three
-         are `position: fixed` and belong to the viewport, not to the column. -->
+    <!-- The three floating pieces belong to the viewport, not the column. -->
     <ReaderSelectionMenu
       v-if="menuOpen && selected"
       :x="menuAt.x"

@@ -44,42 +44,28 @@ const owned = computed<Book[]>(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
-    <h1 class="mb-2 font-serif text-3xl tracking-tight text-ink sm:text-4xl">My books</h1>
-    <p class="text-mono-body mb-10">
-      <template v-if="access?.track">
-        everything on the {{ access.track }} track. pick up where you left off.
-      </template>
-      <template v-else-if="owned.length">pick up where you left off.</template>
-      <template v-else>the books you buy show up here.</template>
-    </p>
-
-    <div v-if="owned.length" class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-      <BookCard v-for="book in owned" :key="book.slug" :book="book" />
-    </div>
+  <AccountShell
+    title="My shelf"
+    :sub="access?.track
+      ? `Everything on the ${access.track} track. Pick up where you left off.`
+      : owned.length ? 'Pick up where you left off.' : 'The books you buy show up here.'"
+  >
+    <BookGrid v-if="owned.length" :books="owned" />
 
     <!-- A reader who has bought nothing. Not an error and not an empty grid —
          every book has free lessons, so the shelf is a real place to send
          them, and the tracks are what they would be buying. -->
-    <div v-else class="border-pencil-light rounded-md bg-panel py-16 text-center">
-      <p class="text-sm text-quiet">You have not bought a track yet.</p>
-      <p class="mt-2 text-sm text-quiet">
-        Every book's first lessons are free to read.
-      </p>
-      <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
-        <NuxtLink
-          to="/pricing"
-          class="rounded-md bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-ink-hover"
-        >
-          See the tracks
-        </NuxtLink>
-        <NuxtLink
-          to="/books"
-          class="border-stroke rounded-md border bg-panel px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-paper-warm"
-        >
-          Browse the shelf
-        </NuxtLink>
-      </div>
-    </div>
-  </div>
+    <EmptyState
+      v-else
+      class="lh-card"
+      eyebrow="nothing here yet"
+      heading="What will you read first?"
+      detail="You have not bought a track yet. Every book's first lessons are free to read."
+      :action="{ label: 'See the tracks', to: '/pricing' }"
+    >
+      <template #secondary>
+        <UiButton variant="ghost" size="lg" to="/books">Browse the shelf</UiButton>
+      </template>
+    </EmptyState>
+  </AccountShell>
 </template>

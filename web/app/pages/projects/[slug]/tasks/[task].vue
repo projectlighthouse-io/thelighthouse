@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import type { TaskPage } from '@/types/Content'
-
-// The brief is authored markdown and renders through `.lesson-content`, which
-// only exists inside `.reader-shell`. Imported here rather than globally for
-// the reason `main.css` gives: it is ~20kb no other route needs.
+// the reader's column, pager and prose
 import '@/assets/css/reader.css'
 
 const route = useRoute()
@@ -38,78 +35,82 @@ useSeo(() => ({
 
 <template>
   <div v-if="task" class="reader-shell">
-    <div class="reader-subbar">
-      <!-- The layout's own grid, borrowed: this page's gutter is empty, so the
-           breadcrumb has nothing to line up with unless it sits in the same
-           column the article does. See `reader.css`. -->
-      <div class="reader-layout reader-layout--no-aside reader-subbar__grid">
-        <div class="reader-subbar__gutter" />
-
-        <div class="reader-subbar__row">
-          <NuxtLink class="reader-subbar__book" :to="`/projects/${task.project.slug}`">
-            {{ task.project.name }}
-          </NuxtLink>
-          <span class="reader-subbar__sep">›</span>
-          <span class="reader-subbar__cur">{{ task.title }}</span>
-          <span class="reader-subbar__spacer" />
-
-          <!-- Only once the poll has answered — see the projects page. -->
-          <span v-if="mine?.status === 'challenge_completed'" class="reader-subbar__rt">
-            done · {{ mine.points_earned }} pts
-          </span>
-          <span v-else-if="mine && mine.attempts > 0" class="reader-subbar__rt">
-            {{ mine.attempts }} {{ mine.attempts === 1 ? 'attempt' : 'attempts' }}
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <div class="reader-layout reader-layout--no-aside">
-      <!-- A task carries no toc, so the gutter is empty. It still has to be
-           here: the article sits in the middle track of a three-track grid. -->
-      <aside class="reader-toc" />
-
+    <div class="reader-layout">
       <article class="reader-article">
-        <div class="reader-eyebrow">
-          task {{ String(task.position).padStart(2, '0') }} of {{ task.total }}
-        </div>
-        <h1>{{ task.title }}</h1>
+        <header class="reader-head">
+          <p class="lh-eyebrow">
+            <NuxtLink :to="`/projects/${task.project.slug}`" class="lh-link">{{ task.project.name }}</NuxtLink>
+            · task {{ String(task.position).padStart(2, '0') }} of {{ task.total }}
+          </p>
+          <h1 class="lh-h1">{{ task.title }}</h1>
 
-        <div v-if="task.html" class="reader-prose" style="margin-top: 44px">
+          <!-- Only once the poll has answered — see the project page. -->
+          <div v-if="mine" class="reader-meta">
+            <span v-if="mine.status === 'challenge_completed'" class="lh-num">
+              done · {{ mine.points_earned }} points
+            </span>
+            <span v-else-if="mine.attempts > 0" class="lh-num">
+              {{ mine.attempts }} {{ mine.attempts === 1 ? 'attempt' : 'attempts' }}
+            </span>
+          </div>
+        </header>
+
+        <div v-if="task.html" class="reader-body">
           <!-- eslint-disable-next-line vue/no-v-html -- authored markdown, rendered server side -->
           <div class="lesson-content" v-html="task.html" />
         </div>
 
-        <div class="border-pencil-light mt-12 rounded-md bg-panel p-8">
-          <p class="text-mono-body">
+        <div class="run">
+          <p class="lh-sub">
             Validators and hints run in your terminal, not here. luxctl reads the project's
             blueprint, checks your work on your own machine, and reports the outcome back.
           </p>
-
-          <pre class="mt-8 overflow-x-auto rounded-md bg-term-bg p-5 font-mono text-xs leading-relaxed text-term-text sm:text-sm"><span class="text-term-dim">$</span> luxctl projects start {{ task.project.slug }}
-<span class="text-term-dim">$</span> luxctl tasks submit
-  <span class="text-term-dim">→ running validator on your machine…</span>
-  <span class="text-term-green">✓ checks passed</span></pre>
+          <TerminalPanel tag="luxctl" note="run it on your own machine">
+            <pre class="commands"><span class="dim">$ </span>luxctl projects start {{ task.project.slug }}
+<span class="dim">$ </span>luxctl tasks submit
+  <span class="dim">→ running validator on your machine…</span>
+  <span class="ok">✓ checks passed</span></pre>
+          </TerminalPanel>
         </div>
 
-        <div class="mt-12 flex items-center justify-between gap-4">
-          <NuxtLink
+        <nav class="reader-pager" aria-label="tasks">
+          <UiButton
             v-if="task.previous"
+            variant="ghost"
+            size="lg"
             :to="`/projects/${task.project.slug}/tasks/${task.previous.slug}`"
-            class="btn-chalk text-sm text-ink"
           >
             ← {{ task.previous.title }}
-          </NuxtLink>
-          <span v-else />
-          <NuxtLink
+          </UiButton>
+          <UiButton
             v-if="task.next"
+            variant="ghost"
+            size="lg"
             :to="`/projects/${task.project.slug}/tasks/${task.next.slug}`"
-            class="btn-chalk text-sm text-ink"
           >
             {{ task.next.title }} →
-          </NuxtLink>
-        </div>
+          </UiButton>
+        </nav>
       </article>
     </div>
   </div>
 </template>
+
+<style scoped>
+.run {
+  display: grid;
+  gap: var(--space-6);
+  margin-top: var(--space-12);
+}
+
+.commands {
+  margin: 0;
+  padding: var(--space-4) 28px var(--space-6);
+  overflow-x: auto;
+  font: var(--text-code);
+  color: var(--term-bright);
+}
+
+.dim { color: var(--term-grey); }
+.ok { color: var(--term-green); }
+</style>

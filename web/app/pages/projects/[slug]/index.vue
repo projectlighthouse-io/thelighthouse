@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ProjectPage } from '@/types/Content'
+import type { ProjectPage, TocSection } from '@/types/Content'
 
 const route = useRoute()
 const slug = computed<string>(() => String(route.params.slug))
@@ -34,6 +34,43 @@ const resume = computed<string>(() => {
   return next?.slug ?? tasks[0]?.slug ?? ''
 })
 
+const unit = computed<string>(() => (project.value?.isChallenge ? 'tasks' : 'stages'))
+
+const eyebrow = computed<string>(() => {
+  const parts = [label.value, `${project.value?.tasksCount ?? 0} ${unit.value}`]
+  if (project.value?.difficulty) parts.push(project.value.difficulty)
+
+  return parts.join(' · ')
+})
+
+/** What a reader's progress says about one task, in a word. */
+function noteFor(slug: string): string | undefined {
+  const status = forTask(slug)?.status
+
+  if (status === 'challenge_completed') return 'done'
+  if (status === 'challenge_failed') return 'failed'
+
+  return undefined
+}
+
+const sections = computed<TocSection[]>(() => [{
+  key: 'stages',
+  eyebrow: progress.value
+    ? `${progress.value.completed} of ${progress.value.total} done`
+    : `${project.value?.tasks.length ?? 0} ${unit.value}`,
+  title: project.value?.isChallenge ? 'Tasks' : 'Stages',
+  rows: (project.value?.tasks ?? []).map(task => ({
+    n: String(task.sortOrder).padStart(2, '0'),
+    title: task.title,
+    blurb: `${task.points} points`,
+    to: `/projects/${slug.value}/tasks/${task.slug}`,
+    locked: !task.isFree || Boolean(forTask(task.slug)?.is_locked),
+    note: noteFor(task.slug),
+  })),
+}])
+
+const hasPro = computed<boolean>(() => (project.value?.tasks ?? []).some(task => !task.isFree))
+
 useSeo(() => ({
   title: `${project.value?.name} — projectlighthouse`,
   description: project.value?.shortDescription ?? '',
@@ -53,100 +90,96 @@ useJsonLd('project', () => ({
 </script>
 
 <template>
-  <div v-if="project" class="mx-auto max-w-3xl bg-panel px-6 sm:px-10">
-    <nav class="pt-10 pb-8 font-sans text-xs text-crumb">
-      <NuxtLink to="/projects" class="hover:text-ink">projects</NuxtLink>
-      <span class="mx-2">/</span>
-      <span class="text-faint">{{ project.slug }}</span>
-    </nav>
+  <div v-if="project" class="project">
+    <DetailHead
+      :eyebrow="eyebrow"
+      :title="project.name"
+      :description="project.shortDescription"
+    >
+      <template #actions>
+        <UiButton
+          v-if="resume"
+          variant="inverse"
+          size="lg"
+          cta="pro"
+          :to="`/projects/${project.slug}/tasks/${resume}`"
+        >
+          {{ progress && progress.completed > 0 ? 'Continue →' : `Start the ${label} →` }}
+        </UiButton>
+        <UiButton v-if="hasPro" variant="ghost" size="lg" cta="free" flame to="/pricing">
+          Get Pro
+        </UiButton>
+      </template>
+    </DetailHead>
 
-    <section class="pb-16">
-      <div>
-        <h1 class="masthead-title">
-          {{ project.name }}
-        </h1>
+    <div class="lh-figure run">
+      <TerminalPanel tag="luxctl" note="run it on your own machine">
+        <pre class="commands"><span class="dim">$ </span>luxctl projects start {{ project.slug }}
+<span class="dim">$ </span>luxctl tasks submit</pre>
+      </TerminalPanel>
+    </div>
 
-        <p class="masthead-dek">
-          {{ project.shortDescription }}
-        </p>
+    <div class="lh-figure stages">
+      <TocList :sections="sections" :unit="unit" />
+    </div>
 
-        <div class="mt-10">
-          <NuxtLink
-            :to="`/projects/${project.slug}/tasks/${resume}`"
-            class="inline-block rounded-md bg-ink px-5 py-3 text-base font-medium text-on-ink transition hover:bg-ink-hover"
-          >
-            {{ progress && progress.completed > 0 ? 'Continue' : `Start the ${label}` }}
-          </NuxtLink>
-        </div>
-
-        <div class="mt-14">
-          <div class="mb-6 flex items-baseline justify-between">
-            <h2 class="part-title">Tasks</h2>
-            <!-- Only once the poll has answered. A bare "0 / 8" drawn before
-                 the first response reads as "you have done none of this" to a
-                 reader who has finished it. -->
-            <span v-if="progress" class="font-mono text-xs tabular-nums text-faint">
-              {{ progress.completed }} / {{ progress.total }} done
-              <span v-if="progress.points_earned > 0" class="ml-2 text-teal">
-                {{ progress.points_earned }} pts
-              </span>
-            </span>
-          </div>
-
-          <NuxtLink
-            v-for="task in project.tasks"
-            :key="task.slug"
-            :to="`/projects/${project.slug}/tasks/${task.slug}`"
-            class="ch"
-          >
-            <span class="ch-no">{{ String(task.sortOrder).padStart(2, '0') }}</span>
-            <span class="ch-title">
-              {{ task.title }}
-              <span v-if="forTask(task.slug)?.status === 'challenge_completed'" class="pill pill-done">
-                done
-              </span>
-              <span
-                v-else-if="forTask(task.slug)?.status === 'challenge_failed'"
-                class="pill pill-muted"
-              >failed</span>
-              <span v-else-if="forTask(task.slug)?.is_locked" class="pill pill-muted">locked</span>
-              <span v-else class="pill pill-muted">{{ task.points }} pts</span>
-            </span>
-          </NuxtLink>
-        </div>
-
-        <div v-if="project.features.length" class="mt-14">
-          <h2 class="mb-6 font-serif text-2xl text-ink">What you'll build</h2>
-          <ul class="grid gap-6 sm:grid-cols-2">
-            <li v-for="feature in project.features" :key="feature.title">
-              <div class="font-editorial text-ink">{{ feature.title }}</div>
-              <p v-if="feature.description" class="mt-1 text-sm leading-relaxed text-quiet">
-                {{ feature.description }}
-              </p>
-            </li>
-          </ul>
-        </div>
+    <section v-if="project.features.length" class="lh-figure features">
+      <div class="head">
+        <p class="lh-eyebrow">what you will build</p>
       </div>
-
-      <aside class="mt-14">
-        <div class="border-pencil-light rounded-md bg-panel p-7">
-          <div class="font-mono text-xs tracking-wider uppercase text-teal">run it locally</div>
-          <pre class="mt-5 overflow-x-auto rounded-md bg-term-bg p-4 font-mono text-xs leading-relaxed text-term-text"><span class="text-term-dim">$</span> luxctl projects start {{ project.slug }}
-<span class="text-term-dim">$</span> luxctl tasks submit</pre>
-          <p class="mt-5 text-sm leading-relaxed text-quiet">
-            Everything runs on your own machine. luxctl validates your work and reports back.
-          </p>
-        </div>
-      </aside>
+      <ul class="feature-grid">
+        <li v-for="feature in project.features" :key="feature.title" class="lh-card">
+          <h3 class="lh-h3">{{ feature.title }}</h3>
+          <p v-if="feature.description" class="lh-sub">{{ feature.description }}</p>
+        </li>
+      </ul>
     </section>
+
+    <div class="end" aria-hidden="true">
+      <img src="/lighthouse.svg" alt="" width="20" height="20">
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* Lighter than the book's chapter rows. A lesson title is the only thing on
- * its row that carries weight; a task row is shorter and reads as a list of
- * steps rather than a table of contents, and 600 made it shout. */
-.ch-title {
-    font-weight: 500;
+.run { margin-top: var(--space-16); }
+
+.commands {
+  margin: 0;
+  padding: var(--space-4) 28px var(--space-6);
+  overflow-x: auto;
+  font: var(--text-code);
+  color: var(--term-bright);
+}
+
+.dim { color: var(--term-grey); }
+
+.stages { margin-top: var(--space-24); }
+
+.features { margin-top: var(--space-24); display: grid; gap: var(--space-4); }
+
+.features .head { padding: 0 var(--space-4); }
+
+.feature-grid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.feature-grid li { display: grid; gap: var(--space-2); align-content: start; }
+
+.end {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-24);
+}
+
+.end img { width: 20px; height: 20px; opacity: 0.35; }
+
+@media (max-width: 700px) {
+  .feature-grid { grid-template-columns: minmax(0, 1fr); }
 }
 </style>

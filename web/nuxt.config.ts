@@ -1,9 +1,29 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 
 const appDir = fileURLToPath(new URL('./app', import.meta.url))
 const serverDir = fileURLToPath(new URL('./server', import.meta.url))
+
+// What the footer prints. VERSION is the release; the commit comes from the
+// build environment (the image has no .git), else from git in a checkout, else
+// nothing — the footer then shows the version alone.
+const version = readFileSync(new URL('./VERSION', import.meta.url), 'utf8').trim()
+
+function commitOf(): string {
+  if (process.env.GIT_COMMIT) return process.env.GIT_COMMIT.slice(0, 8)
+
+  try {
+    return execSync('git rev-parse --short=8 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim()
+  }
+  catch {
+    return ''
+  }
+}
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
@@ -32,27 +52,16 @@ export default defineNuxtConfig({
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       ],
-      script: [
-        {
-          // Runs before first paint so the page never renders light and snaps
-          // to dark. Must stay inline and synchronous — deferred or hydrated
-          // is worse than having no dark mode at all.
-          innerHTML:
-            '(function(){try{var s=localStorage.getItem("theme");'
-            + 'var d=s==="dark"||(s!=="light"&&matchMedia("(prefers-color-scheme:dark)").matches);'
-            + 'var r=document.documentElement;'
-            + 'r.classList.toggle("dark",d);r.style.colorScheme=d?"dark":"light";}catch(e){}})()',
-          tagPosition: 'head',
-          tagPriority: 'critical',
-        },
-      ],
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/lighthouse.svg' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         {
           rel: 'stylesheet',
-          href: 'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@300;400;500;600&family=Fredericka+the+Great&family=Caveat:wght@400..700&family=Newsreader:opsz,wght@6..72,400..700&family=IM+Fell+English:ital@0;1&display=swap',
+          // Inter, Libre Baskerville and Geist Mono at the two weights the system
+          // uses; Fredericka the Great is the hero h1 and nothing else. The
+          // serif italic is for the author's sign-off and the desk's "now.".
+          href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Libre+Baskerville:ital,wght@0,400;1,400&family=Geist+Mono:wght@400;500&family=Fredericka+the+Great&display=swap',
         },
       ],
     },
@@ -65,6 +74,10 @@ export default defineNuxtConfig({
   // leaves the container. NUXT_API_BASE overrides it.
   runtimeConfig: {
     apiBase: 'http://127.0.0.1:9000',
+    public: {
+      version,
+      commit: commitOf(),
+    },
   },
 
   // Development only, and load-bearing: caddy fronts development too, and it
@@ -199,6 +212,9 @@ export default defineNuxtConfig({
     '/notes': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
     '/profile': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
     '/settings/**': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
+
+    // Per country, so never shared — see the handler.
+    '/_api/billing/offer': { headers: { 'cache-control': 'private, no-store' } },
 
     // Hashed filenames, so they can never go stale.
     '/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
