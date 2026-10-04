@@ -39,71 +39,79 @@ function on(date: string | null): string {
 </script>
 
 <template>
-  <SettingsShell>
-    <h2 class="font-serif text-2xl text-ink">Billing</h2>
-    <p class="mt-2 text-sm leading-relaxed text-quiet">
-      What you are paying for. Books you bought outright are not listed here —
-      they do not renew, and they stay yours.
-    </p>
+  <AccountShell
+    title="Billing"
+    sub="What you are paying for. Books you bought outright are not listed here — they do not renew, and they stay yours."
+  >
+    <p v-if="!resolved" class="lh-sub">Loading…</p>
 
-    <p v-if="!resolved" class="mt-8 text-sm text-quiet">Loading…</p>
-
-    <div v-else-if="!membership" class="mt-8 rounded-lg border border-dashed border-rule p-8 text-center">
-      <p class="text-sm text-quiet">You have no subscription.</p>
-      <NuxtLink
-        to="/pricing"
-        class="mt-4 inline-block rounded-md bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-ink-hover"
-      >
-        See the tracks
-      </NuxtLink>
+    <div v-else-if="!membership" class="lh-card empty">
+      <p class="lh-eyebrow">no subscription</p>
+      <p class="lh-sub">You are not subscribed to a track.</p>
+      <UiButton variant="inverse" size="lg" to="/pricing">See the tracks</UiButton>
     </div>
 
-    <div v-else class="mt-8 rounded-lg border border-rule p-6">
-      <div class="flex items-baseline justify-between">
-        <span class="font-editorial text-xl text-ink capitalize">{{ track }}</span>
-        <span class="text-sm text-quiet">{{ period }}</span>
-      </div>
+    <div v-else class="lh-card plan">
+      <dl class="lh-facts">
+        <dt>track</dt>
+        <dd>{{ track }}</dd>
+        <dt>billed</dt>
+        <dd>{{ period }}</dd>
+        <dt>status</dt>
+        <dd>
+          <!-- Grace is a failed payment being retried. Access has already
+               stopped, so saying "active" here would be a lie the reader can
+               see through. -->
+          <template v-if="membership.status === 'grace'">
+            A payment did not go through, and your books are closed until it does.
+            Update your card with your bank or try again.
+          </template>
+          <template v-else-if="ending">
+            Ends on {{ on(membership.cancel_at) }}. You keep everything until then.
+          </template>
+          <template v-else-if="membership.period_ends_at">
+            Renews on {{ on(membership.period_ends_at) }}.
+          </template>
+          <template v-else>{{ membership.status }}</template>
+        </dd>
+      </dl>
 
-      <!-- Grace is a failed payment being retried. Access has already stopped,
-           so saying "active" here would be a lie the reader can see through. -->
-      <p v-if="membership.status === 'grace'" class="mt-4 text-sm leading-relaxed text-quiet">
-        A payment did not go through, and your books are closed until it does.
-        Update your card with your bank or try again.
-      </p>
-      <p v-else-if="ending" class="mt-4 text-sm leading-relaxed text-quiet">
-        Ends on {{ on(membership.cancel_at) }}. You keep everything until then.
-      </p>
-      <p v-else-if="membership.period_ends_at" class="mt-4 text-sm leading-relaxed text-quiet">
-        Renews on {{ on(membership.period_ends_at) }}.
-      </p>
+      <p v-if="reason" class="lh-error" role="alert">{{ reason }}</p>
 
-      <p v-if="reason" class="mt-4 text-sm text-ink">{{ reason }}</p>
+      <hr class="lh-dashed">
 
-      <div class="mt-6 flex gap-3">
-        <button
-          v-if="ending"
-          type="button"
-          :disabled="busy"
-          class="rounded-md bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-ink-hover disabled:opacity-50"
-          @click="resume()"
-        >
+      <div class="actions">
+        <UiButton v-if="ending" variant="inverse" size="md" :disabled="busy" @click="resume()">
           {{ busy ? 'Working…' : 'Keep it' }}
-        </button>
-        <button
-          v-else-if="subscribed"
-          type="button"
-          :disabled="busy"
-          class="rounded-md border border-rule bg-panel px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-paper-warm disabled:opacity-50"
-          @click="cancel()"
-        >
+        </UiButton>
+        <UiButton v-else-if="subscribed" variant="ghost" size="md" :disabled="busy" @click="cancel()">
           {{ busy ? 'Working…' : 'Cancel' }}
-        </button>
-      </div>
+        </UiButton>
 
-      <p v-if="subscribed && !ending" class="mt-4 text-sm text-quiet">
-        Cancelling stops the renewal. You keep your books until
-        {{ on(membership.period_ends_at) }}.
-      </p>
+        <p v-if="subscribed && !ending" class="lh-hint">
+          Cancelling stops the renewal. You keep your books until
+          {{ on(membership.period_ends_at) }}.
+        </p>
+      </div>
     </div>
-  </SettingsShell>
+  </AccountShell>
 </template>
+
+<style scoped>
+.empty,
+.plan {
+  display: grid;
+  gap: var(--space-5);
+  justify-items: start;
+}
+
+.plan .lh-facts,
+.plan hr { width: 100%; }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+</style>

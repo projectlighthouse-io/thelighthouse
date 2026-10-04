@@ -120,84 +120,109 @@ const when = (at: string | null): string =>
 </script>
 
 <template>
-  <SettingsShell>
-    <h2 class="font-serif text-2xl text-ink">API tokens</h2>
-    <p class="mt-2 text-sm leading-relaxed text-quiet">
-      luxctl authenticates with a bearer token. Create one, copy it once, keep it somewhere safe.
-    </p>
-
-    <p v-if="problem" class="mt-4 text-sm text-red-700">{{ problem }}</p>
+  <AccountShell
+    title="API tokens"
+    sub="luxctl authenticates with a bearer token. Create one, copy it once, keep it somewhere safe."
+  >
+    <p v-if="problem" class="lh-error problem" role="alert">{{ problem }}</p>
 
     <!-- Shown once. The api keeps only a hash, so this cannot be recovered. -->
-    <div v-if="justMinted" class="mt-8 rounded-lg border border-rule bg-paper p-4">
-      <p class="text-sm font-medium text-ink">
-        Copy “{{ justMinted.name }}” now — it is not shown again.
-      </p>
-      <div class="mt-3 flex items-center gap-2">
+    <div v-if="justMinted" class="lh-card minted">
+      <p class="lh-eyebrow">copy “{{ justMinted.name }}” now — it is not shown again</p>
+      <div class="row">
         <input
           :value="justMinted.token_string"
           readonly
-          class="min-w-0 flex-1 rounded-md border border-rule bg-panel px-3 py-2 font-mono text-xs text-ink"
+          class="lh-input token"
+          aria-label="your new token"
           @focus="(e) => (e.target as HTMLInputElement).select()"
         >
-        <button
-          type="button"
-          class="rounded-md bg-ink px-4 py-2 text-sm font-medium text-on-ink"
-          @click="copy"
-        >
-          {{ copied ? 'Copied' : 'Copy' }}
-        </button>
+        <UiButton variant="inverse" size="md" @click="copy">{{ copied ? 'Copied' : 'Copy' }}</UiButton>
       </div>
-      <p class="mt-2 text-xs text-quiet">
-        Then run <code>lux auth --token &lt;token&gt;</code>.
-      </p>
+      <p class="lh-hint">Then run <code>lux auth --token &lt;token&gt;</code>.</p>
     </div>
 
-    <form class="mt-8 flex items-center gap-2" @submit.prevent="create">
+    <form class="row create" @submit.prevent="create">
+      <label class="lh-sr" for="token-name">what the token is for</label>
       <input
+        id="token-name"
         v-model="name"
         placeholder="What is it for? e.g. my laptop"
         maxlength="60"
-        class="min-w-0 flex-1 rounded-md border border-rule px-3 py-2.5 text-sm transition outline-none placeholder:text-faint focus:border-ink"
+        class="lh-input"
       >
-      <button
-        type="submit"
-        :disabled="busy || !name.trim()"
-        class="rounded-md bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-ink-hover disabled:opacity-50"
-      >
+      <UiButton type="submit" variant="inverse" size="md" :disabled="busy || !name.trim()">
         Create token
-      </button>
+      </UiButton>
     </form>
 
-    <div v-if="tokens.length" class="mt-8 overflow-hidden rounded-lg border border-rule">
-      <div
-        v-for="token in tokens"
-        :key="token.id"
-        class="flex items-center justify-between gap-4 border-b border-rule px-4 py-3 last:border-b-0"
-      >
-        <div class="min-w-0">
-          <p class="truncate text-sm font-medium text-ink">{{ token.name }}</p>
-          <p class="mt-0.5 text-xs text-quiet">
+    <ul v-if="tokens.length" class="tokens">
+      <li v-for="token in tokens" :key="token.id" class="lh-card item">
+        <div class="who">
+          <span class="lh-h3">{{ token.name }}</span>
+          <span class="lh-mono lh-muted">
             created {{ when(token.created_at) }} · last used {{ when(token.last_used_at) }}
-          </p>
+          </span>
         </div>
-        <button
-          type="button"
-          :disabled="busy"
-          class="shrink-0 rounded-md px-2.5 py-1.5 text-sm text-quiet transition hover:bg-paper-warm hover:text-rose disabled:opacity-50"
-          @click="revoke(token)"
-        >
-          Revoke
-        </button>
-      </div>
-    </div>
+        <UiButton variant="ghost" size="sm" :disabled="busy" @click="revoke(token)">Revoke</UiButton>
+      </li>
+    </ul>
 
-    <div v-else class="mt-8 rounded-lg border border-dashed border-rule p-8 text-center">
-      <p class="text-sm text-quiet">No tokens yet.</p>
-    </div>
+    <p v-else class="lh-card lh-sub none">No tokens yet.</p>
 
-    <p class="mt-6 text-sm text-quiet">
+    <p class="lh-hint after">
       A token is shown once at creation and never again. If you lose it, revoke it and make another.
     </p>
-  </SettingsShell>
+  </AccountShell>
 </template>
+
+<style scoped>
+.problem { margin-bottom: var(--space-4); }
+
+.minted {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-8);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.row .lh-input { flex: 1; min-width: 0; }
+
+.token { font: var(--text-code); }
+
+code { font: var(--text-code); color: var(--ink); }
+
+.tokens {
+  margin: var(--space-8) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.who {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.none { margin-top: var(--space-8); }
+
+.after { margin-top: var(--space-6); }
+
+@media (max-width: 560px) {
+  .row { flex-direction: column; align-items: stretch; }
+}
+</style>
