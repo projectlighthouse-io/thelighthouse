@@ -165,7 +165,7 @@ run: ## run the built image locally on PORT, configured from .env
 	docker run --rm -p $(PORT):8080 --env-file .env $(IMAGE):local
 
 login: ## authenticate to the DO registry
-	doctl registry login --context lighthouse
+	doctl registry login --context thelighthouse
 
 # login first — DO registry credentials expire, and a stale docker credential
 # fails the push looking like a doctl auth problem
