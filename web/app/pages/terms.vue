@@ -14,15 +14,14 @@ useJsonLd('page', {
 </script>
 
 <template>
-  <div class="reader-shell">
-    <div class="legal-layout">
-      <article class="reader-article">
-        <div class="reader-eyebrow">legal</div>
-        <h1>Terms of Service</h1>
-        <p class="reader-dek">Last updated: February 2026</p>
+  <article class="page lh-text lh-gap">
+    <header class="lh-head">
+      <p class="lh-eyebrow">legal</p>
+      <h1 class="lh-h1">Terms of Service</h1>
+      <p class="lh-sub">Last updated: February 2026</p>
+    </header>
 
-        <div class="reader-prose mt-11">
-          <div class="lesson-content" data-lesson-content>
+    <div class="lesson-content body is-legal">
             <p>Hi, it's Aryan.</p>
             <p>
               Most terms of service read like they were written by a committee of
@@ -55,7 +54,7 @@ useJsonLd('page', {
               projectlighthouse offers interactive books, hands-on labs, and
               coding projects. Some content is free. Some requires a paid
               subscription. What's included in each tier is shown on the
-              <a to="/subscriptionsindex">subscriptions page</a>.
+              <NuxtLink to="/pricing">pricing page</NuxtLink>.
             </p>
             <p>
               I'm always adding and updating content. That means things might
@@ -208,7 +207,7 @@ useJsonLd('page', {
               just talk things through.
             </p>
 
-            <hr class="legal-hr" >
+            <hr>
             <p>
               The spirit behind all of this is straightforward: use the platform
               to learn, respect the content and the community, and don't do
@@ -220,30 +219,10 @@ useJsonLd('page', {
               rather explain something than have you wonder about it.
             </p>
             <p>&mdash; Aryan</p>
-          </div>
-        </div>
-      </article>
     </div>
-  </div>
+  </article>
 </template>
 
 <style scoped>
-.legal-layout {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 72px 40px 96px;
-}
-
-.legal-hr {
-  border: none;
-  height: 1px;
-  background: var(--color-read-line-soft);
-  margin: 40px 0 28px;
-}
-
-@media (max-width: 880px) {
-  .legal-layout {
-    padding: 40px 20px 80px;
-  }
-}
+.body { margin-top: var(--space-12); }
 </style>

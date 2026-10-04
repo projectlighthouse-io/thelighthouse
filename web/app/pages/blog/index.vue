@@ -28,41 +28,32 @@ useJsonLd('blog', {
 </script>
 
 <template>
-  <div>
-    <section class="py-16">
-      <div class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8 text-center">
-        <h1 class="mb-4 font-serif text-4xl tracking-tight text-ink sm:text-5xl">Blog</h1>
-        <p class="text-mono-body">notes from the workshop floor.</p>
-      </div>
-    </section>
+  <div class="blog lh-text lh-gap">
+    <div class="lh-head">
+      <p class="lh-eyebrow">blog</p>
+      <h1 class="lh-h1">Notes from the workshop floor</h1>
+    </div>
 
-    <section class="pb-20">
-      <div class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8">
-        <article
-          v-for="post in sorted"
-          :key="post.slug"
-          class="border-b border-dashed border-rule-soft py-8 last:border-b-0"
-        >
-          <div class="mb-2 flex flex-wrap items-center gap-3 font-mono text-xs text-faint">
-            <time :datetime="post.publishedAt">{{ post.publishedAt }}</time>
-            <span>·</span>
-            <span>{{ post.readMinutes }} min read</span>
-            <span v-for="tag in post.tags" :key="tag" class="text-teal">#{{ tag }}</span>
-          </div>
-
-          <h2 class="font-editorial text-2xl text-ink sm:text-3xl font-semibold">
-            <NuxtLink :to="`/blog/${post.slug}`" class="hover:text-link-hover">
-              {{ post.title }}
-            </NuxtLink>
-          </h2>
-
-          <p class="mt-3 font-serif text-base leading-relaxed text-quiet">{{ post.description }}</p>
-
-          <NuxtLink :to="`/blog/${post.slug}`" class="btn-chalk mt-4 text-sm font-medium text-ink">
-            read <span class="ml-1">———→</span>
-          </NuxtLink>
-        </article>
-      </div>
-    </section>
+    <ol class="list">
+      <li v-for="post in sorted" :key="post.slug">
+        <PostRow
+          :to="`/blog/${post.slug}`"
+          :eyebrow="`${post.publishedAt} · ${post.readMinutes} min read${post.tags.length ? ' · ' + post.tags.map(t => '#' + t).join(' ') : ''}`"
+          :datetime="post.publishedAt"
+          :title="post.title"
+          :caption="post.description"
+        />
+      </li>
+    </ol>
   </div>
 </template>
+
+<style scoped>
+.list {
+  margin: var(--space-12) calc(var(--space-4) * -1) 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+</style>

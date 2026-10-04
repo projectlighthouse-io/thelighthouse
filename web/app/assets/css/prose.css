@@ -169,3 +169,11 @@
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }
 }
+
+/* terms and privacy: sections open on a mono eyebrow rather than a heading */
+.lesson-content.is-legal h2 {
+  margin: var(--space-12) 0 var(--space-3);
+  font: var(--text-label-mono);
+  letter-spacing: 0;
+  color: var(--ink-muted);
+}
