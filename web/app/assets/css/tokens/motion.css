@@ -1,0 +1,23 @@
+/* Short, eased-out, interruptible. Exits are quieter than entrances.
+   Nothing bounces. The house transition is the source page's copy-button swap:
+   opacity 0 / scale 0.25 / blur(4px) -> opacity 1 / scale 1 / blur(0), 0.2s easeOut. */
+:root {
+  --duration-fast: 120ms; /* @kind other */
+  --duration: 200ms; /* @kind other */
+  --duration-slow: 320ms; /* @kind other */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1); /* @kind other */
+  --transition-control: box-shadow var(--duration) var(--ease-out),
+    background-color var(--duration) var(--ease-out),
+    color var(--duration) var(--ease-out),
+    opacity var(--duration) var(--ease-out);
+  --enter-scale: 0.25; /* @kind other */
+  --enter-blur: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms; /* @kind other */
+    --duration: 0ms; /* @kind other */
+    --duration-slow: 0ms; /* @kind other */
+  }
+}

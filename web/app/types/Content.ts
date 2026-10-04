@@ -21,11 +21,6 @@ export interface Book {
   images?: string[]
 }
 
-export interface HeroStat {
-  value: string
-  label: string
-}
-
 export interface Project {
   slug: string
   name: string
@@ -105,12 +100,23 @@ export interface ProjectProgress {
   tasks: TaskProgress[]
 }
 
-export interface HorizonBook {
+/** A book being written, as the desk shows it. */
+export interface Manuscript {
   title: string
+  /** `next` is next on the shelf; `drafting` has chapters; `outlined` has none yet. */
+  status: 'next' | 'drafting' | 'outlined'
   description: string
+  chapters: string[]
+  /** How many of `chapters`, from the start, are written. */
+  written: number
+  excerpt: { from: string, text: string } | null
+  /** ISO date. Shown relative once the page is running in a browser. */
+  editedAt: string
 }
 
 export interface Testimonial {
+  /** The line the mailbox lists it under — a summary, never a name. */
+  subject: string
   quote: string
 }
 
@@ -204,4 +210,12 @@ export interface LessonResponse {
   percent: number
   previous: { slug: string, title: string } | null
   next: { slug: string, title: string } | null
+}
+
+/** The purchasing-power offer for the reader's country, as `/_api/billing/offer` sends it. */
+export interface PppOffer {
+  /** ISO 3166 alpha-2. The page turns it into a name. */
+  country: string
+  code: string
+  percent: number
 }

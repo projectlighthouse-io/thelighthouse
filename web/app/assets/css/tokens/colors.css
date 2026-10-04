@@ -1,0 +1,89 @@
+/* Measured off the rendered source page. Light is sampled; dark is an inferred
+   inversion built on the same relationships (page darker than card, ink flipped,
+   accent held constant).
+
+   Dark is opt-in only, through data-theme="dark". The prefers-color-scheme
+   block from the handoff is left out until dark mode is designed and checked —
+   otherwise every reader on a dark OS would get the unverified palette. */
+:root {
+  /* surfaces */
+  --surface-page: #fcfcfc;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f9f9f9;
+  --surface-muted: #f0f0f0;
+  --surface-inverse: #202020;
+
+  /* ink */
+  --ink: #202020;
+  --ink-secondary: #424242;
+  --ink-muted: #838383;
+  --ink-faint: #a8a8a8;
+  --ink-inverse: #ffffff;
+
+  /* lines */
+  --border: #e8e8e8;
+  --border-strong: #e0e0e0;
+  --border-dashed: #dcdcdc;
+
+  /* accent — the single brand hue */
+  --accent: #5aabf3;
+  --accent-strong: #2b7fd4;
+  --accent-tint: #f3f6fc;
+  --accent-ink: #ffffff;
+  --focus-ring: #5aabf3;
+
+  /* annotation-only pink: the one colour outside the palette */
+  --swatch-pink: rgba(236, 130, 178, 0.28);
+  --swatch-pink-line: rgba(236, 130, 178, 0.55);
+  --swatch-pink-ink: #c2568f;
+}
+
+/* Explicit light scope, so data-theme="light" wins over the auto-dark media query. */
+:root[data-theme="light"] {
+  --surface-page: #fcfcfc;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f9f9f9;
+  --surface-muted: #f0f0f0;
+  --surface-inverse: #202020;
+  --ink: #202020;
+  --ink-secondary: #424242;
+  --ink-muted: #838383;
+  --ink-faint: #a8a8a8;
+  --ink-inverse: #ffffff;
+  --border: #e8e8e8;
+  --border-strong: #e0e0e0;
+  --border-dashed: #dcdcdc;
+  --accent: #5aabf3;
+  --accent-strong: #2b7fd4;
+  --accent-tint: #f3f6fc;
+  --accent-ink: #ffffff;
+  --focus-ring: #5aabf3;
+}
+
+:root[data-theme="dark"] {
+  --surface-page: #111111;
+  --surface-raised: #1a1a1a;
+  --surface-sunken: #0d0d0d;
+  --surface-muted: #222222;
+  --surface-inverse: #f2f2f2;
+  --ink: #f2f2f2;
+  --ink-secondary: #c9c9c9;
+  --ink-muted: #8a8a8a;
+  --ink-faint: #6b6b6b;
+  --ink-inverse: #111111;
+  --border: #2a2a2a;
+  --border-strong: #343434;
+  --border-dashed: #303030;
+  --accent: #5aabf3;
+  --accent-strong: #7dc0ff;
+  --accent-tint: #172230;
+  --accent-ink: #ffffff;
+  --focus-ring: #7dc0ff;
+  --swatch-pink: rgba(236, 130, 178, 0.22);
+  --swatch-pink-line: rgba(236, 130, 178, 0.45);
+  --swatch-pink-ink: #e58cbb;
+  --shadow-hairline: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.07);
+}

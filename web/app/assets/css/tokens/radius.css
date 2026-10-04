@@ -1,0 +1,14 @@
+/* Controls are pills. Containers are md. There is no third option.
+   Nested radii are concentric: inner radius + padding = outer radius. */
+:root {
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+
+  --radius-control: var(--radius-full);
+  --radius-container: var(--radius-md);
+  --radius-frame: var(--radius-lg);
+}

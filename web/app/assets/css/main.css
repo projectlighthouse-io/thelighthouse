@@ -12,6 +12,17 @@
 @import './transition.css';
 @import './masthead.css';
 
+/* the design system: tokens in the handoff's order, then the shared layer */
+@import './tokens/fonts.css';
+@import './tokens/colors.css';
+@import './tokens/typography.css';
+@import './tokens/spacing.css';
+@import './tokens/radius.css';
+@import './tokens/elevation.css';
+@import './tokens/motion.css';
+@import './tokens/base.css';
+@import './system.css';
+
 /* reader.css is NOT imported here on purpose — it is one system scoped under
    .reader-shell and only the lesson page needs it, so that page imports it
    itself and every other route stops shipping ~20kb it never uses. */
