@@ -37,17 +37,16 @@ RUN apk add --no-cache musl-dev
 
 WORKDIR /build
 
-# Manifests first: dependencies only rebuild when they actually change, which
-# is the difference between a 20-second and a four-minute rebuild.
-COPY Cargo.toml Cargo.lock* ./
-COPY crates/api/Cargo.toml ./crates/api/
-RUN mkdir -p crates/api/src \
-    && echo 'fn main() {}' > crates/api/src/main.rs \
-    && cargo build --release --locked 2>/dev/null || cargo build --release
-
+COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
-# cargo skips a rebuild if mtime looks unchanged, and the stub above shares one
-RUN touch crates/api/src/main.rs && cargo build --release
+
+# Cache mounts rather than a stub-manifest layer: the workspace has several
+# crates and every one needs a real manifest before cargo will resolve it. The
+# mounted target dir does not survive into the layer, hence the copy out.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/build/target \
+    cargo build --release --locked -p lighthouse-api \
+    && cp target/release/lighthouse-api /usr/local/bin/lighthouse-api
 
 # runtime
 FROM caddy:${CADDY_VERSION} AS runtime
@@ -66,7 +65,7 @@ ENV NUXT_PORT=3000
 
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY --from=api-build /build/target/release/lighthouse-api /usr/local/bin/lighthouse-api
+COPY --from=api-build /usr/local/bin/lighthouse-api /usr/local/bin/lighthouse-api
 COPY --from=web-build /build/.output /app/web
 
 RUN chmod +x /usr/local/bin/entrypoint.sh \
