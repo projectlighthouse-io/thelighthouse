@@ -173,6 +173,45 @@ async function unlock(): Promise<void> {
 const readable = computed(() => unlockedHtml.value ?? data.value?.html ?? '')
 
 /**
+ * The paywall card, mounted into the element the api left behind.
+ *
+ * `ohara::body` puts `<div data-paywall data-topics="…">` where the withheld
+ * region stood, so the card lands mid-lesson rather than after it. It is
+ * teleported into that element rather than the body being split around it:
+ * splitting would mean several `[data-lesson-content]` containers, and the note
+ * anchoring walks exactly one.
+ *
+ * Null until found, and on the server: until then the card renders after the
+ * body instead, so a lesson without the marker still has a paywall.
+ */
+const paywallTopics = ref<string[] | null>(null)
+
+function findPaywall(): void {
+  if (import.meta.server) return
+
+  const el = document.querySelector<HTMLElement>('[data-paywall]')
+
+  // `|` rather than json: the topics are lesson prose, and prose in a json
+  // attribute is a quoting problem waiting to happen.
+  paywallTopics.value = el
+    ? (el.dataset.topics ?? '').split('|').filter(Boolean)
+    : null
+}
+
+// The element is `v-html`, so it exists only after a paint. Re-checked when the
+// body changes — unlocking replaces it, and the card must go with the region it
+// was standing in for.
+onMounted(async () => {
+  await nextTick()
+  findPaywall()
+})
+
+watch(readable, async () => {
+  await nextTick()
+  findPaywall()
+})
+
+/**
  * Which contents entry is highlighted: the section actually being read.
  *
  * Scroll position, not the url. The hash only says where the reader jumped
@@ -728,27 +767,21 @@ useJsonLd('crumbs', () => ({
           <div class="lesson-content" data-lesson-content v-html="readable" />
         </div>
 
-        <div v-if="lesson.locked && !unlockedHtml" class="reader-paywall paywalled">
-          <hr class="lh-dashed">
-          <span class="lh-eyebrow">pro · {{ data.remainingSections }} more sections</span>
-          <h2 class="lh-h2">The rest of this lesson is part of {{ book.title }}</h2>
-          <p class="lh-sub">
-            The remaining sections, and the project that goes with them, come with a plan
-            that includes this book.
-          </p>
-          <div class="reader-paywall__actions">
-            <UiButton variant="inverse" size="lg" cta="pro" flame to="/pricing">Get Pro</UiButton>
-            <UiButton
-              v-if="!isSignedIn"
-              variant="ghost"
-              size="lg"
-              cta="free"
-              :to="`/login?redirect=${encodeURIComponent(route.fullPath)}`"
-            >
-              I already own it
-            </UiButton>
-          </div>
-        </div>
+        <!--
+          Into the element the api left where the withheld region stood, so the
+          card reads as the chapter stopping mid-sentence rather than as a
+          footer. Client only: `Teleport` needs the target in the DOM, and the
+          target arrives with `v-html`.
+        -->
+        <Teleport v-if="lesson.locked && !unlockedHtml && paywallTopics" to="[data-paywall]">
+          <ReaderPaywall class="paywalled" :topics="paywallTopics" :book="book.title" :book-slug="book.slug" />
+        </Teleport>
+        <ReaderPaywall
+          v-else-if="lesson.locked && !unlockedHtml"
+          class="paywalled"
+          :book="book.title"
+          :book-slug="book.slug"
+        />
 
         <nav class="reader-pager" aria-label="lessons">
           <UiButton

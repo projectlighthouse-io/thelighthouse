@@ -105,19 +105,6 @@ a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink);
 }
 
 /* the locked half: dashed rule, mono label, one button */
-.reader-paywall {
-  display: grid;
-  gap: var(--space-4);
-  margin-top: var(--space-12);
-}
-
-.reader-paywall__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
-}
-
 .reader-pager {
   display: flex;
   flex-wrap: wrap;

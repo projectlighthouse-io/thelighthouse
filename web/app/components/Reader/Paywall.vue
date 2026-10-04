@@ -181,7 +181,7 @@ async function buy(): Promise<void> {
          reads as more rather than as an ending. -->
     <div class="wall__fade" aria-hidden="true" />
 
-    <section class="wall__card border-pencil">
+    <section class="wall__card">
       <p class="wall__eyebrow">keep reading</p>
 
       <h2 class="wall__title">There's more to this story</h2>
@@ -301,7 +301,7 @@ async function buy(): Promise<void> {
     margin: 24px 0;
 }
 
-/* Sits above the card and over the prose before it. `--color-read-bg` rather
+/* Sits above the card and over the prose before it. `--surface-page` rather
    than white, so it fades into the reader's own ground in either theme. */
 .wall__fade {
     pointer-events: none;
@@ -310,13 +310,14 @@ async function buy(): Promise<void> {
     right: 0;
     left: 0;
     height: 128px;
-    background: linear-gradient(to bottom, transparent, var(--color-read-bg));
+    background: linear-gradient(to bottom, transparent, var(--surface-page));
 }
 
 .wall__card {
     position: relative;
+    border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--color-panel);
+    background: var(--surface-raised);
     padding: 34px 32px;
 }
 
@@ -326,7 +327,7 @@ async function buy(): Promise<void> {
     font-size: 11px;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--color-teal-deep);
+    color: var(--accent-strong);
 }
 
 .wall__title {
@@ -336,7 +337,7 @@ async function buy(): Promise<void> {
     font-size: 30px;
     line-height: 1.1;
     letter-spacing: -0.015em;
-    color: var(--color-ink);
+    color: var(--ink);
 }
 
 .wall__sub {
@@ -345,13 +346,13 @@ async function buy(): Promise<void> {
     font-family: var(--font-serif);
     font-size: 17px;
     line-height: 1.62;
-    color: var(--color-read-ink-soft);
+    color: var(--ink-secondary);
     text-wrap: pretty;
 }
 
 .wall__topic {
     font-weight: 500;
-    color: var(--color-ink);
+    color: var(--ink);
 }
 
 .wall__perks {
@@ -364,12 +365,12 @@ async function buy(): Promise<void> {
     font-family: var(--font-serif);
     font-size: 16px;
     line-height: 1.45;
-    color: var(--color-read-ink-soft);
+    color: var(--ink-secondary);
 }
 
 .wall__perks b {
     font-weight: 600;
-    color: var(--color-ink);
+    color: var(--ink);
 }
 
 .wall__plans-head {
@@ -378,7 +379,7 @@ async function buy(): Promise<void> {
     font-weight: 600;
     font-size: 20px;
     letter-spacing: -0.01em;
-    color: var(--color-ink);
+    color: var(--ink);
 }
 
 .wall__plans {
@@ -393,7 +394,7 @@ async function buy(): Promise<void> {
     gap: 14px;
     width: 100%;
     padding: 14px 18px;
-    border: 1px solid var(--color-rule);
+    border: 1px solid var(--border);
     border-radius: 6px;
     background: none;
     cursor: pointer;
@@ -404,12 +405,12 @@ async function buy(): Promise<void> {
 }
 
 .wall__plan:hover {
-    border-color: var(--color-stroke);
+    border-color: var(--border-strong);
 }
 
 .wall__plan--on {
-    border-color: var(--color-teal-deep);
-    background: var(--color-teal-wash);
+    border-color: var(--accent-strong);
+    background: var(--accent-tint);
 }
 
 .wall__radio {
@@ -418,7 +419,7 @@ async function buy(): Promise<void> {
     width: 18px;
     height: 18px;
     flex: none;
-    border: 1.5px solid var(--color-stroke);
+    border: 1.5px solid var(--border-strong);
     border-radius: 50%;
     transition: border-color 140ms;
 }
@@ -428,13 +429,13 @@ async function buy(): Promise<void> {
     width: 9px;
     height: 9px;
     border-radius: 50%;
-    background: var(--color-teal-deep);
+    background: var(--accent-strong);
     transform: scale(0);
     transition: transform 160ms;
 }
 
 .wall__plan--on .wall__radio {
-    border-color: var(--color-teal-deep);
+    border-color: var(--accent-strong);
 }
 
 .wall__plan--on .wall__radio::after {
@@ -451,7 +452,7 @@ async function buy(): Promise<void> {
     font-family: var(--font-sans);
     font-weight: 600;
     font-size: 16px;
-    color: var(--color-ink);
+    color: var(--ink);
 }
 
 .wall__plan-desc {
@@ -459,7 +460,7 @@ async function buy(): Promise<void> {
     margin-top: 2px;
     font-family: var(--font-serif);
     font-size: 14px;
-    color: var(--color-quiet);
+    color: var(--ink-secondary);
 }
 
 .wall__price {
@@ -472,14 +473,14 @@ async function buy(): Promise<void> {
     font-family: var(--font-serif);
     font-weight: 600;
     font-size: 21px;
-    color: var(--color-ink);
+    color: var(--ink);
 }
 
 .wall__price span {
     margin-left: 3px;
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--color-quiet);
+    color: var(--ink-secondary);
 }
 
 /* The list price beside the reduced one. Quiet and small: it is context for
@@ -488,35 +489,35 @@ async function buy(): Promise<void> {
     margin-right: 5px;
     font-family: var(--font-serif);
     font-size: 15px;
-    color: var(--color-faint);
+    color: var(--ink-faint);
 }
 
 .wall__ppp {
     margin: 12px 0 0;
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--color-quiet);
+    color: var(--ink-secondary);
 }
 
 .wall__ppp code {
     padding: 1px 5px;
-    border: 1px solid var(--color-stroke);
+    border: 1px solid var(--border-strong);
     border-radius: 3px;
-    color: var(--color-ink);
+    color: var(--ink);
 }
 
 .wall__reason {
     margin: 12px 0 0;
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--color-pencil-red);
+    color: var(--ink);
 }
 
 .wall__summary {
     margin: 0;
     font-family: var(--font-serif);
     font-size: 14px;
-    color: var(--color-quiet);
+    color: var(--ink-secondary);
 }
 
 .wall__actions {
@@ -528,23 +529,23 @@ async function buy(): Promise<void> {
 .wall__view {
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--color-quiet);
+    color: var(--ink-secondary);
     transition: color 140ms;
 }
 
 .wall__view:hover {
-    color: var(--color-ink);
+    color: var(--ink);
 }
 
 .wall__note {
     margin: 18px 0 0;
     font-family: var(--font-serif);
     font-size: 14px;
-    color: var(--color-quiet);
+    color: var(--ink-secondary);
 }
 
 .wall__note a {
-    color: var(--color-teal-deep);
+    color: var(--accent-strong);
     text-decoration: underline;
     text-underline-offset: 2px;
 }
@@ -562,17 +563,17 @@ async function buy(): Promise<void> {
     border: 0;
     cursor: pointer;
     border-radius: 6px;
-    background: var(--color-ink);
+    background: var(--ink);
     padding: 13px 22px;
     font-family: var(--font-sans);
     font-size: 15px;
     font-weight: 500;
-    color: var(--color-on-ink);
+    color: var(--ink-inverse);
     transition: background 140ms;
 }
 
 .wall__buy:hover:not(:disabled) {
-    background: var(--color-ink-hover);
+    background: var(--ink-secondary);
 }
 
 .wall__buy:disabled {
