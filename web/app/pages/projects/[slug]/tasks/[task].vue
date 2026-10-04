@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { TaskPage } from '@/types/Content'
+// the reader's column, pager and prose
+import '@/assets/css/reader.css'
 
 const route = useRoute()
 const slug = computed<string>(() => String(route.params.slug))
@@ -32,72 +34,83 @@ useSeo(() => ({
 </script>
 
 <template>
-  <div v-if="task" class="mx-auto max-w-3xl px-2 sm:px-6 lg:px-8">
-    <nav class="pt-10 pb-8 font-mono text-sm text-faint">
-      <NuxtLink to="/projects" class="hover:text-ink">projects</NuxtLink>
-      <span class="mx-3 text-crumb">/</span>
-      <NuxtLink :to="`/projects/${task.project.slug}`" class="hover:text-ink">
-        {{ task.project.slug }}
-      </NuxtLink>
-      <span class="mx-3 text-crumb">/</span>
-      <span class="text-quiet">{{ task.slug }}</span>
-    </nav>
+  <div v-if="task" class="reader-shell">
+    <div class="reader-layout">
+      <article class="reader-article">
+        <header class="reader-head">
+          <p class="lh-eyebrow">
+            <NuxtLink :to="`/projects/${task.project.slug}`" class="lh-link">{{ task.project.name }}</NuxtLink>
+            · task {{ String(task.position).padStart(2, '0') }} of {{ task.total }}
+          </p>
+          <h1 class="lh-h1">{{ task.title }}</h1>
 
-    <article class="pb-20">
-      <div class="flex items-baseline justify-between gap-4">
-        <div class="font-mono text-xs tracking-[0.2em] uppercase text-teal">
-          task {{ String(task.position).padStart(2, '0') }} of {{ task.total }}
+          <!-- Only once the poll has answered — see the project page. -->
+          <div v-if="mine" class="reader-meta">
+            <span v-if="mine.status === 'challenge_completed'" class="lh-num">
+              done · {{ mine.points_earned }} points
+            </span>
+            <span v-else-if="mine.attempts > 0" class="lh-num">
+              {{ mine.attempts }} {{ mine.attempts === 1 ? 'attempt' : 'attempts' }}
+            </span>
+          </div>
+        </header>
+
+        <div v-if="task.html" class="reader-body">
+          <!-- eslint-disable-next-line vue/no-v-html -- authored markdown, rendered server side -->
+          <div class="lesson-content" v-html="task.html" />
         </div>
 
-        <!-- Only once the poll has answered — see the projects page. -->
-        <div v-if="mine" class="font-mono text-xs">
-          <span v-if="mine.status === 'challenge_completed'" class="text-teal">
-            done · {{ mine.points_earned }} pts
-          </span>
-          <span v-else-if="mine.attempts > 0" class="text-faint">
-            {{ mine.attempts }} {{ mine.attempts === 1 ? 'attempt' : 'attempts' }}
-          </span>
+        <div class="run">
+          <p class="lh-sub">
+            Validators and hints run in your terminal, not here. luxctl reads the project's
+            blueprint, checks your work on your own machine, and reports the outcome back.
+          </p>
+          <TerminalPanel tag="luxctl" note="run it on your own machine">
+            <pre class="commands"><span class="dim">$ </span>luxctl projects start {{ task.project.slug }}
+<span class="dim">$ </span>luxctl tasks submit
+  <span class="dim">→ running validator on your machine…</span>
+  <span class="ok">✓ checks passed</span></pre>
+          </TerminalPanel>
         </div>
-      </div>
 
-      <h1 class="mt-3 font-serif text-4xl text-ink sm:text-5xl">
-        {{ task.title }}
-      </h1>
-
-      <div v-if="task.html" class="reader-prose" style="margin-top: 40px">
-        <!-- eslint-disable-next-line vue/no-v-html -- authored markdown, rendered server side -->
-        <div class="lesson-content" v-html="task.html" />
-      </div>
-
-      <div class="border-pencil-light mt-10 rounded-md bg-panel p-8">
-        <p class="text-mono-body">
-          Validators and hints run in your terminal, not here. luxctl reads the project's
-          blueprint, checks your work on your own machine, and reports the outcome back.
-        </p>
-
-        <pre class="mt-8 overflow-x-auto rounded-md bg-term-bg p-5 font-mono text-xs leading-relaxed text-term-text sm:text-sm"><span class="text-term-dim">$</span> luxctl projects start {{ task.project.slug }}
-<span class="text-term-dim">$</span> luxctl tasks submit
-  <span class="text-term-dim">→ running validator on your machine…</span>
-  <span class="text-term-green">✓ checks passed</span></pre>
-      </div>
-
-      <div class="mt-12 flex items-center justify-between gap-4">
-        <NuxtLink
-          v-if="task.previous"
-          :to="`/projects/${task.project.slug}/tasks/${task.previous.slug}`"
-          class="btn-chalk text-sm text-ink"
-        >
-          ← {{ task.previous.title }}
-        </NuxtLink>
-        <span v-else />
-        <NuxtLink
-          v-if="task.next"
-          :to="`/projects/${task.project.slug}/tasks/${task.next.slug}`"
-          class="btn-chalk text-sm text-ink"
-        >
-          {{ task.next.title }} →
-        </NuxtLink>
-      </div>
-    </article>
+        <nav class="reader-pager" aria-label="tasks">
+          <UiButton
+            v-if="task.previous"
+            variant="ghost"
+            size="lg"
+            :to="`/projects/${task.project.slug}/tasks/${task.previous.slug}`"
+          >
+            ← {{ task.previous.title }}
+          </UiButton>
+          <UiButton
+            v-if="task.next"
+            variant="ghost"
+            size="lg"
+            :to="`/projects/${task.project.slug}/tasks/${task.next.slug}`"
+          >
+            {{ task.next.title }} →
+          </UiButton>
+        </nav>
+      </article>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.run {
+  display: grid;
+  gap: var(--space-6);
+  margin-top: var(--space-12);
+}
+
+.commands {
+  margin: 0;
+  padding: var(--space-4) 28px var(--space-6);
+  overflow-x: auto;
+  font: var(--text-code);
+  color: var(--term-bright);
+}
+
+.dim { color: var(--term-grey); }
+.ok { color: var(--term-green); }
+</style>

@@ -15,7 +15,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="head lh-figure">
+  <div class="head lh-figure" :class="{ 'is-bare': !$slots.figure && !cover }">
     <div class="words">
       <p class="lh-eyebrow">{{ eyebrow }}</p>
       <h1 class="lh-title-serif">{{ title }}</h1>
@@ -50,6 +50,8 @@ defineProps<{
   gap: var(--space-8) var(--space-16);
   align-items: start;
 }
+
+.head.is-bare { grid-template-columns: minmax(0, 1fr); }
 
 .words {
   min-width: 0;

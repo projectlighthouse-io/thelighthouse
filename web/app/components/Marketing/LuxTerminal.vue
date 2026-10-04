@@ -78,16 +78,7 @@ onBeforeUnmount(() => clearTimeout(timer))
 </script>
 
 <template>
-  <div class="lh-terminal terminal">
-    <div class="bar">
-      <span class="tag">luxctl</span>
-      <span class="note">the runner every chapter ends in</span>
-      <span class="lights" aria-hidden="true">
-        <span class="on" />
-        <span class="off" />
-      </span>
-    </div>
-
+  <TerminalPanel tag="luxctl" note="the runner every chapter ends in">
     <div
       ref="scroller"
       class="body lh-noscroll"
@@ -105,50 +96,10 @@ onBeforeUnmount(() => clearTimeout(timer))
         <div v-if="done" class="t-grey">$ <span class="lh-caret" /></div>
       </div>
     </div>
-  </div>
+  </TerminalPanel>
 </template>
 
 <style scoped>
-.bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: 18px 28px 6px;
-}
-
-.tag {
-  padding: 4px 10px;
-  border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--term-text);
-  font: var(--text-label-mono);
-}
-
-.note {
-  font: var(--text-label-mono);
-  color: var(--term-grey);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lights {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.lights > span {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-full);
-}
-
-.on { background: var(--term-green); }
-.off { background: var(--term-line); }
-
 .body {
   height: 400px;
   overflow: auto;
@@ -175,7 +126,6 @@ onBeforeUnmount(() => clearTimeout(timer))
 .t-red { color: var(--term-red); }
 
 @media (max-width: 600px) {
-  .bar { padding: 16px 20px 6px; }
   .body { padding: var(--space-4) 20px var(--space-5); }
 }
 </style>

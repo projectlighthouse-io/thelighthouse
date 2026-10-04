@@ -228,6 +228,8 @@ export interface TocRow {
   to: string
   locked: boolean
   current?: boolean
+  /** A word for the access column in place of "pro" — done, failed. */
+  note?: string
 }
 
 /** A titled run of rows — a chapter. */

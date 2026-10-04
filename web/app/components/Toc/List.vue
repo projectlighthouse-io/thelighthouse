@@ -64,7 +64,8 @@ const showsSplit = computed<boolean>(() => {
               <span class="n lh-num">{{ row.n }}</span>
               <span class="name">{{ row.title }}</span>
               <span class="access">
-                <template v-if="row.locked">pro<span class="lh-sr"> — part of this needs a plan</span></template>
+                <template v-if="row.note">{{ row.note }}</template>
+                <template v-else-if="row.locked">pro<span class="lh-sr"> — part of this needs a plan</span></template>
               </span>
               <span v-if="row.blurb && !compact" class="blurb">{{ row.blurb }}</span>
             </NuxtLink>
