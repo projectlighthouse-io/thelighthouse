@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { Book, Chapter, LessonSummary } from '@/types/Content'
+import type { Book, Chapter, LessonSummary, TocSection } from '@/types/Content'
+import { bookTopics } from '@/data/BookTopics'
 
 interface BookDetailResponse {
   book: Book
@@ -63,9 +64,6 @@ const book = computed(() => data.value?.book)
 const lessons = computed<LessonSummary[]>(() => data.value?.lessons ?? [])
 const chapters = computed<Chapter[]>(() => data.value?.chapters ?? [])
 
-const lessonsFor = (chapter: Chapter): LessonSummary[] =>
-  lessons.value.filter(l => l.chapterId === chapter.id)
-
 /** running lesson number across the whole book, not per chapter */
 const numberOf = (lesson: LessonSummary): string =>
   String(lessons.value.indexOf(lesson) + 1).padStart(2, '0')
@@ -87,19 +85,46 @@ const firstLesson = computed<string | null>(
 /** A book whose lessons are all still drafts. Renders a note, not a blank. */
 const isEmpty = computed<boolean>(() => lessons.value.length === 0)
 
-/**
- * What the slideshow shows.
- *
- * `images` is the book's own list and the thumbnail is the fallback, so a book
- * whose yaml has no `images:` yet still shows its cover rather than a gap. A
- * book with neither shows nothing at all — the component renders no frame.
- */
-const covers = computed<string[]>(() => {
-  const listed = book.value?.images ?? []
-  if (listed.length) return listed
+const sections = computed<TocSection[]>(() => chapters.value.map((chapter, i) => ({
+  key: chapter.id,
+  eyebrow: `chapter ${String(i + 1).padStart(2, '0')}`,
+  title: chapter.title,
+  rows: lessons.value
+    .filter(lesson => lesson.chapterId === chapter.id)
+    .map(lesson => ({
+      n: numberOf(lesson),
+      title: lesson.title,
+      blurb: lesson.description,
+      to: `/books/${slug.value}/pages/${lesson.slug}`,
+      locked: lesson.locked,
+    })),
+})))
 
-  return book.value?.thumbnailUrl ? [book.value.thumbnailUrl] : []
+/**
+ * "book 06 — go · rust": where the book sits on the shelf, and the tracks
+ * that carry it. The shelf's order is the api's, through the same listing
+ * the books page renders.
+ */
+const { data: shelf } = await useAsyncData('books', () =>
+  $fetch<Book[]>('/_api/books').catch(() => [] as Book[]))
+
+const eyebrow = computed<string>(() => {
+  const at = (shelf.value ?? []).findIndex(b => b.slug === slug.value)
+  const number = at === -1 ? 'book' : `book ${String(at + 1).padStart(2, '0')}`
+  const onTracks = Object.keys(book.value?.tracks ?? {})
+
+  return onTracks.length ? `${number} — ${onTracks.join(' · ')}` : number
 })
+
+const topics = computed<string[]>(() => bookTopics[slug.value] ?? [])
+
+// Get Pro only where there is something to unlock, and never to a reader who
+// already has it.
+const { load: loadAccess, owns } = useAccess()
+onMounted(loadAccess)
+
+const hasPro = computed<boolean>(() => lessons.value.some(lesson => lesson.locked))
+const showPro = computed<boolean>(() => hasPro.value && !owns(slug.value))
 
 useSeo(() => ({
   title: `${book.value?.title} — projectlighthouse`,
@@ -131,232 +156,61 @@ useJsonLd('crumbs', () => ({
 </script>
 
 <template>
-  <div v-if="book" class="book mx-auto max-w-[1040px] bg-panel">
-    <!-- `bg-panel`, not `bg-white`: the token is #ffffff in light and the dark
-         panel in dark, so this slab inverts with the theme rather than staying
-         a sheet of white on a dark page.
+  <div v-if="book" class="book">
+    <DetailHead
+      :eyebrow="eyebrow"
+      :title="book.title"
+      :description="book.description"
+      :topics="topics"
+      :cover="book.thumbnailUrl || undefined"
+      :cover-alt="`${book.title} cover`"
+    >
+      <template v-if="firstLesson || showPro" #actions>
+        <UiButton
+          v-if="firstLesson"
+          variant="inverse"
+          size="lg"
+          cta="pro"
+          :to="`/books/${book.slug}/pages/${firstLesson}`"
+        >
+          Start reading →
+        </UiButton>
+        <!-- `owns` is false until the browser asks, so the server and the
+             first client render agree and the button only ever disappears. -->
+        <UiButton v-if="showPro" variant="ghost" size="lg" cta="free" flame to="/pricing">
+          Get Pro
+        </UiButton>
+      </template>
+    </DetailHead>
 
-         The breadcrumb that used to sit above the title is gone. `/books` is
-         one click away in the nav on every viewport, and the trail was a mono
-         line of chrome above a display face that has to be the first thing
-         read. The BreadcrumbList in the script stays: search results still
-         want the trail, and that markup is what they read, not this. -->
-    <header class="px-10 pt-11 max-[820px]:px-6 max-[820px]:pt-10">
-      <!-- One column until 1080px, then the images take a fixed 232px beside
-           the title. Fixed rather than fractional so the measure of the dek is
-           set by the dek, not by how wide the window happens to be. -->
-      <div
-        class="grid grid-cols-1 items-start gap-14"
-        :class="covers.length ? 'min-[1081px]:grid-cols-[minmax(0,1fr)_232px]' : ''"
-      >
-        <div>
-          <h1 class="masthead-title">
-            {{ book.title }}
-          </h1>
-
-          <p class="masthead-dek">
-            {{ book.description }}
-          </p>
-
-          <div v-if="firstLesson" class="mt-6">
-            <NuxtLink
-              :to="`/books/${book.slug}/pages/${firstLesson}`"
-              class="start"
-            >
-              Start reading
-              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path
-                  d="M3 8h9M8.5 4l4 4-4 4"
-                  stroke="currentColor"
-                  stroke-width="1.4"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </NuxtLink>
-          </div>
-        </div>
-
-        <!-- The book's own images, not its thumbnail: `images` is what it has to
-             show, and falls back to the one image every book has. -->
-        <BookCoverSlideshow :images="covers" :title="book.title" />
-      </div>
-    </header>
-
-    <!-- 720px, and left under the title rather than centred. The rows are a
-         numbered list read top to bottom, so their left edge lines up with the
-         masthead's; centring them would set the whole page adrift of the one
-         vertical the title establishes. -->
-    <main class="mt-[34px] max-w-[720px] px-10 pb-[90px] max-[820px]:px-6">
+    <div id="toc" class="lh-figure toc-wrap">
       <!-- A published book whose lessons are all still drafts. The api sends
-           no chapters for one, so without this the page ends at the hero and
+           no chapters for one, so without this the page ends at the head and
            reads as broken rather than as early. -->
-      <p v-if="isEmpty" class="empty">
+      <p v-if="isEmpty" class="lh-sub empty">
         No lessons published yet — this one is still being written. The
-        <NuxtLink to="/roadmap">roadmap</NuxtLink> says what lands next.
+        <NuxtLink to="/roadmap" class="lh-inline">roadmap</NuxtLink> says what lands next.
       </p>
 
-      <!-- No `v-if` on the rows: the api builds a chapter only from the
-           lessons it has, so a chapter that reaches here always has some. -->
-      <section v-for="chapter in chapters" v-else :key="chapter.id" class="part">
-        <h2 class="part-title">
-          {{ chapter.title }}
-        </h2>
+      <TocList v-else :sections="sections" />
+    </div>
 
-        <NuxtLink
-          v-for="lesson in lessonsFor(chapter)"
-          :key="lesson.slug"
-          :to="`/books/${book.slug}/pages/${lesson.slug}`"
-          class="ch"
-        >
-          <span class="ch-no">{{ numberOf(lesson) }}</span>
-          <span>
-            <span class="ch-title">
-              {{ lesson.title }}
-              <span class="pill" :class="lesson.locked ? 'pill-paid' : 'pill-free'">
-                {{ lesson.locked ? 'paid' : 'free' }}
-              </span>
-            </span>
-            <span v-if="lesson.description" class="ch-desc">
-              {{ lesson.description }}
-            </span>
-          </span>
-        </NuxtLink>
-      </section>
-    </main>
+    <div class="end" aria-hidden="true">
+      <img src="/lighthouse.svg" alt="" width="20" height="20">
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* Written as css rather than utilities because almost every number here is off
- * the scale — 15.5px titles, 9px pills, a 32px numeral gutter. As utilities
- * each one is an arbitrary value in brackets, and the row markup stops being
- * readable at a glance. */
+.toc-wrap { margin-top: var(--space-24); }
 
-.start {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border-radius: 6px;
-    padding: 9px 15px;
-    font-size: 12.5px;
-    font-weight: 500;
-    background: var(--color-read-ink);
-    color: var(--color-on-ink);
-    transition:
-        background 140ms,
-        color 140ms;
+.empty { padding: 0 var(--space-4); }
+
+.end {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-24);
 }
 
-.start:hover {
-    background: var(--color-teal-deep);
-}
-
-.start svg {
-    width: 13px;
-    height: 13px;
-}
-
-.part + .part {
-    margin-top: 44px;
-}
-
-.part-title {
-    font-family: 'Newsreader', Georgia, serif;
-    font-optical-sizing: auto;
-    font-weight: 600;
-    font-size: 19px;
-    line-height: 1.15;
-    letter-spacing: -0.005em;
-    margin: 0 0 2px;
-    color: var(--color-read-ink);
-}
-
-/* No rule between rows and no tint on the locked ones. The pill already says
- * which is which, and a full-width band behind every paid lesson turned the
- * back half of the book into a grey block. */
-.ch {
-    display: grid;
-    grid-template-columns: 32px minmax(0, 1fr);
-    gap: 14px;
-    align-items: start;
-    padding: 11px 12px 11px 0;
-    text-decoration: none;
-}
-
-.ch-no {
-    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-    font-size: 10.5px;
-    padding: 4px 0 0 2px;
-    color: var(--color-read-faint);
-    transition: color 140ms;
-}
-
-.ch:hover .ch-no {
-    color: var(--color-teal-mid);
-}
-
-.ch-title {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    flex-wrap: wrap;
-    font-family: 'Newsreader', Georgia, serif;
-    font-optical-sizing: auto;
-    font-weight: 600;
-    font-size: 15.5px;
-    line-height: 1.25;
-    color: var(--color-read-ink);
-    transition: color 140ms;
-}
-
-.ch:hover .ch-title {
-    color: var(--color-teal-deep);
-}
-
-.ch-desc {
-    display: block;
-    margin-top: 4px;
-    font-size: 12px;
-    line-height: 1.55;
-    color: var(--color-read-mute);
-    text-wrap: pretty;
-}
-
-.empty {
-    font-family: 'Newsreader', Georgia, serif;
-    font-optical-sizing: auto;
-    font-size: 15.5px;
-    line-height: 1.55;
-    color: var(--color-read-mute);
-    border-top: 1px solid var(--color-read-line);
-    padding-top: 18px;
-    margin: 0;
-}
-
-.empty a {
-    color: var(--color-teal-deep);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-}
-
-.pill {
-    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-    font-size: 9px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: lowercase;
-    padding: 2px 7px;
-    border-radius: 20px;
-}
-
-.pill-free {
-    color: var(--color-teal-deep);
-    background: var(--color-teal-wash);
-}
-
-.pill-paid {
-    color: var(--color-amber);
-    background: var(--color-amber-soft);
-}
+.end img { width: 20px; height: 20px; opacity: 0.35; }
 </style>

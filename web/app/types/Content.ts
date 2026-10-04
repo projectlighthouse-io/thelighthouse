@@ -219,3 +219,21 @@ export interface PppOffer {
   code: string
   percent: number
 }
+
+/** One row of a contents list — a lesson, a stage. */
+export interface TocRow {
+  n: string
+  title: string
+  blurb?: string
+  to: string
+  locked: boolean
+  current?: boolean
+}
+
+/** A titled run of rows — a chapter. */
+export interface TocSection {
+  key: string | number
+  eyebrow: string
+  title: string
+  rows: TocRow[]
+}

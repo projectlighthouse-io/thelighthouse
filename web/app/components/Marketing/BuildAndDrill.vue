@@ -80,7 +80,7 @@ const cards = computed<Project[]>(() => (overflowing.value ? shown.value.slice(0
       </p>
     </div>
 
-    <div class="filter">
+    <div class="filter-row">
       <SegmentedFilter v-model="kind" :options="options" label="filter by kind" />
     </div>
 
@@ -126,7 +126,7 @@ const cards = computed<Project[]>(() => (overflowing.value ? shown.value.slice(0
   text-wrap: pretty;
 }
 
-.filter {
+.filter-row {
   display: flex;
   justify-content: center;
   margin-top: var(--space-12);
