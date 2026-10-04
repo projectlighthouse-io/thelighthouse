@@ -12,15 +12,17 @@ export interface Offer {
 }
 
 /**
- * What is for sale and what it costs, from rust through nitro.
+ * What the api offers this reader, plan by plan — read for the coupons.
  *
- * One handler for the one cache key, so the pricing page's structured data
- * and the frame's visible prices are the same answer. Allowed to fail: a
- * build with no api behind it renders the tracks without amounts.
+ * The amounts on the page come from the compiled `Catalogue.ts`; only the
+ * purchasing-power coupon depends on who is asking, and that is known only in
+ * the browser. `server: false` is load-bearing: `/pricing` is prerendered, and
+ * a server-side read there runs once at build time with no country and no api.
+ * Allowed to fail — no coupon is the full price.
  */
 export function usePlans() {
   return useAsyncData('billing-plans', () =>
     $fetch<{ plans: Offer[] }>('/_api/billing/plans')
       .then(response => response.plans)
-      .catch(() => [] as Offer[]))
+      .catch(() => [] as Offer[]), { server: false, default: () => [] as Offer[] })
 }

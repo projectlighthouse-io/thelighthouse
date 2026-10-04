@@ -75,7 +75,7 @@ const stats = computed(() => [
 
     <MarketingBuildAndDrill :projects="projects" fade />
 
-    <MarketingPricingFrame :books="books" />
+    <MarketingPricingFrame />
 
     <MarketingOnTheDesk :manuscripts="manuscripts" />
 

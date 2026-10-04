@@ -1,22 +1,26 @@
 <script setup lang="ts">
-import type { Offer } from '@/composables/UsePlans'
-import type { Book } from '@/types/Content'
+import type { CataloguePlan } from '@/data/Catalogue'
+import { plans, shelf } from '@/data/Catalogue'
 import { tracks } from '@/data/Tracks'
 
 /**
  * The pricing frame: an image panel with the pitch, and a panel per track.
  *
- * What is for sale and what it costs come from the api — the panels are
- * whatever `/_api/billing/plans` returns, grouped by track. `Tracks.ts` only
- * supplies the name and the line under it. Fetched through nitro so a
- * prerendered page carries the prices in its html; allowed to fail, in which
- * case the tracks render without amounts and their buttons stay disabled.
+ * What is for sale, what it costs and which books each track holds are
+ * compiled in from `Catalogue.ts`, not fetched. `/pricing` is prerendered from
+ * `web/` alone, with no api to ask, and a fetch there baked an em dash into
+ * every price. `lighthouse-prices catalogue` writes that file from the same
+ * declaration it reconciles against stripe, so the number is still the one
+ * charged. `Tracks.ts` only supplies the name and the line under it.
+ *
+ * The one thing not compiled in is the purchasing-power coupon, which depends
+ * on where the reader is — see `couponFor`.
  */
-const props = defineProps<{
-  books: Book[]
+defineProps<{
   eyebrow?: string
 }>()
 
+// The coupons the api offers this reader, per plan. Read in the browser only.
 const { data: offers } = await usePlans()
 
 interface Panel {
@@ -24,54 +28,72 @@ interface Panel {
   name: string
   blurb: string
   featured: boolean
-  yearly: Offer | undefined
-  outright: Offer | undefined
+  /** What the panel prices and the button buys: yearly, or outright when a
+   *  track is only sold that way. */
+  lead: CataloguePlan | undefined
+  /** The outright plan, offered beside a yearly one. */
+  outright: CataloguePlan | undefined
   titles: string[]
 }
 
-const titleOf = (slug: string): string =>
-  props.books.find(book => book.slug === slug)?.title ?? slug
+/**
+ * The books on a track, in that track's reading order. `all` is every book on
+ * the shelf, including the ones on no track.
+ */
+function titlesOn(key: string): string[] {
+  if (key === 'all') return shelf.map(book => book.title)
 
-const panels = computed<Panel[]>(() => {
-  const all = offers.value ?? []
+  return shelf
+    .filter(book => book.tracks[key] !== undefined)
+    .sort((a, b) => (a.tracks[key] ?? 0) - (b.tracks[key] ?? 0))
+    .map(book => book.title)
+}
 
-  // The api's tracks, in the order Tracks.ts reads them; anything it does not
-  // know about still gets a panel, after the rest.
-  const order = tracks.map(track => track.key as string)
-  const keys = [...new Set(all.map(offer => offer.track))]
-    .sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99))
+// The catalogue's tracks, in the order Tracks.ts reads them; anything it does
+// not know about still gets a panel, after the rest.
+const order = tracks.map(track => track.key as string)
+const keys = [...new Set(plans.map(plan => plan.track))]
+  .sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99))
 
-  const fromApi = keys.length ? keys : order
+const panels: Panel[] = keys.map((key) => {
+  const known = tracks.find(track => track.key === key)
+  const yearly = plans.find(plan => plan.track === key && plan.recurring)
+  const outright = plans.find(plan => plan.track === key && !plan.recurring)
 
-  return fromApi.map((key) => {
-    const known = tracks.find(track => track.key === key)
-    const yearly = all.find(offer => offer.track === key && offer.recurring)
-    const outright = all.find(offer => offer.track === key && !offer.recurring)
-    const source = yearly ?? outright
-
-    const slugs = source?.everything
-      ? props.books.map(book => book.slug)
-      : source?.books ?? []
-
-    return {
-      key,
-      name: known?.name ?? key,
-      blurb: known?.blurb ?? '',
-      featured: known?.featured ?? false,
-      yearly,
-      outright,
-      titles: slugs.map(titleOf),
-    }
-  })
+  return {
+    key,
+    name: known?.name ?? key,
+    blurb: known?.blurb ?? '',
+    featured: known?.featured ?? false,
+    lead: yearly ?? outright,
+    outright: yearly ? outright : undefined,
+    titles: titlesOn(key),
+  }
 })
 
+/**
+ * The coupon that comes off this particular plan, if any. Asked per plan, not
+ * per reader: a stripe coupon is restricted to one plan's product, so two
+ * panels can carry different codes in the same country.
+ */
+function couponFor(offer: CataloguePlan | undefined): { code: string, percent: number } | null {
+  if (!offer) return null
+
+  return (offers.value ?? []).find(o => o.plan === offer.plan)?.coupon ?? null
+}
+
+/** What a plan costs once its coupon is applied, or null when the list price is the price. */
+function reduced(offer: CataloguePlan | undefined): string | null {
+  const percent = couponFor(offer)?.percent
+
+  if (!offer?.amount || !percent) return null
+
+  return money(afterDiscount(offer.amount, percent))
+}
+
 /** `4900` reads as `$49`; a price nobody knows reads as a dash. */
-function priced(offer: Offer | undefined): string {
-  if (!offer?.amount) return '—'
-
-  const whole = offer.amount / 100
-
-  return `$${Number.isInteger(whole) ? whole : whole.toFixed(2)}`
+function priced(offer: CataloguePlan | undefined): string {
+  return offer?.amount ? money(offer.amount) : '—'
 }
 
 const pad = (n: number): string => String(n).padStart(2, '0')
@@ -128,8 +150,20 @@ const IMAGE = 'https://spaces.projectlighthouse.io/books/art/lighthouse.001.jpeg
               <span class="blurb">{{ panel.blurb }}</span>
             </div>
             <div class="price">
-              <span class="amount lh-num">{{ priced(panel.yearly) }}</span>
-              <span class="per">per year · {{ panel.titles.length }} books</span>
+              <!-- The list price stays, struck through: the reduced number
+                   means nothing without the one it came down from. -->
+              <span v-if="reduced(panel.lead)" class="was lh-num">{{ priced(panel.lead) }}</span>
+              <span class="amount lh-num">{{ reduced(panel.lead) ?? priced(panel.lead) }}</span>
+              <span class="per">
+                {{ panel.lead?.recurring === false ? 'once' : 'per year' }} · {{ panel.titles.length }} books
+              </span>
+              <!-- Advertised, not applied: the reader types the code at
+                   stripe. Beside the plan it comes off, since a coupon is
+                   restricted to one plan and two panels can differ. -->
+              <span v-if="couponFor(panel.lead)" class="coupon">
+                {{ couponFor(panel.lead)?.percent }}% off — enter
+                <code>{{ couponFor(panel.lead)?.code }}</code> at checkout
+              </span>
             </div>
           </div>
 
@@ -147,7 +181,8 @@ const IMAGE = 'https://spaces.projectlighthouse.io/books/art/lighthouse.001.jpeg
               :disabled="busy"
               @click="buy(panel.outright?.plan)"
             >
-              or {{ priced(panel.outright) }} once, yours to keep →
+              or {{ reduced(panel.outright) ?? priced(panel.outright) }} once, yours to keep{{
+                couponFor(panel.outright) ? ` with ${couponFor(panel.outright)?.code}` : '' }} →
             </button>
 
             <UiButton
@@ -155,8 +190,8 @@ const IMAGE = 'https://spaces.projectlighthouse.io/books/art/lighthouse.001.jpeg
               size="lg"
               cta="pro-dark"
               flame
-              :disabled="busy || !panel.yearly"
-              @click="buy(panel.yearly?.plan)"
+              :disabled="busy || !panel.lead"
+              @click="buy(panel.lead?.plan)"
             >
               {{ busy ? 'One moment…' : 'Get Pro' }}
             </UiButton>
@@ -296,6 +331,17 @@ const IMAGE = 'https://spaces.projectlighthouse.io/books/art/lighthouse.001.jpeg
   white-space: nowrap;
   font: var(--text-label-mono);
   color: var(--ink-inverse-muted);
+}
+
+.was {
+  font: var(--text-body-sm);
+  color: var(--ink-inverse-muted);
+  text-decoration: line-through;
+}
+
+.coupon {
+  font: var(--text-label-mono);
+  color: var(--ink-inverse-secondary);
 }
 
 .titles {

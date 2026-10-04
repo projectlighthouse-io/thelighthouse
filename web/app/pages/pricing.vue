@@ -1,29 +1,25 @@
 <script setup lang="ts">
+import { plans } from '@/data/Catalogue'
 import { faqs } from '@/data/Faqs'
 
 const description
-  = 'four tracks — foundation, go, rust, or everything. subscribe yearly, or buy a track outright and keep it.'
+  = 'two tracks — foundation, or everything. subscribe yearly, or buy a track outright and keep it.'
 
 useSeo({ title: 'Pricing — projectlighthouse', description })
 
-// The same request, and the same cache key, as the frame below — so the
-// structured data and the visible prices are one answer.
-const { data: offers } = await usePlans()
-
-const { data: books } = await useShelf()
-
+// Compiled in, like the frame's prices, so the structured data and the visible
+// amounts are one answer — and both survive prerendering with no api.
 useJsonLd('offers', {
   '@type': 'Product',
   'name': 'projectlighthouse',
   'description': 'Books and hands-on projects on systems programming.',
   'brand': { '@type': 'Brand', 'name': SITE.name },
-  'offers': (offers.value ?? [])
-    .filter(offer => offer.amount !== null)
+  'offers': plans
     .map(offer => ({
       '@type': 'Offer',
       'name': offer.plan,
-      'price': String((offer.amount ?? 0) / 100),
-      'priceCurrency': (offer.currency ?? 'usd').toUpperCase(),
+      'price': String(offer.amount / 100),
+      'priceCurrency': offer.currency.toUpperCase(),
       'url': `${SITE.url}/pricing`,
       'availability': 'https://schema.org/InStock',
     })),
@@ -52,7 +48,7 @@ useJsonLd('faq', {
       </div>
     </section>
 
-    <MarketingPricingFrame :books="books ?? []" eyebrow="the tracks" class="frame" />
+    <MarketingPricingFrame eyebrow="the tracks" class="frame" />
 
     <MarketingFaqSection />
   </div>
