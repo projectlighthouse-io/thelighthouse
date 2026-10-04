@@ -106,9 +106,12 @@ export interface ApiLesson {
   chapter_id: number
   sort_order: number
   html: string
-  toc: { id: string, text: string }[]
+  /** Every heading; `locked` on the ones this reader cannot reach yet. */
+  toc: { id: string, text: string, locked: boolean }[]
   read_minutes: number
   has_paid_part: boolean
+  /** Whether the api answered with the whole lesson for this reader. */
+  unlocked: boolean
   remaining_sections: number
   position: number
   total: number

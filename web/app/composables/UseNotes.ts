@@ -76,6 +76,12 @@ export interface NotesScope {
  */
 const PER_LESSON = 50
 
+/** A page of the reader's own notes list, when nothing narrows it to a lesson. */
+const PER_PAGE = 20
+
+/** How long the search box waits for typing to stop before asking. */
+const SEARCH_WAIT = 300
+
 /** Shown when the api refused but said nothing a reader can act on. */
 const GENERIC_FAILURE = 'That could not be saved. Please try again.'
 
@@ -124,31 +130,71 @@ export function useNotes(scope?: MaybeRefOrGetter<NotesScope | undefined>) {
   // notes, for as long as the request takes.
   const loaded = ref<boolean>(false)
   const pending = ref<boolean>(false)
+  // Set when the last ask failed, so the notes page can offer a retry rather
+  // than an empty state. A lesson's thread ignores it.
+  const failed = ref<boolean>(false)
+
+  // Paging and search, for the reader's own list. A lesson's thread asks for
+  // one page big enough to hold everything and never searches, so for it
+  // these stay at their defaults.
+  const page = ref<number>(1)
+  const perPage = ref<number>(toValue(scope) ? PER_LESSON : PER_PAGE)
+  const search = ref<string>('')
+  const pages = computed<number>(() => Math.max(1, Math.ceil(total.value / perPage.value)))
 
   async function load(): Promise<void> {
     if (import.meta.server) return
 
     pending.value = true
 
+    const q = search.value.trim()
+
     try {
       const response = await $fetch<PageResponse<NoteResponse>>('/api/notes', {
-        query: { per_page: PER_LESSON, ...toValue(scope) },
+        query: {
+          page: page.value,
+          per_page: perPage.value,
+          ...(q ? { q } : {}),
+          ...toValue(scope),
+        },
       })
 
       notes.value = response.items.map(toNote)
       total.value = response.total
+      // The api clamps per_page; count pages by what it actually used.
+      perPage.value = response.per_page || perPage.value
+      failed.value = false
     }
     catch {
       // Including a 401: a signed-out reader has no notes to draw, and the
       // page is perfectly readable without them.
       notes.value = []
       total.value = 0
+      failed.value = true
     }
     finally {
       pending.value = false
       loaded.value = true
     }
   }
+
+  async function goTo(next: number): Promise<void> {
+    page.value = Math.min(Math.max(1, next), pages.value)
+    await load()
+  }
+
+  // A new search starts again from the first page, once typing settles.
+  let waiting: ReturnType<typeof setTimeout> | undefined
+
+  watch(search, () => {
+    clearTimeout(waiting)
+    waiting = setTimeout(() => {
+      page.value = 1
+      void load()
+    }, SEARCH_WAIT)
+  })
+
+  onScopeDispose(() => clearTimeout(waiting))
 
   /**
    * Saves a note against a passage, or against the lesson when `anchor` is
@@ -234,5 +280,5 @@ export function useNotes(scope?: MaybeRefOrGetter<NotesScope | undefined>) {
     }
   }
 
-  return { notes, total, loaded, pending, load, create, edit, remove }
+  return { notes, total, loaded, pending, failed, page, pages, search, load, goTo, create, edit, remove }
 }

@@ -81,7 +81,7 @@ const eyebrow = computed<string>(() => {
  * A 404 is the ordinary answer for a reader who has not bought it, so it is
  * not logged or shown — the paywall below is what it looks like.
  */
-interface Heading { id: string, text: string, locked: boolean }
+interface Heading { id: string, text: string, locked?: boolean }
 
 /**
  * The whole lesson, once the api has been asked as *this reader*.

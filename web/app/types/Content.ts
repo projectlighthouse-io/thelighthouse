@@ -180,6 +180,8 @@ export interface ChangelogEntry {
 export interface TocItem {
   id: string
   text: string
+  /** Set on a lesson's headings the reader cannot reach yet. */
+  locked?: boolean
 }
 
 export interface SyntaxResponse {
