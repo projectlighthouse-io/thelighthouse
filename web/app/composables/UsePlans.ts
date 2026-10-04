@@ -21,7 +21,7 @@ export interface Offer {
  * Allowed to fail — no coupon is the full price.
  */
 export function usePlans() {
-  return useAsyncData('billing-plans', () =>
+  return useAsyncData('billing-coupons', () =>
     $fetch<{ plans: Offer[] }>('/_api/billing/plans')
       .then(response => response.plans)
       .catch(() => [] as Offer[]), { server: false, default: () => [] as Offer[] })
