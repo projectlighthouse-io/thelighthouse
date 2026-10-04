@@ -27,7 +27,7 @@ API_PORT ?= 9000
 
 .DEFAULT_GOAL := help
 .PHONY: help web up dev api down db db-down db-reset psql migrate migrate-status fmt fmt-check \
-        lint test build check audit image run login push clean \
+        lint test build check audit image run run-built login push clean \
         content content-check content-sync content-db-sync content-reload \
         prices prices-apply catalogue
 
@@ -163,6 +163,18 @@ image: ## build the combined caddy + nuxt + api image
 # the dev server instead of this container.
 run: ## run the built image locally on PORT, configured from .env
 	docker run --rm -p $(PORT):8080 --env-file .env $(IMAGE):local
+
+# The image `make image` last built, against the local postgres. Three .env
+# values are host paths and would break inside the container, so they are
+# overridden: the database is the host's, not the container's loopback, and
+# content and plans are the copies baked into the image. On CADDY_PORT so
+# APP_URL and the registered oauth callbacks still match.
+run-built: ## run the last built image against the local postgres
+	docker run --rm -p $(CADDY_PORT):8080 --env-file .env \
+		-e DATABASE_URL="$$(grep ^DATABASE_URL= .env | cut -d= -f2- | sed 's/127.0.0.1/host.docker.internal/')" \
+		-e CONTENT_PATH=/app/content \
+		-e BILLING_PLANS=/app/billing.yaml \
+		$(IMAGE):local
 
 login: ## authenticate to the DO registry
 	doctl registry login --context thelighthouse
