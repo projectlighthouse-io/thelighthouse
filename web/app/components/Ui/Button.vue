@@ -20,6 +20,9 @@ const props = withDefaults(
     type?: 'button' | 'submit'
     disabled?: boolean
     flame?: boolean
+    /** A full page load even for a path on this site — an OAuth start, say. */
+    external?: boolean
+    block?: boolean
   }>(),
   {
     variant: 'ghost',
@@ -30,16 +33,19 @@ const props = withDefaults(
     type: 'button',
     disabled: false,
     flame: false,
+    external: false,
+    block: false,
   },
 )
 
-const external = computed<boolean>(() => /^https?:\/\//.test(props.to ?? ''))
+const isExternal = computed<boolean>(() => props.external || /^https?:\/\//.test(props.to ?? ''))
 
 const classes = computed(() => [
   'btn',
   `btn-${props.size}`,
   `btn-${props.variant}`,
   props.cta ? `btn-cta btn-${props.cta}` : null,
+  props.block ? 'btn-block' : null,
 ])
 </script>
 
@@ -47,7 +53,7 @@ const classes = computed(() => [
   <NuxtLink
     v-if="to && !disabled"
     :to="to"
-    :external="external"
+    :external="isExternal"
     :target="target"
     :rel="target === '_blank' ? 'noopener' : undefined"
     :class="classes"
@@ -84,6 +90,8 @@ const classes = computed(() => [
 }
 
 .btn:disabled { cursor: not-allowed; opacity: 0.4; }
+
+.btn-block { display: flex; width: 100%; }
 
 .btn-sm { height: 28px; padding: 0 12px; font-size: 14px; }
 .btn-md { height: 32px; padding: 0 14px; font-size: 15px; }

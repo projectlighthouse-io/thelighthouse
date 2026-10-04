@@ -47,43 +47,70 @@ const trackName = computed(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-2 py-24 sm:px-6 lg:px-8">
-    <h1 class="font-editorial text-4xl font-bold text-ink">Thank you.</h1>
+  <div class="thanks lh-text lh-gap">
+    <div class="lh-card card">
+      <p class="lh-eyebrow">checkout</p>
+      <h1 class="lh-h2">Thank you.</h1>
 
-    <template v-if="bought">
-      <p class="text-mono-body mt-4">
-        You bought <strong class="font-semibold text-ink">{{ trackName }}</strong>.
-        <template v-if="bought.paid">Your books are open.</template>
-        <template v-else>
-          Your payment is still clearing — the books open as soon as it lands.
-        </template>
+      <template v-if="bought">
+        <p class="lh-sub">
+          You bought <strong>{{ trackName }}</strong>.
+          <template v-if="bought.paid">Your books are open.</template>
+          <template v-else>
+            Your payment is still clearing — the books open as soon as it lands.
+          </template>
+        </p>
+
+        <ol v-if="bought.books.length" class="books">
+          <li v-for="(book, i) in bought.books" :key="book.slug">
+            <NuxtLink :to="`/books/${book.slug}`" class="lh-row row">
+              <span class="lh-mono lh-faint lh-num">{{ String(i + 1).padStart(2, '0') }}</span>
+              <span>{{ book.title }}</span>
+            </NuxtLink>
+          </li>
+        </ol>
+
+        <UiButton variant="inverse" size="lg" to="/dashboard">Go to my shelf →</UiButton>
+      </template>
+
+      <!-- No session in the url, or one that is not this reader's. Nothing is
+           wrong with their purchase; there is simply nothing to report here. -->
+      <p v-else-if="error || !session" class="lh-sub">
+        Your purchase is being confirmed. It will appear in
+        <NuxtLink to="/settings/billing" class="lh-inline">billing</NuxtLink> shortly.
       </p>
 
-      <ul v-if="bought.books.length" class="mt-8 space-y-3">
-        <li v-for="book in bought.books" :key="book.slug" class="flex items-start gap-3">
-          <span class="mt-0.5 font-mono text-sm text-quiet">-</span>
-          <NuxtLink :to="`/books/${book.slug}`" class="text-ink underline underline-offset-4">
-            {{ book.title }}
-          </NuxtLink>
-        </li>
-      </ul>
-    </template>
+      <p v-else class="lh-sub">Confirming your purchase…</p>
 
-    <!-- No session in the url, or one that is not this reader's. Nothing is
-         wrong with their purchase; there is simply nothing to report here. -->
-    <p v-else-if="error || !session" class="text-mono-body mt-4">
-      Your purchase is being confirmed. It will appear in
-      <NuxtLink to="/settings/billing" class="underline">your billing settings</NuxtLink>
-      shortly.
-    </p>
-
-    <p v-else class="text-mono-body mt-4">
-      Confirming your purchase…
-    </p>
-
-    <p class="mt-10 text-sm text-quiet">
-      Manage it any time in
-      <NuxtLink to="/settings/billing" class="underline">settings</NuxtLink>.
-    </p>
+      <p class="lh-hint">
+        Manage it any time in <NuxtLink to="/settings/billing" class="lh-inline">billing</NuxtLink>.
+      </p>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.card {
+  display: grid;
+  gap: var(--space-5);
+  justify-items: start;
+}
+
+strong { font-weight: var(--weight-medium); color: var(--ink); }
+
+.books {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  padding: var(--space-2) var(--space-3);
+  font: var(--text-body-sm);
+}
+</style>

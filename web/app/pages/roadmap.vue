@@ -74,7 +74,7 @@ useJsonLd('roadmap', {
           <li v-for="item in col.items" :key="item.title" class="item">
             <span class="item-top">
               <span class="lh-h3">{{ item.title }}</span>
-              <span v-if="item.hot" class="lh-mono lh-faint">in demand</span>
+              <span v-if="item.hot" class="lh-mono lh-faint">hot</span>
             </span>
             <span class="lh-caption">{{ item.description }}</span>
             <span v-if="item.tags.length" class="tags">
