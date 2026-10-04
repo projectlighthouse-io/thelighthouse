@@ -173,6 +173,9 @@ const readable = computed(() => unlockedHtml.value ?? data.value?.html ?? '')
 // would paint a contents list with nothing lit until hydration.
 const activeId = ref<string>(data.value?.toc?.[0]?.id ?? '')
 
+/** Percent of the page scrolled, for the progress bar. */
+const read = ref(0)
+
 /**
  * Where a heading counts as reached — just past the 24px `scroll-margin-top`
  * the reader's headings carry, so a heading jumped to by its anchor lands on
@@ -189,6 +192,15 @@ const TOP_LINE = 32
  * measuring the rest.
  */
 const syncFromScroll = (): void => {
+  // How far down the document the reader is, for the bar across the top. Not
+  // `data.percent`: that is where this lesson sits in the book, which does not
+  // change while the page is open — the bar sat still because it was showing a
+  // number that never moves.
+  const scrollable = document.documentElement.scrollHeight - window.innerHeight
+  read.value = scrollable > 0
+    ? Math.min(100, Math.max(0, (window.scrollY / scrollable) * 100))
+    : 100
+
   const last = toc.value.at(-1)
 
   if (!last) return
@@ -643,7 +655,7 @@ useJsonLd('crumbs', () => ({
 <template>
   <div v-if="data && book && lesson" class="reader-shell">
     <div class="reader-progress" aria-hidden="true">
-      <span :style="{ width: `${data.percent}%` }" />
+      <span :style="{ width: `${read}%` }" />
     </div>
 
     <div class="reader-layout">
