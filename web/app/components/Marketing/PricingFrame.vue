@@ -1,17 +1,7 @@
 <script setup lang="ts">
+import type { Offer } from '@/composables/UsePlans'
 import type { Book } from '@/types/Content'
 import { tracks } from '@/data/Tracks'
-
-/** One purchasable plan, as `/_api/billing/plans` reports it. */
-interface Offer {
-  plan: string
-  track: string
-  books: string[]
-  everything: boolean
-  recurring: boolean
-  amount: number | null
-  currency: string | null
-}
 
 /**
  * The pricing frame: an image panel with the pitch, and a panel per track.
@@ -27,8 +17,7 @@ const props = defineProps<{
   eyebrow?: string
 }>()
 
-const { data: offers } = await useAsyncData('billing-plans', () =>
-  $fetch<Offer[]>('/_api/billing/plans').catch(() => [] as Offer[]))
+const { data: offers } = await usePlans()
 
 interface Panel {
   key: string

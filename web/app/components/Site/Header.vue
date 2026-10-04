@@ -234,10 +234,12 @@ async function onSignOut(): Promise<void> {
 
 .item-quiet { color: var(--ink-muted); }
 
+/* phones: logo mark only, the nav takes the middle and gives way first,
+   the handle truncates rather than running into it */
 @media (max-width: 560px) {
-  .header { gap: var(--space-3); }
+  .header { grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-3); }
   .wordmark { display: none; }
-  .nav { gap: var(--space-4); }
-  .pill { max-width: 120px; }
+  .nav { justify-content: center; gap: var(--space-3); min-width: 0; }
+  .pill { max-width: 104px; }
 }
 </style>

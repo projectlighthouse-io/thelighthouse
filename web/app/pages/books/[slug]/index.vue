@@ -105,8 +105,7 @@ const sections = computed<TocSection[]>(() => chapters.value.map((chapter, i) =>
  * that carry it. The shelf's order is the api's, through the same listing
  * the books page renders.
  */
-const { data: shelf } = await useAsyncData('books', () =>
-  $fetch<Book[]>('/_api/books').catch(() => [] as Book[]))
+const { data: shelf } = await useShelf()
 
 const eyebrow = computed<string>(() => {
   const at = (shelf.value ?? []).findIndex(b => b.slug === slug.value)

@@ -1,15 +1,5 @@
 <script setup lang="ts">
 import { faqs } from '@/data/Faqs'
-import type { Book } from '@/types/Content'
-
-/** One purchasable plan, as `/api/billing/plans` reports it. */
-interface Offer {
-  plan: string
-  track: string
-  recurring: boolean
-  amount: number | null
-  currency: string | null
-}
 
 const description
   = 'four tracks — foundation, go, rust, or everything. subscribe yearly, or buy a track outright and keep it.'
@@ -18,11 +8,9 @@ useSeo({ title: 'Pricing — projectlighthouse', description })
 
 // The same request, and the same cache key, as the frame below — so the
 // structured data and the visible prices are one answer.
-const { data: offers } = await useAsyncData('billing-plans', () =>
-  $fetch<Offer[]>('/_api/billing/plans').catch(() => [] as Offer[]))
+const { data: offers } = await usePlans()
 
-const { data: books } = await useAsyncData('books', () =>
-  $fetch<Book[]>('/_api/books').catch(() => [] as Book[]))
+const { data: books } = await useShelf()
 
 useJsonLd('offers', {
   '@type': 'Product',

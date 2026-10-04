@@ -6,7 +6,7 @@ const description
 
 // From ohara, through the rust api. During SSR this calls the handler directly,
 // so it costs no HTTP round trip.
-const { data } = await useAsyncData('books', () => $fetch<Book[]>('/_api/books'))
+const { data } = await useShelf()
 
 const books = computed<Book[]>(() => data.value ?? [])
 
