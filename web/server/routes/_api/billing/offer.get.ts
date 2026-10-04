@@ -27,9 +27,9 @@ export default defineEventHandler(async (event): Promise<PppOffer | null> => {
     return null
   }
 
-  const plans = await fromApi<ApiPlanCoupon[]>('/api/billing/plans', undefined, {
+  const { plans } = await fromApi<{ plans: ApiPlanCoupon[] }>('/api/billing/plans', undefined, {
     'cf-ipcountry': country,
-  }).catch(() => [] as ApiPlanCoupon[])
+  }).catch(() => ({ plans: [] as ApiPlanCoupon[] }))
 
   // The deepest discount on offer, so the banner never advertises less than
   // the reader can actually get.

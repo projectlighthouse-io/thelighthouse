@@ -7,6 +7,8 @@ export interface Offer {
   recurring: boolean
   amount: number | null
   currency: string | null
+  /** The purchasing-power code that comes off this plan, for the asker's country. */
+  coupon: { code: string, percent: number } | null
 }
 
 /**
@@ -18,5 +20,7 @@ export interface Offer {
  */
 export function usePlans() {
   return useAsyncData('billing-plans', () =>
-    $fetch<Offer[]>('/_api/billing/plans').catch(() => [] as Offer[]))
+    $fetch<{ plans: Offer[] }>('/_api/billing/plans')
+      .then(response => response.plans)
+      .catch(() => [] as Offer[]))
 }
