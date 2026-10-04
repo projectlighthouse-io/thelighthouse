@@ -48,12 +48,12 @@ useJsonLd('faq', {
       </div>
     </section>
 
-    <MarketingPricingFrame eyebrow="the tracks" class="frame" />
+    <MarketingPricingFrame eyebrow="the tracks" class="tracks" />
 
     <MarketingFaqSection />
   </div>
 </template>
 
 <style scoped>
-.frame { margin-top: var(--space-12); }
+.tracks { margin-top: var(--space-12); }
 </style>
