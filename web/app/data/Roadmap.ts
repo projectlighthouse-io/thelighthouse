@@ -6,9 +6,6 @@ import type { RoadmapColumn } from '@/types/Content'
 export const columns: RoadmapColumn[] = [
   {
     label: 'Ideas',
-    headerClass: 'text-yellow-600',
-    dotClass: 'bg-yellow-400',
-    cardClass: 'border-pencil-light opacity-60',
     items: [
       {
         title: 'Protocol Engineering',
@@ -68,9 +65,6 @@ export const columns: RoadmapColumn[] = [
   },
   {
     label: 'Next',
-    headerClass: 'text-blue-700',
-    dotClass: 'bg-blue-500',
-    cardClass: 'border-pencil-light opacity-60',
     items: [
       {
         title: 'Build Your Own Docker project',
@@ -100,9 +94,6 @@ export const columns: RoadmapColumn[] = [
   },
   {
     label: 'Forging',
-    headerClass: 'text-amber-700',
-    dotClass: 'bg-amber-500',
-    cardClass: 'border-2 border-dashed border-amber-400 bg-white',
     items: [
       {
         title: 'Networking Fundamentals — Bangla translation',
@@ -144,9 +135,6 @@ export const columns: RoadmapColumn[] = [
   },
   {
     label: 'Shipped',
-    headerClass: 'text-emerald-700',
-    dotClass: 'bg-emerald-500',
-    cardClass: 'border-pencil',
     items: [
       {
         title: 'Rust 101s — focused mini-lessons',

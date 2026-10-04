@@ -167,9 +167,6 @@ export interface RoadmapItem {
 
 export interface RoadmapColumn {
   label: string
-  headerClass: string
-  dotClass: string
-  cardClass: string
   items: RoadmapItem[]
 }
 
