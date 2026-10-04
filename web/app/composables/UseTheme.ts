@@ -8,12 +8,13 @@ const STORAGE_KEY = 'theme'
  * Locale changes what the HTML says, so the server has to know it before
  * rendering. Theme changes only which CSS variables apply — the markup is
  * identical either way — so keeping it out of the request means anonymous
- * pages stay one cached artifact instead of two. The inline script in
- * nuxt.config applies the class before first paint, so there is no flash.
+ * pages stay one cached artifact instead of two.
  *
- * Light and dark, nothing else. The OS preference is read once by that inline
- * script to pick a sensible starting point; after that the button decides and
- * the choice sticks.
+ * PARKED until dark mode is designed: the toggle is not rendered and the
+ * inline script that applied the stored choice before first paint is gone
+ * from nuxt.config. Bringing it back means restoring that script — setting
+ * `data-theme` on <html>, which is what the tokens in colors.css key off —
+ * and putting ChromeThemeToggle back in SiteHeader.
  */
 export function useTheme() {
   // 'light' on the server, corrected on mount where the DOM exists
@@ -24,7 +25,7 @@ export function useTheme() {
   const commit = (next: Theme): void => {
     theme.value = next
     localStorage.setItem(STORAGE_KEY, next)
-    document.documentElement.classList.toggle('dark', next === 'dark')
+    document.documentElement.dataset.theme = next
     document.documentElement.style.colorScheme = next
   }
 
@@ -66,7 +67,7 @@ export function useTheme() {
   onMounted(() => {
     // read back what the inline script already decided, so the button starts in
     // agreement with the page rather than guessing
-    theme.value = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+    theme.value = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
   })
 
   return { theme, isDark, set, toggle }
