@@ -82,7 +82,9 @@ jobs:
           submodules: recursive
 
       - name: Build image
-        run: docker build --platform linux/amd64 -t thelighthouse:ci .
+        run: |
+          touch billing.yaml
+          docker build --platform linux/amd64 --build-context ohara=fixture -t thelighthouse:ci .
 
       # A build that succeeds and an image that serves are different claims.
       # This asserts the routing too: the frontend is public, the api is not.
