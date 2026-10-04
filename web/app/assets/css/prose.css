@@ -1,435 +1,171 @@
-/* lesson body content: images, blockquotes, tables, tooltips, related chapters */
+/* Rendered markdown — lessons, project tasks, blog posts, syntax pages.
+ *
+ * `.lesson-content` is the hook every page already wraps its v-html in, so it
+ * stays the selector. Body 17/29, headings from the scale, code on the
+ * terminal ground. No italics, no pills.
+ */
 
-/* images */
-
-/* default image styling */
-.lesson-content img,
-.lesson-content.prose img,
-.lesson-content p img,
-.prose img {
-    box-shadow: none !important;
-    max-width: 100% !important;
-    height: auto !important;
-    margin: 1.5rem 0 !important;
-    border-radius: 0.5rem !important;
+.lesson-content {
+  font: var(--text-body);
+  color: var(--ink-secondary);
+  overflow-wrap: break-word;
 }
 
-/* predefined image sizes - use with <img class="img-lg" ...> in markdown */
-.lesson-content img.img-sm {
-    max-width: 400px !important;
-    width: 100% !important;
+.lesson-content > :first-child { margin-top: 0; }
+
+.lesson-content :is(p, ul, ol, blockquote, table, pre, figure) {
+  margin: 0 0 var(--space-6);
 }
 
-.lesson-content img.img-md {
-    max-width: 600px !important;
-    width: 100% !important;
+.lesson-content :is(h1, h2, h3, h4) {
+  color: var(--ink);
+  text-wrap: balance;
+  scroll-margin-top: var(--space-6);
 }
 
-.lesson-content img.img-lg {
-    max-width: 100% !important;
-    min-width: 100% !important;
-    width: 100% !important;
+.lesson-content h1 { margin: var(--space-12) 0 var(--space-4); font: var(--text-h1); letter-spacing: var(--tracking-h1); }
+.lesson-content h2 { margin: var(--space-12) 0 var(--space-4); font: var(--text-h2); letter-spacing: var(--tracking-h2); }
+.lesson-content h3 { margin: var(--space-8) 0 var(--space-3); font: var(--text-h3); letter-spacing: var(--tracking-title); }
+.lesson-content h4 { margin: var(--space-6) 0 var(--space-2); font: 500 16px/24px var(--font-sans); }
+
+/* the injected heading anchor: invisible until hovered or focused */
+.lesson-content .anchor {
+  margin-left: 0.4em;
+  color: var(--ink-faint);
+  opacity: 0;
+  text-decoration: none;
+  transition: opacity var(--duration) var(--ease-out);
 }
 
-.lesson-content img.img-xl {
-    max-width: none !important;
-    min-width: 100% !important;
-    width: 100% !important;
-    margin-left: -2rem !important;
-    margin-right: -2rem !important;
-    width: calc(100% + 4rem) !important;
+.lesson-content .anchor::after { content: '#'; }
+
+.lesson-content :is(h1, h2, h3, h4):hover .anchor,
+.lesson-content .anchor:focus-visible { opacity: 1; }
+
+.lesson-content strong, .lesson-content b { font-weight: var(--weight-medium); color: var(--ink); }
+
+/* the system has no italic in running copy */
+.lesson-content em, .lesson-content i { font-style: normal; color: var(--ink); }
+
+.lesson-content a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 4px;
+  transition: text-decoration-color var(--duration) var(--ease-out);
 }
 
-/* blockquotes */
+.lesson-content a:hover { text-decoration-color: var(--ink); }
 
-/* blockquote styling - clean pencil sketch style */
-.lesson-content.prose blockquote {
-    margin: 2rem 0 !important;
-    padding: 1.5rem 2rem 1.5rem 2rem !important;
-    background: transparent !important;
-    border: none !important;
-    border-left: 3px solid var(--color-quiet) !important;
-    font-style: italic !important;
-    filter: url(#pencil-filter);
+.lesson-content :is(ul, ol) { padding-left: var(--space-6); }
+.lesson-content ul { list-style: disc; }
+.lesson-content ol { list-style: decimal; }
+.lesson-content li { margin: var(--space-1) 0; }
+.lesson-content li::marker { color: var(--ink-faint); font: var(--text-label-mono); }
+.lesson-content li > :is(ul, ol) { margin: var(--space-1) 0 0; }
+
+.lesson-content hr {
+  margin: var(--space-12) 0;
+  border: 0;
+  border-top: 1px dashed var(--border-dashed);
 }
 
-.lesson-content.prose blockquote p {
-    margin: 0 !important;
-    color: var(--color-ink-hover) !important;
-    font-weight: 400 !important;
-    font-size: 1.15rem !important;
-    line-height: 1.8 !important;
-    font-family: Georgia, 'Times New Roman', serif !important;
+.lesson-content blockquote {
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  font: var(--text-quote);
+  color: var(--ink-secondary);
+}
+
+.lesson-content blockquote > :last-child { margin-bottom: 0; }
+
+/* images, with the sizes markdown can ask for */
+.lesson-content img {
+  max-width: 100%;
+  height: auto;
+  margin: var(--space-6) 0;
+  border-radius: var(--radius-md);
+}
+
+.lesson-content img.img-sm { width: 100%; max-width: 400px; }
+.lesson-content img.img-md { width: 100%; max-width: 600px; }
+.lesson-content img.img-lg,
+.lesson-content img.img-xl { width: 100%; }
+
+/* inline code */
+.lesson-content :not(pre) > code {
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-muted);
+  font: var(--text-code);
+  font-size: 0.85em;
+  color: var(--ink);
+}
+
+/* code blocks — the terminal ground, whatever the highlighter wrote inline */
+.lesson-content pre {
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  background: #0d1117 !important;
+  font: var(--text-code);
+  color: #c9d1d9;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.lesson-content pre code {
+  font: inherit;
+  color: inherit;
+  background: none;
+  white-space: pre;
 }
 
 /* tables */
-
-/* Pencil/hand-drawn style tables for lesson content */
-.lesson-content .table-scroll-wrapper {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    margin: 2rem 0;
-}
-
-/* on laptop+ screens, let tables break out of the narrow prose column
-   instead of scrolling horizontally */
-@media (min-width: 1024px) {
-    .lesson-content .table-scroll-wrapper {
-        overflow-x: visible;
-        margin-left: -4rem;
-        margin-right: -4rem;
-    }
-}
-
 .lesson-content table {
-    margin: 2rem 0;
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    overflow: visible;
-    position: relative;
-    background: white;
-    border: 2px solid var(--color-ink);
-    filter: url(#pencil-filter);
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--text-body-sm);
 }
 
-/* when wrapped, remove table's own margin (wrapper handles it) */
-.lesson-content .table-scroll-wrapper table {
-    margin: 0;
-}
-
-.lesson-content thead {
-    background: var(--color-quote-bg);
-}
+.lesson-content .table-scroll-wrapper { overflow-x: auto; margin-bottom: var(--space-6); }
+.lesson-content .table-scroll-wrapper table { margin: 0; }
 
 .lesson-content th {
-    padding: 0.75rem 1rem;
-    text-align: left;
-    font-weight: 600;
-    font-size: 0.875rem;
-    color: var(--color-ink);
-    border-bottom: 2px solid var(--color-ink);
-    border-right: 1px solid var(--color-ink);
-}
-
-.lesson-content th:last-child {
-    border-right: none;
-}
-
-@media (min-width: 640px) {
-    .lesson-content th {
-        padding: 1rem 1.25rem;
-        font-size: 0.9375rem;
-    }
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-strong);
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+  text-align: left;
 }
 
 .lesson-content td {
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--color-ink);
-    border-right: 1px solid var(--color-ink);
-    color: var(--color-ink);
-    font-size: 0.875rem;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
 }
 
-.lesson-content td:last-child {
-    border-right: none;
+/* authored callouts. Older lessons draw these with pencil-border classes;
+   they render as plain containers now. */
+.lesson-content [class*='border-pencil'] {
+  margin: var(--space-6) 0;
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
 }
 
-.lesson-content tbody tr:last-child td {
-    border-bottom: none;
+.lesson-content .highlight-wavy {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
 }
 
-@media (min-width: 640px) {
-    .lesson-content td {
-        padding: 1rem 1.25rem;
-        font-size: 0.9375rem;
-    }
+@media (max-width: 600px) {
+  .lesson-content pre { margin-inline: calc(var(--space-6) * -1); border-radius: 0; }
 }
 
-.lesson-content tbody tr {
-    transition: background-color 0.15s ease;
-}
-
-.lesson-content tbody tr:nth-child(even) {
-    background: var(--color-panel);
-}
-
-.lesson-content tbody tr:nth-child(odd) {
-    background: white;
-}
-
-.lesson-content tbody tr:hover {
-    background: var(--color-quote-bg);
-}
-
-/* related chapters block */
-
-/* Related chapters block - pencil sketch style */
-.related-chapters-block {
-    margin: 1.5rem 0;
-    padding: 0.75rem 1rem;
-    background: white;
-    border: 2px solid var(--color-ink);
-    border-radius: 0.5rem;
-    filter: url(#pencil-filter);
-}
-
-.related-chapters-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.375rem;
-    border-bottom: 1px solid var(--color-prose-edge);
-}
-
-.related-chapters-icon {
-    width: 1.25rem;
-    height: 1.25rem;
-    color: var(--color-quiet);
-    flex-shrink: 0;
-}
-
-.related-chapters-title {
-    font-size: 0.9375rem;
-    font-weight: 600;
-    color: var(--color-ink);
-    letter-spacing: -0.01em;
-}
-
-.related-chapters-list {
-    list-style: none;
-    margin: 0;
-    padding: 0 !important;
-    padding-left: 0 !important;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-}
-
-.related-chapter-item {
-    display: flex;
-    align-items: center;
-    padding: 0;
-    margin: 0;
-}
-
-.related-chapter-link {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0;
-    border-radius: 0.25rem;
-    text-decoration: none;
-    color: inherit;
-    width: 100%;
-    transition: background-color 0.15s ease;
-}
-
-.related-chapter-link:hover {
-    background-color: var(--color-quote-bg);
-}
-
-.related-chapter-number {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--color-quiet);
-    background: var(--color-stripe);
-    border-radius: 0.25rem;
-    flex-shrink: 0;
-}
-
-.related-chapter-title {
-    font-size: 0.9375rem;
-    color: var(--color-ink);
-    flex: 1;
-    transition: color 0.15s ease;
-}
-
-.related-chapter-arrow {
-    width: 1rem;
-    height: 1rem;
-    color: var(--color-prose-faint);
-    flex-shrink: 0;
-    opacity: 0;
-    transform: translateX(-4px);
-    transition:
-        opacity 0.15s ease,
-        transform 0.15s ease;
-}
-
-.related-chapter-link:hover .related-chapter-arrow {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-/* upcoming/placeholder chapters */
-.related-chapter-upcoming {
-    padding: 0;
-    gap: 0.5rem;
-    opacity: 0.7;
-}
-
-.related-chapter-upcoming .related-chapter-number {
-    background: var(--color-stripe);
-    color: var(--color-prose-mute);
-}
-
-.related-chapter-badge {
-    font-size: 0.6875rem;
-    font-weight: 500;
-    color: var(--color-prose-mute);
-    background: var(--color-stripe);
-    padding: 0.125rem 0.5rem;
-    border-radius: 9999px;
-    margin-left: auto;
-}
-
-/* inline highlights and term tooltips */
-
-/* Inline highlight — decorative emphasis, solid green underline, no tooltip */
-.highlight-wavy {
-    text-decoration: underline solid;
-    text-decoration-color: oklch(59.6% 0.145 163.225); /* emerald-600 */
-    text-underline-offset: 3px;
-    text-decoration-thickness: 1.5px;
-}
-
-/* Inline term tooltip — wavy underline trigger */
-.term-tooltip {
-    text-decoration: underline wavy;
-    text-decoration-color: var(--color-prose-accent-soft); /* blue-300 */
-    text-underline-offset: 3px;
-    text-decoration-thickness: 1.5px;
-    cursor: pointer;
-    transition: text-decoration-color 0.15s ease;
-}
-
-.term-tooltip:hover {
-    text-decoration-color: var(--color-prose-accent); /* blue-500 */
-}
-
-/* tooltip popup card */
-.term-tooltip-popup {
-    position: absolute;
-    z-index: 9999;
-    max-width: 360px;
-    padding: 0.75rem 1rem;
-    background: white;
-    border: 2px solid var(--color-ink);
-    border-radius: 0.5rem;
-    filter: url(#pencil-filter);
-    font-size: 0.8125rem;
-    line-height: 1.6;
-    color: var(--color-ink);
-    pointer-events: auto;
-    opacity: 0;
-    transform: translateY(4px);
-    transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.term-tooltip-popup.term-tooltip-visible {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-/* arrow pointing down (tooltip above) */
-.term-tooltip-popup::after {
-    content: '';
-    position: absolute;
-    bottom: -7px;
-    left: 50%;
-    transform: translateX(-50%) rotate(45deg);
-    width: 10px;
-    height: 10px;
-    background: white;
-    border-right: 2px solid var(--color-ink);
-    border-bottom: 2px solid var(--color-ink);
-}
-
-/* arrow pointing up (tooltip below) */
-.term-tooltip-popup.term-tooltip-below::after {
-    bottom: auto;
-    top: -7px;
-    border-right: none;
-    border-bottom: none;
-    border-left: 2px solid var(--color-ink);
-    border-top: 2px solid var(--color-ink);
-}
-
-/* markdown inside tooltip */
-.term-tooltip-popup strong {
-    font-weight: 600;
-    color: var(--color-ink);
-}
-
-.term-tooltip-popup code {
-    background: var(--color-paper-edge);
-    padding: 0.125rem 0.375rem;
-    border-radius: 0.25rem;
-    font-size: 0.75rem;
-}
-
-.term-tooltip-popup pre {
-    margin: 0.5rem 0;
-    padding: 0.625rem 0.75rem;
-    background: var(--color-code-bg);
-    border: 1px solid var(--color-rule);
-    border-radius: 0.375rem;
-    overflow-x: auto;
-}
-
-.term-tooltip-popup pre code {
-    background: none;
-    padding: 0;
-    font-size: 0.7rem;
-    line-height: 1.5;
-    white-space: pre;
-}
-
-/* Heading anchors and where a jump lands.
- *
- * The renderer gives every heading an id and drops a deep-link <a class="anchor">
- * inside it. Two things follow from that.
- */
-
-/* A jump puts the heading hard against the top of the viewport, where it reads
- * as the page having lost its first line. Land it a little below instead.
- */
-.lesson-content :is(h1, h2, h3, h4) {
-    scroll-margin-top: 24px;
-}
-
-/* The injected anchor is empty, so it is invisible but still focusable — a
- * keyboard user tabs through one per heading with nothing to see. Give it
- * something on hover and, more importantly, on focus.
- */
-.lesson-content .anchor {
-    margin-left: 0.4em;
-    opacity: 0;
-    text-decoration: none;
-    transition: opacity 120ms;
-}
-
-.lesson-content .anchor::after {
-    content: '#';
-}
-
-.lesson-content :is(h1, h2, h3, h4):hover .anchor,
-.lesson-content .anchor:focus-visible {
-    opacity: 0.45;
-}
-
-/* Smooth only where it is wanted: `prefers-reduced-motion` is a request from
- * someone for whom motion is a symptom, not a preference.
- */
 @media (prefers-reduced-motion: no-preference) {
-    html {
-        scroll-behavior: smooth;
-    }
+  html { scroll-behavior: smooth; }
 }

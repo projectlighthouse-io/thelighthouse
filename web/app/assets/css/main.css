@@ -5,10 +5,8 @@
 
 /* theme first — it defines the @theme tokens and :root variables the rest use */
 @import './theme.css';
-@import './code.css';
 @import './animation.css';
 @import './pencil.css';
-@import './prose.css';
 @import './transition.css';
 @import './masthead.css';
 
@@ -22,6 +20,7 @@
 @import './tokens/motion.css';
 @import './tokens/base.css';
 @import './system.css';
+@import './prose.css';
 
 /* reader.css is NOT imported here on purpose — it is one system scoped under
    .reader-shell and only the lesson page needs it, so that page imports it
