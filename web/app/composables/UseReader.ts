@@ -6,6 +6,8 @@ export interface Reader {
   sub: string
   provider: string
   name: string
+  /** The public handle, when one has been chosen. The header shows it. */
+  username: string | null
   email: string
   avatar: string | null
   /**

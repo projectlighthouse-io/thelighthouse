@@ -6,9 +6,48 @@ const description
 
 // From ohara, through the rust api. During SSR this calls the handler directly,
 // so it costs no HTTP round trip.
-const { data } = await useAsyncData('books', () => $fetch<Book[]>('/_api/books'))
+const { data } = await useShelf()
 
 const books = computed<Book[]>(() => data.value ?? [])
+
+/**
+ * The track tabs, named here so their order is a decision rather than
+ * whatever the response happened to contain. A book on no track is still on
+ * the shelf under `all`. `?track=` is the tab, so a track is a link.
+ */
+const TRACKS = ['go', 'rust', 'systems'] as const
+
+type Track = 'all' | typeof TRACKS[number]
+
+const isTrack = (value: unknown): value is Track =>
+  value === 'all' || (TRACKS as readonly string[]).includes(value as string)
+
+const route = useRoute()
+const router = useRouter()
+
+const track = ref<Track>(isTrack(route.query.track) ? route.query.track : 'all')
+
+watch(track, (chosen) => {
+  void router.replace({ query: chosen === 'all' ? {} : { track: chosen } })
+})
+
+const onTrack = (book: Book, key: Track): boolean =>
+  key === 'all' || book.tracks[key] !== undefined
+
+const tabs = computed(() =>
+  (['all', ...TRACKS] as const)
+    .map(key => ({ key, label: key, count: books.value.filter(b => onTrack(b, key)).length }))
+    .filter(tab => tab.key === 'all' || tab.count > 0))
+
+/** A track is a reading order, so a track shows in that order. */
+const shown = computed<Book[]>(() => {
+  const chosen = track.value
+  const matching = books.value.filter(book => onTrack(book, chosen))
+
+  if (chosen === 'all') return matching
+
+  return [...matching].sort((a, b) => (a.tracks[chosen] ?? 0) - (b.tracks[chosen] ?? 0))
+})
 
 useSeo({
   title: 'Programming Books - Go, Rust, DSA, Networking, OS',
@@ -31,18 +70,30 @@ useJsonLd('books', () => ({
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1120px] bg-panel px-[52px] pt-[52px] pb-24 max-[820px]:px-10 max-[820px]:pt-10">
-    <!-- `bg-panel` so the body's dotted paper stops at the edge of the slab,
-         the same way the book page's does. -->
-    <header class="text-center">
-      <h1 class="masthead-title">Books</h1>
-      <p class="masthead-dek mx-auto max-w-[30em]">
-        Programming concepts in depth, one topic at a time.
-      </p>
-    </header>
+  <div class="books">
+    <section class="lh-text lh-gap">
+      <div class="lh-head">
+        <h1 class="lh-h2">Books</h1>
+        <p class="lh-sub">Carefully crafted books to help you level up your skills</p>
+      </div>
+    </section>
 
-    <!-- The shelf owns the tabs, the filtering and the covers. This page owns
-         the slab, the title and what a crawler reads. -->
-    <BookShelf :books="books" />
+    <div class="lh-shelf shelf">
+      <div v-if="tabs.length > 1" class="tabs">
+        <SegmentedFilter v-model="track" :options="tabs" label="filter by track" />
+      </div>
+
+      <BookGrid :books="shown" />
+    </div>
   </div>
 </template>
+
+<style scoped>
+.shelf { margin-top: var(--space-12); }
+
+.tabs {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 40px;
+}
+</style>

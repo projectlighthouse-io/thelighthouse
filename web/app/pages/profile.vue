@@ -1,71 +1,114 @@
 <script setup lang="ts">
+import type { Project, ProjectProgress } from '@/types/Content'
+
 definePageMeta({ middleware: 'auth' })
 
 useSeo({
-  title: 'Profile — projectlighthouse',
-  description: 'Your projectlighthouse profile and reading stats.',
+  title: 'Progress — projectlighthouse',
+  description: 'Where you are in each project.',
   noindex: true,
 })
 
 // The route guard already resolved the session to let this page render, so
 // this reads the state rather than asking again.
-const { reader, initials, signOut } = useReader()
+const { reader, signOut } = useReader()
 
-const stats = [
-  { label: 'lessons read', value: '—' },
-  { label: 'projects shipped', value: '—' },
-  { label: 'notes taken', value: '—' },
-  { label: 'day streak', value: '—' },
-]
+interface Row {
+  project: Project
+  progress: ProjectProgress
+}
+
+/**
+ * Every project the reader has started, with how far along each is.
+ *
+ * Browser only, like the rest of this page — one progress request per project,
+ * asked once rather than polled. A project with nothing run and nothing done
+ * is not started and is left off.
+ */
+const { data: rows, pending } = await useAsyncData('progress-rows', async () => {
+  const projects = await $fetch<Project[]>('/_api/projects').catch(() => [] as Project[])
+
+  const answers = await Promise.all(projects.map(project =>
+    $fetch<ProjectProgress>(`/api/projects/${encodeURIComponent(project.slug)}/progress`)
+      .then(progress => ({ project, progress }))
+      .catch(() => null)))
+
+  return answers.filter((row): row is Row =>
+    row !== null && (row.progress.completed > 0 || row.progress.run > 0))
+}, { server: false })
+
+const ticks = (progress: ProjectProgress): boolean[] =>
+  Array.from({ length: progress.total }, (_, i) => i < progress.completed)
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-2 py-16 sm:px-6 lg:px-8">
-    <div class="flex items-center gap-5">
-      <img
-        v-if="reader?.avatar"
-        :src="reader.avatar"
-        alt=""
-        class="size-16 shrink-0 rounded-full object-cover"
-      >
-      <div
-        v-else
-        class="flex size-16 shrink-0 items-center justify-center rounded-full bg-ink font-mono text-lg text-on-ink"
-      >
-        {{ initials }}
-      </div>
-      <div>
-        <h1 class="font-serif text-3xl tracking-tight text-ink">
-          {{ reader?.name ?? 'Your profile' }}
-        </h1>
-        <p class="text-mono-body mt-1">
-          {{ reader ? `${reader.email} · signed in with ${reader.provider}` : 'loading…' }}
-        </p>
-      </div>
+  <AccountShell
+    title="Progress"
+    :sub="reader ? `${reader.name} · signed in with ${reader.provider}` : undefined"
+  >
+    <p v-if="pending" class="lh-sub">Loading…</p>
+
+    <ul v-else-if="rows?.length" class="rows">
+      <li v-for="row in rows" :key="row.project.slug">
+        <NuxtLink :to="`/projects/${row.project.slug}`" class="row">
+          <span class="top">
+            <span class="lh-h3">{{ row.project.name }}</span>
+            <span class="lh-mono lh-muted">{{ row.project.isChallenge ? 'challenge' : 'project' }}</span>
+          </span>
+          <span class="lh-ticks" aria-hidden="true">
+            <span v-for="(done, i) in ticks(row.progress)" :key="i" :class="{ 'is-done': done }" />
+          </span>
+          <span class="lh-mono lh-muted lh-num">
+            {{ row.progress.completed }} of {{ row.progress.total }} done · {{ row.progress.points_earned }} points
+          </span>
+        </NuxtLink>
+      </li>
+    </ul>
+
+    <EmptyState
+      v-else
+      class="lh-card"
+      eyebrow="nothing started"
+      heading="Which one will you build?"
+      detail="Start a project or a challenge and its progress shows up here."
+      :action="{ label: 'See the projects', to: '/projects' }"
+    />
+
+    <div class="out">
+      <UiButton variant="ghost" size="md" @click="signOut">Sign out</UiButton>
     </div>
-
-    <dl class="mt-12 grid grid-cols-2 gap-px overflow-hidden rounded-md bg-rule sm:grid-cols-4">
-      <div v-for="stat in stats" :key="stat.label" class="bg-panel p-5">
-        <dt class="font-mono text-xs text-faint">{{ stat.label }}</dt>
-        <dd class="mt-1 font-serif text-2xl text-ink">{{ stat.value }}</dd>
-      </div>
-    </dl>
-
-    <div class="mt-10 flex flex-wrap items-center gap-4">
-      <NuxtLink
-        to="/settings/profile"
-        class="btn-chalk text-sm font-medium text-ink"
-      >
-        edit settings <span class="ml-1">———→</span>
-      </NuxtLink>
-
-      <button
-        type="button"
-        class="cursor-pointer rounded-md border border-stroke bg-panel px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-paper-warm"
-        @click="signOut"
-      >
-        sign out
-      </button>
-    </div>
-  </div>
+  </AccountShell>
 </template>
+
+<style scoped>
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.row {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--ink);
+  text-decoration: none;
+  transition: background-color var(--duration) var(--ease-out);
+}
+
+.row:hover { background: var(--surface-sunken); color: var(--ink); }
+
+.top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.out { margin-top: var(--space-12); }
+</style>

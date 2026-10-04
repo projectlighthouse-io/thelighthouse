@@ -30,6 +30,7 @@ export default defineEventHandler(async (event) => {
       title: book.title,
       description: book.description ?? '',
       thumbnailUrl: book.thumbnail_url ?? '',
+      tracks: book.tracks ?? {},
       pages: book.lesson_count,
       price: priceLabel(book.price),
       firstLesson: book.first_lesson,

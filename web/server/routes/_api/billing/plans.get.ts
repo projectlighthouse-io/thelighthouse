@@ -4,6 +4,10 @@ import { fromApi } from '#server/utils/Lighthouse'
 interface ApiPlan {
   plan: string
   track: string
+  /** Book slugs the plan unlocks, for the pricing card's list. */
+  books?: string[]
+  /** Every book, including ones published after purchase. */
+  everything?: boolean
   recurring: boolean
   amount: number | null
   currency: string | null
@@ -33,6 +37,8 @@ export default defineEventHandler(async () => {
   return plans.map(plan => ({
     plan: plan.plan,
     track: plan.track,
+    books: plan.books ?? [],
+    everything: plan.everything ?? false,
     recurring: plan.recurring,
     amount: plan.amount,
     currency: plan.currency,

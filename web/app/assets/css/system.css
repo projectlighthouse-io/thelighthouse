@@ -1,0 +1,325 @@
+/* The shared vocabulary every page composes from.
+
+   Only what more than one page needs lives here — a column, an eyebrow, a row
+   that fills on hover. A component's own look stays in that component's scoped
+   style. Every value is a token from ./tokens; the few literal colours below
+   are the off-system ones the handoff names (the terminal palette). */
+
+html { background: var(--surface-page); color-scheme: light; }
+
+body { min-height: 100vh; }
+
+img, svg { display: block; max-width: 100%; }
+
+summary { list-style: none; cursor: pointer; }
+summary::-webkit-details-marker { display: none; }
+
+/* columns — 730 for text, 960 for a figure, 1200 for wide bands */
+
+.lh-text,
+.lh-figure,
+.lh-shelf,
+.lh-wide {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: var(--space-6);
+}
+
+.lh-text { max-width: var(--measure-text); }
+.lh-figure { max-width: var(--measure-figure); }
+.lh-shelf { max-width: 1080px; }
+.lh-wide { max-width: 1200px; }
+
+/* the standing gaps between sections */
+.lh-gap { padding-top: var(--space-24); }
+.lh-gap-lg { padding-top: 128px; }
+
+/* type */
+
+.lh-eyebrow {
+  margin: 0;
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+}
+
+.lh-display {
+  margin: 0;
+  font: var(--text-display);
+  letter-spacing: var(--tracking-display);
+  text-wrap: balance;
+}
+
+.lh-h1 {
+  margin: 0;
+  font: var(--text-h1);
+  letter-spacing: var(--tracking-h1);
+  text-wrap: balance;
+}
+
+.lh-h2 {
+  margin: 0;
+  font: var(--text-h2);
+  letter-spacing: var(--tracking-h2);
+  text-wrap: balance;
+}
+
+.lh-h3 {
+  margin: 0;
+  font: var(--text-h3);
+  letter-spacing: var(--tracking-title);
+}
+
+/* the serif masthead the book and project pages open on */
+.lh-title-serif {
+  margin: 0;
+  font: 400 64px/68px var(--font-serif);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+@media (max-width: 760px) {
+  .lh-title-serif { font-size: 48px; line-height: 52px; }
+}
+
+.lh-lede {
+  margin: 0;
+  font: var(--text-body);
+  color: var(--ink-secondary);
+  text-wrap: pretty;
+  max-width: 560px;
+}
+
+.lh-sub {
+  margin: 0;
+  font: var(--text-body-sm);
+  color: var(--ink-secondary);
+  text-wrap: pretty;
+}
+
+.lh-caption {
+  margin: 0;
+  font: var(--text-caption);
+  color: var(--ink-secondary);
+}
+
+.lh-mono { font: var(--text-label-mono); }
+.lh-muted { color: var(--ink-muted); }
+.lh-faint { color: var(--ink-faint); }
+.lh-num { font-variant-numeric: tabular-nums; }
+
+/* a quiet text link — secondary at rest, ink on hover */
+.lh-link {
+  color: var(--ink-secondary);
+  text-decoration: none;
+  transition: color var(--duration) var(--ease-out);
+}
+
+.lh-link:hover { color: var(--ink); }
+
+/* an inline link inside running text */
+.lh-inline {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.lh-inline:hover { color: var(--ink-secondary); }
+
+/* the heading block that opens a page or band */
+.lh-head {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* containers */
+
+.lh-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+}
+
+.lh-card-sunken {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-md);
+  padding: var(--space-5) var(--space-6);
+}
+
+/* a list row: a link that fills on hover, nothing else */
+.lh-row {
+  display: block;
+  padding: 14px var(--space-4);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  text-decoration: none;
+  transition: background-color var(--duration) var(--ease-out);
+}
+
+a.lh-row:hover,
+button.lh-row:hover { background: var(--surface-sunken); color: var(--ink); }
+
+/* the dashed rule that separates free from pro, and sections inside a card */
+.lh-dashed {
+  border: 0;
+  border-top: 1px dashed var(--border-dashed);
+  margin: 0;
+}
+
+/* progress ticks — the desk's style, reused by the shelf and progress pages */
+.lh-ticks {
+  display: flex;
+  gap: 3px;
+}
+
+.lh-ticks > span {
+  flex: 1;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.lh-ticks > span.is-done { background: var(--ink); }
+
+/* forms — fields are pills */
+
+.lh-field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.lh-label {
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+}
+
+.lh-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: var(--text-body-sm);
+  transition: border-color var(--duration) var(--ease-out);
+}
+
+.lh-input::placeholder { color: var(--ink-faint); }
+.lh-input:hover { border-color: var(--ink-faint); }
+.lh-input:focus-visible { border-color: var(--focus-ring); }
+
+textarea.lh-input {
+  height: auto;
+  min-height: 120px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  resize: vertical;
+}
+
+.lh-hint {
+  margin: 0;
+  font: var(--text-caption);
+  color: var(--ink-muted);
+}
+
+.lh-error {
+  margin: 0;
+  font: var(--text-caption);
+  color: var(--ink);
+}
+
+/* a definition list of mono labels and values, for billing and settings */
+.lh-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 160px) minmax(0, 1fr);
+  gap: var(--space-3) var(--space-6);
+}
+
+.lh-facts dt {
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+  padding-top: 4px;
+}
+
+.lh-facts dd {
+  margin: 0;
+  font: var(--text-body-sm);
+  color: var(--ink);
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  .lh-facts { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .lh-facts dd { margin-bottom: var(--space-3); }
+}
+
+/* the shared terminal palette — off-system on purpose, see the handoff */
+.lh-terminal {
+  --term-bg: #0d1117;
+  --term-text: #c9d1d9;
+  --term-bright: #e6edf3;
+  --term-grey: #6e7681;
+  --term-dim: #4b535d;
+  --term-green: #4ec27a;
+  --term-blue: #5aabf3;
+  --term-orange: #e3a857;
+  --term-yellow: #e3c04a;
+  --term-red: #f0655f;
+  --term-line: #30363d;
+
+  background: var(--term-bg);
+  color: var(--term-text);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.lh-noscroll { scrollbar-width: none; }
+.lh-noscroll::-webkit-scrollbar { display: none; }
+
+@keyframes lh-caret {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0; }
+}
+
+.lh-caret {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  vertical-align: -3px;
+  background: var(--term-blue, var(--accent));
+  animation: lh-caret 1.1s steps(1, end) infinite;
+}
+
+/* the inverse frame pricing and the mailbox sit in */
+.lh-inverse {
+  --ink-inverse-muted: #8a8a8a;
+  --ink-inverse-secondary: #c9c9c9;
+  --ink-inverse-faint: #3a3a3a;
+
+  background: var(--surface-inverse);
+  color: var(--ink-inverse);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2);
+}
+
+/* visually hidden, still read */
+.lh-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* route transitions — paired with app.pageTransition in nuxt.config */
+.page-enter-active,
+.page-leave-active { transition: opacity var(--duration) var(--ease-out); }
+.page-enter-from,
+.page-leave-to { opacity: 0; }
+
+.layout-enter-active { transition: opacity var(--duration) var(--ease-out); }
+.layout-enter-from { opacity: 0; }

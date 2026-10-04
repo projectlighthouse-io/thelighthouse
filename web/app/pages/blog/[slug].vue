@@ -35,27 +35,36 @@ useJsonLd('post', () => ({
 </script>
 
 <template>
-  <article v-if="post" class="mx-auto max-w-3xl px-2 py-16 sm:px-6 lg:px-8">
-    <nav class="mb-8 font-mono text-sm text-faint">
-      <NuxtLink to="/blog" class="hover:text-ink">blog</NuxtLink>
-      <span class="mx-3 text-crumb">/</span>
-      <span class="text-quiet">{{ post.slug }}</span>
-    </nav>
-
-    <div class="mb-4 flex flex-wrap items-center gap-3 font-mono text-xs text-faint">
-      <time :datetime="post.publishedAt">{{ post.publishedAt }}</time>
-      <span>·</span>
-      <span>{{ post.readMinutes }} min read</span>
-      <span v-for="tag in post.tags" :key="tag" class="text-teal">#{{ tag }}</span>
-    </div>
-
-    <h1 class="font-editorial text-4xl leading-tight text-ink sm:text-5xl font-semibold">
-      {{ post.title }}
-    </h1>
-
-    <p class="mt-6 font-serif text-lg leading-relaxed text-quiet">{{ post.description }}</p>
+  <article v-if="post" class="post lh-text lh-gap">
+    <header class="lh-head">
+      <p class="lh-eyebrow">
+        <NuxtLink to="/blog" class="lh-link">blog</NuxtLink>
+        · <time :datetime="post.publishedAt">{{ post.publishedAt }}</time>
+        · {{ post.readMinutes }} min read
+      </p>
+      <h1 class="lh-h1">{{ post.title }}</h1>
+      <p class="lh-lede">{{ post.description }}</p>
+      <ul v-if="post.tags.length" class="tags" aria-label="tags">
+        <li v-for="tag in post.tags" :key="tag">#{{ tag }}</li>
+      </ul>
+    </header>
 
     <!-- eslint-disable-next-line vue/no-v-html -- authored markdown, rendered at build -->
-    <div class="lesson-content prose mt-12 max-w-none" v-html="post.html" />
+    <div class="lesson-content body" v-html="post.html" />
   </article>
 </template>
+
+<style scoped>
+.tags {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px var(--space-4);
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+}
+
+.body { margin-top: var(--space-12); }
+</style>

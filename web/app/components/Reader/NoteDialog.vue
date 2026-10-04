@@ -79,10 +79,8 @@ const onKeydown = (event: KeyboardEvent): void => {
          costs an unsaved sentence and never a saved one. -->
     <div class="reader-notedialog__veil" @click="emit('cancel')" />
 
-    <div class="reader-notedialog__card border-pencil-light bg-panel">
-      <div class="font-mono text-xs tracking-wide text-teal-deep">
-        <span class="text-faint">/ </span>your note
-      </div>
+    <div class="reader-notedialog__card">
+      <p class="lh-eyebrow">your note</p>
 
       <blockquote class="reader-notedialog__passage">
         {{ preview }}
@@ -97,13 +95,13 @@ const onKeydown = (event: KeyboardEvent): void => {
         placeholder="what you want to remember about this…"
       />
 
-      <div class="mt-2 flex items-center justify-between">
-        <label class="flex cursor-pointer items-center gap-2 text-xs text-quiet">
-          <input v-model="isPrivate" type="checkbox" class="cursor-pointer">
+      <div class="reader-notedialog__row">
+        <label class="reader-notedialog__private">
+          <input v-model="isPrivate" type="checkbox">
           keep this one private
         </label>
 
-        <span class="font-mono text-[11px] text-faint">
+        <span class="lh-mono lh-faint lh-num">
           {{ content.length }}/{{ MAX_NOTE }}
         </span>
       </div>
@@ -112,22 +110,11 @@ const onKeydown = (event: KeyboardEvent): void => {
         {{ error }}
       </p>
 
-      <div class="mt-5 flex items-center justify-end gap-3">
-        <button
-          type="button"
-          class="cursor-pointer rounded-lg border border-stroke bg-panel px-4 py-2 text-sm text-ink transition hover:bg-paper-warm"
-          @click="emit('cancel')"
-        >
-          cancel
-        </button>
-        <button
-          type="button"
-          class="cursor-pointer rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-on-ink transition hover:bg-ink-hover disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="!submittable"
-          @click="save"
-        >
+      <div class="reader-notedialog__actions">
+        <UiButton variant="ghost" size="md" @click="emit('cancel')">cancel</UiButton>
+        <UiButton variant="inverse" size="md" :disabled="!submittable" @click="save">
           {{ saving ? 'saving…' : 'save note' }}
-        </button>
+        </UiButton>
       </div>
     </div>
   </div>

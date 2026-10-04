@@ -1,1643 +1,469 @@
-/* projectlighthouse reader — generic styles for ReaderShell and friends.
-   Scoped under .reader-shell so other pages keep their existing look. */
+/* The lesson reader: a 730 column with an on-this-page list beside it on wide
+ * screens, plus the floating pieces — the selection menu, the note dialog and
+ * popover — and the notes thread under the lesson.
+ *
+ * Imported by the pages that read (lessons, project tasks) rather than by
+ * main.css. Scoped under .reader-shell except where a piece is fixed to the
+ * viewport.
+ */
 
-.reader-shell {
-    --reader-ink: var(--color-read-ink);
-    --reader-ink-2: var(--color-read-ink-soft);
-    --reader-mute: var(--color-read-mute);
-    --reader-faint: var(--color-read-faint);
-    --reader-line: var(--color-read-line);
-    --reader-line-2: var(--color-read-line-soft);
-    --reader-bg: var(--color-read-bg);
-    --reader-bg-2: var(--color-read-bg-soft);
-    --reader-teal: var(--color-teal-mid);
-    --reader-teal-d: var(--color-teal-deep);
-    --reader-teal-soft: var(--color-teal-wash);
-
-    --reader-display: 'IM Fell English', Georgia, serif;
-    --reader-serif: 'Newsreader', Georgia, serif;
-    --reader-sans: 'Inter', -apple-system, system-ui, sans-serif;
-    --reader-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-
-    font-family: var(--reader-sans);
-    color: var(--reader-ink);
-    font-size: 14px;
-    line-height: 1.6;
-    -webkit-font-smoothing: antialiased;
-}
-
-.reader-shell * {
-    box-sizing: border-box;
-}
-
-/* ---------- top progress bar ---------- */
 .reader-progress {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    z-index: 60;
-    background: transparent;
-    pointer-events: none;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 2px;
+  background: var(--border);
 }
 
 .reader-progress > span {
-    display: block;
-    height: 100%;
-    width: 0%;
-    background: var(--reader-teal);
-    transition: width 80ms linear;
+  display: block;
+  height: 100%;
+  background: var(--ink);
 }
 
-/* ---------- sticky sub-bar ---------- */
-/* The breadcrumb sits on the page, not on a bar of its own.
- *
- * It used to be a sticky strip: translucent white, blurred, with a rule under
- * it. All three went together — the background and blur existed *because* it
- * was sticky and prose scrolled beneath it, and the rule was what separated
- * that strip from the page. Take the background away and keep the sticking and
- * you get breadcrumb text sitting over moving paragraphs, which is not a
- * lighter version of the design but a broken one.
- *
- * So it scrolls with the page now. Nothing is lost: the table of contents is
- * still sticky, and the article carries its own previous/next links.
- */
-.reader-subbar {
-    z-index: 30;
-}
-
-.reader-subbar__inner {
-    max-width: 1280px;
-    margin: 0 auto;
-    padding: 12px 40px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-family: var(--reader-mono);
-    font-size: 12px;
-    color: var(--reader-mute);
-}
-
-.reader-subbar__book {
-    color: var(--reader-ink-2);
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.reader-subbar__book svg {
-    width: 14px;
-    height: 14px;
-    color: var(--reader-teal);
-}
-
-.reader-subbar__sep {
-    color: var(--reader-faint);
-}
-
-.reader-subbar__cur {
-    color: var(--reader-ink);
-}
-
-.reader-subbar__spacer {
-    margin-left: auto;
-}
-
-.reader-subbar__rt {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-}
-
-.reader-subbar__rt svg {
-    width: 13px;
-    height: 13px;
-}
-
-/* ---------- reader grid ---------- */
 .reader-layout {
-    display: grid;
-    /* 796 = the 700px measure plus `.reader-article`'s 48px sides. */
-    grid-template-columns: 232px minmax(0, 796px) 184px;
-    gap: 72px;
-    justify-content: center;
-    max-width: 1280px;
-    margin: 0 auto;
-    padding: 72px 40px 48px;
-    align-items: start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--measure-text)) minmax(0, 1fr);
+  column-gap: var(--space-8);
+  padding-top: var(--space-16);
 }
 
-/* A reader with no third column.
- *
- * The grid above is shared with the syntax pages, which still fill their aside,
- * so the column count is a modifier rather than a change to `.reader-layout` —
- * dropping the 184px track there would leave those pages with their aside
- * stacked underneath.
- *
- * **Three tracks, not two, even though only two are filled.** With a left
- * track alone the sidebar and the article were centred *as a pair*, which put
- * the prose half a sidebar right of the page's centre line. An empty track of
- * the same width on the right balances it, so the article is centred and the
- * contents list hangs to its left.
- *
- * **Only the side tracks flex.** The measure is fixed, so a viewport too
- * narrow for the full 1404px takes it out of the margins rather than out of
- * the prose — the article stays 796px and stays centred, and the contents
- * list gets narrower. Making all three `minmax` instead cost the article
- * ~130px at a 1280px viewport, which is the width this has to be right at.
- *
- * Below 1120px the media query further down replaces this outright with the
- * two-column layout and hides the aside.
- */
-.reader-layout--no-aside {
-    /* 232 + 72 + 796 + 72 + 232 = 1404. The base 1280 was sized for two
-       tracks and would shrink the article to pay for the third. */
-    grid-template-columns: minmax(0, 232px) 796px minmax(0, 232px);
-    max-width: 1404px;
+.reader-article {
+  grid-column: 2;
+  min-width: 0;
+  padding-inline: var(--space-6);
 }
 
-@media (max-width: 1120px) {
-    .reader-layout {
-        grid-template-columns: 200px minmax(0, 776px);
-        gap: 56px;
-    }
-
-    .reader-layout .reader-aside {
-        display: none;
-    }
+.reader-head {
+  display: grid;
+  gap: var(--space-4);
 }
 
-@media (max-width: 880px) {
-    .reader-layout {
-        grid-template-columns: minmax(0, 1fr);
-        gap: 0;
-        padding: 40px 20px 100px;
-    }
-
-    .reader-layout .reader-toc {
-        display: none;
-    }
-
-    .reader-article {
-        padding: 32px 24px 40px;
-    }
-
-    .reader-article h1 {
-        font-size: 40px !important;
-    }
-
-    .reader-article .reader-dek {
-        font-size: 18px !important;
-    }
-
-    .reader-prose {
-        font-size: 17px !important;
-    }
-
-    /* The breadcrumb kept the desktop 40px inset at every width, which on a
-     * phone spends a fifth of the screen on margin. Match the page padding. */
-    .reader-subbar__inner {
-        padding: 12px 20px;
-        gap: 8px;
-    }
-
-    /* A lesson title is a sentence, and there is no room for it beside the
-     * book's. Truncate rather than wrap: a breadcrumb that grows to three
-     * lines stops being a breadcrumb. `min-width: 0` is what lets a flex item
-     * shrink below its content — without it `text-overflow` never fires. */
-    .reader-subbar__cur {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .reader-subbar__book {
-        flex: none;
-    }
+.reader-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
 }
 
-/* Phones — tailwind's `sm`, so this lines up with the `sm:` utilities the
- * templates use rather than being a width only this file knows about.
- *
- * The lesson title goes entirely: at this size the book's name and the reading
- * time are the two things worth the row, and the lesson's own title is the h1
- * immediately below it.
- */
-@media (max-width: 639px) {
-    .reader-subbar__cur,
-    .reader-subbar__sep {
-        display: none;
-    }
-
-    .reader-layout {
-        padding: 28px 14px 80px;
-    }
-
-    .reader-article {
-        padding: 28px 18px 36px;
-        border-radius: 10px;
-    }
-
-    .reader-article h1 {
-        font-size: 32px !important;
-    }
-
-    .reader-article .reader-dek {
-        font-size: 17px !important;
-    }
+.reader-meta button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--ink-secondary);
+  cursor: pointer;
 }
 
-/* ---------- left: table of contents ---------- */
+.reader-meta button:hover { color: var(--ink); }
+
+.reader-body { margin-top: var(--space-12); }
+
+/* on this page — wide screens only */
 .reader-toc {
-    position: sticky;
-    top: 104px;
-}
-
-/* The contents list sits in the middle of its gutter rather than against the
-   outer edge of it.
- *
- * `justify-self` on the grid item, so the block shrinks to the width of its
- * longest heading and is centred in the track — the entries stay left aligned
- * against their rule, which is what keeps them readable as a list. Only the
- * lesson layout: the syntax pages fill their aside and have nothing to centre.
- */
-.reader-layout--no-aside .reader-toc {
-    justify-self: center;
-}
-
-.reader-toc__label {
-    font-family: var(--reader-mono);
-    font-size: 10.5px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--reader-faint);
-    margin-bottom: 16px;
-}
-
-/* A section this reader has not bought. Still listed — the titles are what
-   the paywall is arguing for — but it scrolls nowhere, so it is not a link. */
-.reader-toc__item.is-locked {
-    opacity: 0.45;
-    cursor: default;
+  grid-column: 1;
+  justify-self: end;
+  width: 220px;
+  position: sticky;
+  top: var(--space-12);
+  align-self: start;
+  display: grid;
+  gap: var(--space-3);
 }
 
 .reader-toc__list {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-}
-
-.reader-toc__list::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 6px;
-    bottom: 6px;
-    width: 2px;
-    background: var(--reader-line-2);
-    border-radius: 2px;
+  display: grid;
+  gap: 2px;
 }
 
 .reader-toc__item {
-    position: relative;
-    padding: 7px 0 7px 18px;
-    font-family: var(--reader-serif);
-    font-size: 15px;
-    line-height: 1.3;
-    color: var(--reader-mute);
-    transition: color 140ms;
-    cursor: pointer;
-    background: none;
-    border: none;
-    text-align: left;
+  display: block;
+  padding: 6px var(--space-3);
+  border-radius: var(--radius-sm);
+  font: var(--text-caption);
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition: background-color var(--duration) var(--ease-out), color var(--duration) var(--ease-out);
 }
 
-.reader-toc__item::before {
-    content: '';
-    position: absolute;
-    left: -1px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 4px;
-    height: 0;
-    background: var(--reader-teal);
-    border-radius: 2px;
-    transition: height 160ms ease;
-}
-
-.reader-toc__item:hover {
-    color: var(--reader-ink-2);
-}
-
-.reader-toc__item.is-active {
-    color: var(--reader-teal-d);
-    font-weight: 500;
-}
-
-.reader-toc__item.is-active::before {
-    height: 22px;
-}
-
-.reader-toc__child {
-    padding-left: 34px;
-    font-size: 14px;
-}
-
-/* ---------- center: article ---------- */
-/* The prose sits on its own white page.
- *
- * `body` paints a dotted notebook pattern behind the whole site, and the rule
- * there is that anything carrying content lays its own background over it —
- * dots running behind body text is the one place that texture stops being
- * charming. The token rather than `#fff`, so this inverts with the theme
- * instead of staying a white slab in a dark room.
- *
- * The column is widened by exactly this padding in `.reader-layout`, so the
- * measure the text is set to is unchanged — the white extends past the line
- * length rather than shortening it.
- */
-.reader-article {
-    min-width: 0;
-    background: var(--reader-bg);
-    padding: 56px 48px 64px;
-    border-radius: 12px;
-}
-
-.reader-article .reader-eyebrow {
-    font-family: var(--reader-mono);
-    font-size: 12px;
-    letter-spacing: 0.06em;
-    color: var(--reader-teal);
-    text-transform: lowercase;
-}
-
-.reader-article .reader-eyebrow::before {
-    content: '/ ';
-    color: var(--reader-teal);
-}
-
-.reader-article h1 {
-    font-family: 'Lora', Georgia, serif;
-    font-weight: 600;
-    font-size: 54px;
-    line-height: 1.08;
-    letter-spacing: -0.01em;
-    margin: 16px 0 0;
-    color: var(--reader-ink);
-}
-
-.reader-article .reader-dek {
-    font-family: 'Lora', Georgia, serif;
-    font-style: normal;
-    font-weight: 400;
-    font-size: 21px;
-    line-height: 1.5;
-    color: var(--reader-ink-2);
-    margin-top: 20px;
-    max-width: 32em;
-}
-
-.reader-article .reader-byline {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
-    font-family: var(--reader-mono);
-    font-size: 12px;
-    color: var(--reader-mute);
-    margin-top: 26px;
-}
-
-.reader-article .reader-byline .item {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-}
-
-.reader-article .reader-byline svg {
-    width: 13px;
-    height: 13px;
-}
-
-.reader-article .reader-byline .sep-dot {
-    width: 3px;
-    height: 3px;
-    border-radius: 50%;
-    background: var(--reader-faint);
-}
-
-.reader-article .reader-hr {
-    height: 1px;
-    background: var(--reader-line-2);
-    margin: 40px 0;
-}
-
-/* body type for the prose slot */
-.reader-prose {
-    font-family: var(--reader-serif);
-    font-size: 19px;
-    line-height: 1.72;
-    color: var(--reader-ink);
-}
-
-.reader-prose p + p {
-    margin-top: 22px;
-}
-
-/* spacing around block-level siblings (code, lists, tables, quotes) */
-.reader-prose pre,
-.reader-prose .code-block-wrapper,
-.reader-prose ul,
-.reader-prose ol,
-.reader-prose blockquote,
-.reader-prose table,
-.reader-prose .table-scroll-wrapper {
-    margin-top: 28px;
-    margin-bottom: 28px;
-}
-
-/* keep code + tables from blowing past the article column on narrow screens */
-.reader-prose pre,
-.reader-prose .code-block-wrapper,
-.reader-prose .table-scroll-wrapper {
-    max-width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
-/* old lesson css broke tables out of the column with negative margins for the
-   pre-reader layout. inside the new reader, the column is narrower, so undo
-   that bleed and keep the pencil table inside the article body. */
-.reader-shell .reader-prose .table-scroll-wrapper,
-.reader-shell .reader-prose .lesson-content .table-scroll-wrapper,
-.reader-shell .reader-prose .lesson-content table {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-}
-
-.reader-shell .reader-prose .lesson-content table {
-    border-radius: 0.125rem;
-}
-
-/* images trigger the lightbox modal on click — show zoom-in cursor */
-.reader-shell .reader-prose img,
-.reader-shell .reader-prose .lesson-content img {
-    cursor: zoom-in;
-}
-
-/* ---------- related-chapters block (editorial card) ---------- */
-.reader-shell .reader-prose .related-chapters-block {
-    margin: 36px 0;
-    padding: 0;
-    background: var(--reader-bg);
-    border: 1px solid var(--reader-line);
-    border-radius: 12px;
-    filter: none;
-    box-shadow: 0 1px 0 rgba(22, 20, 15, 0.02);
-    overflow: hidden;
-}
-
-.reader-shell .reader-prose .related-chapters-header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 16px 20px;
-    margin: 0;
-    border-bottom: none;
-}
-
-.reader-shell .reader-prose .related-chapters-icon-tile {
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    flex: none;
-    border-radius: 8px;
-    background: var(--reader-teal-soft);
-    color: var(--reader-teal-d);
-}
-
-.reader-shell .reader-prose .related-chapters-icon {
-    width: 18px;
-    height: 18px;
-    color: inherit;
-}
-
-.reader-shell .reader-prose .related-chapters-heading {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    line-height: 1.1;
-}
-
-.reader-shell .reader-prose .related-chapters-eyebrow {
-    font-family: var(--reader-mono);
-    font-size: 10.5px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--reader-faint);
-}
-
-.reader-shell .reader-prose .related-chapters-title {
-    font-family: 'Lora', Georgia, serif;
-    font-weight: 600;
-    font-size: 18px;
-    color: var(--reader-ink);
-    letter-spacing: -0.005em;
-}
-
-.reader-shell .reader-prose .related-chapters-list {
-    list-style: none !important;
-    margin: 0 !important;
-    padding: 4px 0 !important;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-}
-
-.reader-shell .reader-prose .related-chapter-item {
-    display: flex;
-    align-items: center;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-}
-
-.reader-shell .reader-prose .related-chapter-item + .related-chapter-item {
-    border-top: none !important;
-}
-
-.reader-shell .reader-prose .related-chapter-item::marker {
-    content: '';
-}
-
-.reader-shell .reader-prose .related-chapter-link {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 12px 20px;
-    width: 100%;
-    border-radius: 0;
-    text-decoration: none;
-    color: inherit;
-    transition: background 120ms;
-}
-
-.reader-shell .reader-prose .related-chapter-link:hover {
-    background: var(--reader-bg-2);
-}
-
-.reader-shell .reader-prose .related-chapter-number {
-    width: 20px;
-    flex: none;
-    background: none;
-    color: var(--reader-mute);
-    font-family: var(--reader-mono);
-    font-size: 13px;
-    font-weight: 500;
-    text-align: right;
-}
-
-.reader-shell .reader-prose .related-chapter-title {
-    font-family: 'Lora', Georgia, serif;
-    font-size: 16px;
-    line-height: 1.3;
-    color: var(--reader-ink);
-    flex: 1;
-}
-
-.reader-shell .reader-prose .related-chapter-arrow {
-    width: 16px;
-    height: 16px;
-    color: var(--reader-faint);
-    flex: none;
-    opacity: 1;
-    transform: none;
-    transition: transform 140ms, color 140ms;
-}
-
-.reader-shell .reader-prose .related-chapter-link:hover .related-chapter-arrow {
-    transform: translateX(2px);
-    color: var(--reader-teal-d);
-}
-
-.reader-shell .reader-prose .related-chapter-upcoming {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 12px 20px;
-    opacity: 1;
-}
-
-.reader-shell .reader-prose .related-chapter-upcoming .related-chapter-number {
-    color: var(--reader-faint);
-}
-
-.reader-shell .reader-prose .related-chapter-upcoming .related-chapter-title {
-    color: var(--reader-mute);
-}
-
-.reader-shell .reader-prose .related-chapter-badge {
-    font-family: var(--reader-mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--reader-mute);
-    background: var(--reader-line-2);
-    padding: 3px 10px;
-    border-radius: 9999px;
-    margin-left: auto;
-}
-
-.reader-shell .reader-prose .table-scroll-wrapper,
-.reader-shell .reader-prose .lesson-content .table-scroll-wrapper {
-    overflow-x: auto !important;
-}
-
-@media (min-width: 1024px) {
-    .reader-shell .reader-prose .table-scroll-wrapper,
-    .reader-shell .reader-prose .lesson-content .table-scroll-wrapper {
-        overflow-x: auto !important;
-        margin-left: 0 !important;
-        margin-right: 0 !important;
-    }
-}
-
-.reader-prose .code-block-wrapper pre {
-    margin: 0;
-}
-
-
-
-/* lists — restore bullets/numbers killed by the rest of the cascade */
-.reader-prose ul,
-.reader-prose ol {
-    padding-left: 1.4em;
-}
-
-.reader-prose ul {
-    list-style: disc outside;
-}
-
-.reader-prose ol {
-    list-style: decimal outside;
-}
-
-.reader-prose li {
-    margin: 8px 0;
-    padding-left: 4px;
-}
-
-.reader-prose li::marker {
-    color: var(--reader-mute);
-}
+a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink); }
 
-.reader-prose li > p {
-    margin: 0;
-}
-
-.reader-prose li > ul,
-.reader-prose li > ol {
-    margin-top: 8px;
-    margin-bottom: 8px;
-}
-
-.reader-prose pre + p,
-.reader-prose .code-block-wrapper + p,
-.reader-prose ul + p,
-.reader-prose ol + p,
-.reader-prose blockquote + p,
-.reader-prose table + p,
-.reader-prose .table-scroll-wrapper + p,
-.reader-prose p + pre,
-.reader-prose p + .code-block-wrapper,
-.reader-prose p + ul,
-.reader-prose p + ol,
-.reader-prose p + blockquote,
-.reader-prose p + table,
-.reader-prose p + .table-scroll-wrapper {
-    margin-top: 28px;
-}
-
-.reader-prose h2 {
-    font-family: var(--reader-serif);
-    font-weight: 600;
-    font-size: 27px;
-    line-height: 1.2;
-    letter-spacing: -0.005em;
-    color: var(--reader-ink);
-    margin: 56px 0 0;
-    scroll-margin-top: 110px;
-}
-
-.reader-prose h2 + p,
-.reader-prose h3 + p {
-    margin-top: 18px;
-}
-
-.reader-prose h3 {
-    font-family: var(--reader-serif);
-    font-weight: 600;
-    font-size: 22px;
-    line-height: 1.3;
-    color: var(--reader-ink);
-    margin: 36px 0 12px;
-    scroll-margin-top: 110px;
-}
-
-.reader-prose strong {
-    font-weight: 600;
-}
-
-.reader-prose em {
-    font-style: italic;
-}
-
-/* Bengali locale — Lora has no Bengali coverage, so forced italic renders
-   as faux-slant on fallback fonts and appears smaller. Drop italic; keep
-   a soft emphasis via weight + color. Inherit the same font stack as the
-   rest of the body so nothing looks visually different. */
-:lang(bn) .reader-prose em {
-    font-style: normal;
-    font-weight: 500;
-    color: var(--reader-ink);
-}
-
-/* inline code */
-.reader-prose code:not(pre code) {
-    font-family: var(--reader-mono);
-    font-size: 0.82em;
-    background: var(--reader-bg-2);
-    border: 1px solid var(--reader-line);
-    border-radius: 5px;
-    padding: 1.5px 6px;
-    color: var(--reader-teal-d);
-    word-break: break-word;
-    overflow-wrap: anywhere;
-}
-
-/* let long URLs / tokens inside paragraphs wrap instead of pushing the column */
-.reader-prose p,
-.reader-prose li {
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
-/* link */
-.reader-prose a:not(.term-tooltip):not(.related-chapter-link) {
-    color: var(--reader-teal-d);
-    border-bottom: 1px solid rgba(46, 156, 156, 0.4);
-    transition: border-color 120ms;
-}
-
-.reader-prose a:not(.term-tooltip):not(.related-chapter-link):hover {
-    border-color: var(--reader-teal-d);
-}
-
-/* pull quote */
-.reader-prose blockquote {
-    margin: 44px 0;
-    padding: 6px 0 6px 26px;
-    border-left: 3px solid var(--reader-teal);
-    font-family: var(--reader-serif);
-    font-style: italic;
-    font-weight: 500;
-    font-size: 25px;
-    line-height: 1.4;
-    color: var(--reader-ink);
-}
-
-/* ---------- right: aside ---------- */
-.reader-aside {
-    position: sticky;
-    top: 104px;
-    display: flex;
-    flex-direction: column;
-    gap: 26px;
-}
-
-.reader-aside__prog {
-    display: flex;
-    align-items: center;
-    gap: 13px;
-}
-
-.reader-ring {
-    width: 46px;
-    height: 46px;
-    flex: none;
-}
-
-.reader-ring circle {
-    fill: none;
-    stroke-width: 4;
-}
-
-.reader-ring .bg {
-    stroke: var(--reader-line-2);
-}
-
-.reader-ring .fg {
-    stroke: var(--reader-teal);
-    stroke-linecap: round;
-    transform: rotate(-90deg);
-    transform-origin: 50% 50%;
-    transition: stroke-dashoffset 120ms linear;
-}
-
-.reader-aside__prog .pct {
-    font-family: var(--reader-display);
-    font-size: 22px;
-    line-height: 1;
-    color: var(--reader-ink);
-}
-
-.reader-aside__prog .lbl {
-    font-family: var(--reader-mono);
-    font-size: 10.5px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--reader-faint);
-    margin-top: 3px;
-}
-
-.reader-aside__nav {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding-top: 6px;
-}
-
-.reader-chiplink {
-    display: block;
-    padding: 10px 0;
-    transition: opacity 140ms;
-    color: inherit;
-    text-decoration: none;
-}
-
-.reader-chiplink + .reader-chiplink {
-    border-top: 1px solid var(--reader-line-2);
-}
-
-.reader-chiplink:hover .ttl {
-    color: var(--reader-teal-d);
-}
-
-.reader-chiplink .dir {
-    font-family: var(--reader-mono);
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--reader-faint);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.reader-chiplink .dir svg {
-    width: 12px;
-    height: 12px;
-    color: var(--reader-mute);
-}
-
-.reader-chiplink.is-next .dir {
-    justify-content: flex-end;
-}
-
-.reader-chiplink .ttl {
-    display: block;
-    font-family: var(--reader-serif);
-    font-size: 16px;
-    color: var(--reader-ink);
-    margin-top: 5px;
-    line-height: 1.25;
-}
-
-/* right-align next title ONLY in the bottom nav row, not in the aside */
-.reader-bottom-nav .reader-chiplink.is-next {
-    text-align: right;
-}
-
-.reader-bottom-nav .reader-chiplink.is-next .ttl {
-    text-align: right;
-}
-
-/* bottom nav row in lesson page reuses chiplink, but inline */
-.reader-bottom-nav {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 24px;
-}
-
-.reader-bottom-nav .reader-chiplink {
-    padding: 0;
-    border-top: none;
-    flex: 1;
-    min-width: 0;
-    max-width: 320px;
-}
-
-.reader-chiplink--button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font: inherit;
-    color: inherit;
-    text-align: left;
-    padding: 0;
-}
-
-.reader-chiplink--button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* ---------- next steps (end-of-course grid) ---------- */
-.reader-nextsteps {
-    margin-top: 80px;
-}
-
-.reader-nextsteps__head {
-    text-align: center;
-    margin-bottom: 36px;
-}
-
-.reader-nextsteps__eyebrow {
-    font-family: var(--reader-mono);
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    color: var(--reader-teal);
-    margin: 0 0 12px;
-}
-
-.reader-nextsteps__title {
-    font-family: 'Lora', Georgia, serif;
-    font-weight: 600;
-    font-size: 36px;
-    line-height: 1.1;
-    letter-spacing: -0.01em;
-    color: var(--reader-ink);
-    margin: 0;
-}
-
-.reader-nextsteps__title em {
-    font-style: italic;
-    color: var(--reader-teal-d);
-    font-weight: 500;
-}
-
-.reader-nextsteps__dek {
-    font-family: 'Lora', Georgia, serif;
-    font-style: italic;
-    font-size: 17px;
-    color: var(--reader-mute);
-    margin: 10px 0 0;
-}
-
-.reader-nextsteps__grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 18px;
-}
-
-@media (min-width: 640px) {
-    .reader-nextsteps__grid {
-        grid-template-columns: 1fr 1fr;
-    }
-}
-
-.reader-nextstep {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    background: var(--reader-bg);
-    border: 1px solid var(--reader-line);
-    border-radius: 10px;
-    text-decoration: none;
-    color: inherit;
-    transition: border-color 160ms, transform 160ms;
-}
-
-.reader-nextstep:hover {
-    border-color: var(--reader-teal);
-    transform: translateY(-2px);
-}
+.reader-toc__item.is-active { color: var(--ink); background: var(--surface-sunken); }
+.reader-toc__item.is-locked { color: var(--ink-faint); }
 
-.reader-nextstep__thumb {
-    aspect-ratio: 16 / 9;
-    overflow: hidden;
-    background: var(--reader-bg-2);
+@media (max-width: 1250px) {
+  .reader-layout { grid-template-columns: minmax(0, 1fr); padding-top: var(--space-12); }
+  .reader-article { grid-column: 1; width: 100%; max-width: var(--measure-text); margin-inline: auto; }
+  .reader-toc { display: none; }
 }
 
-.reader-nextstep__thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+/* the locked half: dashed rule, mono label, one button */
+.reader-paywall {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-12);
 }
 
-.reader-nextstep__body {
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    flex: 1;
+.reader-paywall__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
 }
 
-.reader-nextstep__type {
-    align-self: flex-start;
-    font-family: var(--reader-mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--reader-teal-d);
-    background: var(--reader-teal-soft);
-    padding: 3px 8px;
-    border-radius: 4px;
+.reader-pager {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-12);
 }
 
-.reader-nextstep__title {
-    font-family: 'Lora', Georgia, serif;
-    font-weight: 600;
-    font-size: 20px;
-    line-height: 1.25;
-    color: var(--reader-ink);
-    margin: 0;
-}
-
-.reader-nextstep__desc {
-    font-family: var(--reader-serif);
-    font-size: 15px;
-    line-height: 1.55;
-    color: var(--reader-ink-2);
-    margin: 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.reader-nextstep__cta {
-    margin-top: auto;
-    font-family: var(--reader-mono);
-    font-size: 12px;
-    color: var(--reader-teal-d);
-}
-
-.reader-aside__acts {
-    display: flex;
-    gap: 18px;
-    padding-top: 4px;
-}
-
-.reader-iconbtn {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    border: none;
-    background: none;
-    padding: 0;
-    font-family: var(--reader-mono);
-    font-size: 11px;
-    color: var(--reader-mute);
-    transition: color 140ms;
-    cursor: pointer;
-}
-
-.reader-iconbtn:hover {
-    color: var(--reader-teal-d);
-}
-
-.reader-iconbtn.is-active {
-    color: var(--reader-teal-d);
-}
+.reader-pager > :only-child { margin-left: auto; }
 
-.reader-iconbtn svg {
-    width: 14px;
-    height: 14px;
+@media (max-width: 600px) {
+  .reader-pager { flex-direction: column; align-items: stretch; }
+  .reader-pager > * { white-space: normal; height: auto; min-height: 44px; padding-block: var(--space-2); }
 }
 
-/* ---------- annotations: highlights, the selection menu, the note dialog ----------
- *
- * The marks are painted into the lesson body by `app/utils/Anchor.ts`, one
- * <mark> per text node a passage spans, so a highlight crossing two paragraphs
- * is two elements that read as one. That is why the rules below never assume a
- * mark is a whole passage: no rounded ends, no padding that would show as a gap
- * at every block boundary.
- *
- * Deliberately *not* scoped under .reader-shell like everything above it. The
- * menu and the dialog are fixed-position and the page mounts them at its root,
- * outside the shell, so a descendant selector would miss them. */
+/* highlights painted into the prose */
 .reader-mark-note {
-    background: var(--color-mark-note);
-    box-shadow: inset 0 -1px 0 var(--color-mark-note-edge);
-    color: inherit;
-    cursor: pointer;
+  background: var(--accent-tint);
+  border-bottom: 1px solid var(--accent);
+  cursor: pointer;
 }
 
 .reader-mark-bookmark {
-    background: var(--color-mark-bookmark);
-    box-shadow: inset 0 -1px 0 var(--color-mark-bookmark-edge);
-    color: inherit;
-    cursor: pointer;
+  background: var(--surface-muted);
+  border-bottom: 1px dashed var(--ink-muted);
 }
 
-/* A passage carrying both. The note wins the ground and the bookmark keeps its
-   underline, so neither disappears under the other. */
-.reader-mark-note.reader-mark-bookmark {
-    box-shadow: inset 0 -2px 0 var(--color-mark-bookmark-edge);
-}
-
+/* selection menu — fixed to the viewport */
 .reader-selectmenu {
-    position: fixed;
-    z-index: 70;
-    display: flex;
-    align-items: center;
-    background: var(--color-panel);
-    border: 1px solid var(--color-rule);
-    border-radius: 10px;
-    box-shadow: 0 6px 20px rgb(0 0 0 / 12%);
-    overflow: hidden;
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-full);
+  background: var(--surface-inverse);
+  box-shadow: var(--shadow-md);
 }
 
 .reader-selectmenu__item {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 9px 13px;
-    border: none;
-    background: none;
-    font-family: var(--reader-mono, 'JetBrains Mono', ui-monospace, monospace);
-    font-size: 12px;
-    white-space: nowrap;
-    color: var(--color-ink);
-    cursor: pointer;
-    transition: background 120ms;
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  font: var(--text-caption);
+  color: var(--ink-inverse);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--duration) var(--ease-out);
 }
 
-.reader-selectmenu__item:hover {
-    background: var(--color-paper-warm);
-}
-
-.reader-selectmenu__item svg {
-    width: 14px;
-    height: 14px;
-}
+.reader-selectmenu__item:hover { background: rgba(255, 255, 255, 0.12); }
 
 .reader-selectmenu__sep {
-    width: 1px;
-    align-self: stretch;
-    background: var(--color-rule);
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.2);
 }
 
+/* the note dialog */
 .reader-notedialog {
-    position: fixed;
-    inset: 0;
-    z-index: 80;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
 }
 
 .reader-notedialog__veil {
-    position: absolute;
-    inset: 0;
-    background: rgb(0 0 0 / 35%);
+  position: absolute;
+  inset: 0;
+  background: rgba(32, 32, 32, 0.32);
 }
 
 .reader-notedialog__card {
-    position: relative;
-    width: 100%;
-    max-width: 520px;
-    padding: 24px;
-    border-radius: 14px;
-    box-shadow: 0 18px 50px rgb(0 0 0 / 22%);
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
 }
 
 .reader-notedialog__passage {
-    margin: 12px 0 16px;
-    padding: 10px 14px;
-    border-left: 3px solid var(--color-mark-note-edge);
-    background: var(--color-paper-warm);
-    font-family: var(--reader-serif, 'Newsreader', Georgia, serif);
-    font-size: 15px;
-    line-height: 1.55;
-    color: var(--color-mono-ink);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font: var(--text-body-sm);
+  color: var(--ink-secondary);
 }
 
-.reader-notedialog__field {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--color-rule);
-    border-radius: 8px;
-    background: var(--color-paper);
-    font-family: inherit;
-    font-size: 14px;
-    line-height: 1.6;
-    color: var(--color-ink);
-    resize: vertical;
+.reader-notedialog__field,
+.reader-comments__textarea,
+.note-comment__field {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  font: var(--text-body-sm);
+  color: var(--ink);
+  resize: vertical;
 }
 
-.reader-notedialog__field:focus {
-    outline: none;
-    border-color: var(--color-stroke);
+.reader-notedialog__field::placeholder,
+.reader-comments__textarea::placeholder { color: var(--ink-faint); }
+
+.reader-notedialog__field:focus-visible,
+.reader-comments__textarea:focus-visible,
+.note-comment__field:focus-visible { border-color: var(--focus-ring); }
+
+.reader-notedialog__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
 }
 
-.reader-notedialog__error {
-    margin-top: 12px;
-    font-size: 13px;
-    color: var(--color-bad);
+.reader-notedialog__private {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-caption);
+  color: var(--ink-secondary);
+  cursor: pointer;
 }
 
+.reader-notedialog__error,
+.reader-comments__error {
+  margin: 0;
+  font: var(--text-caption);
+  color: var(--ink);
+}
+
+.reader-notedialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* the note popover */
 .reader-notepop {
-    position: fixed;
-    z-index: 70;
-    width: 280px;
-    padding: 14px 16px;
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
+  position: fixed;
+  z-index: 40;
+  width: min(320px, calc(100vw - 32px));
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-md);
 }
 
 .reader-notepop__body {
-    margin: 0;
-    font-family: var(--reader-serif, 'Newsreader', Georgia, serif);
-    font-size: 15px;
-    line-height: 1.55;
-    color: var(--color-ink);
-    white-space: pre-wrap;
+  margin: 0;
+  font: var(--text-body-sm);
+  color: var(--ink);
+  white-space: pre-wrap;
 }
 
-.reader-notepop__foot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid var(--color-rule);
+.reader-notepop__foot,
+.reader-notepop__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
 }
 
-.reader-notepop__action {
-    border: none;
-    background: none;
-    padding: 0;
-    font-family: var(--reader-mono, 'JetBrains Mono', ui-monospace, monospace);
-    font-size: 11px;
-    color: var(--color-quiet);
-    cursor: pointer;
-    transition: color 120ms;
+.reader-notepop__action,
+.note-comment__act,
+.note-comment__cancel {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+  cursor: pointer;
 }
 
-.reader-notepop__action:hover {
-    color: var(--color-ink);
-}
+.reader-notepop__action:hover,
+.note-comment__act:hover,
+.note-comment__cancel:hover { color: var(--ink); }
 
-.reader-notepop__action:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-}
+.reader-notepop__action:disabled,
+.note-comment__act:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* ---------- notes & highlights: the thread under a lesson ----------
- *
- * Ported from the laravel reader's `CommentsThread` and `NoteComment` so the
- * two sites read the same. Sits inside `.reader-article`, which already holds
- * the column width, so this carries the rhythm and the type and not a second
- * max-width fighting the first. */
-/* No rule above the heading — the space does the separating. The prev/next
-   buttons sit directly above, and a line between them and this heading reads
-   as their underline rather than as the top of this section. */
+/* notes and highlights under the lesson */
 .reader-comments {
-    margin-top: 64px;
-    font-family: var(--reader-sans);
-    color: var(--reader-ink);
+  display: grid;
+  gap: var(--space-6);
+  margin-top: var(--space-24);
+  padding-top: var(--space-8);
+  border-top: 1px dashed var(--border-dashed);
 }
 
 .reader-comments__title {
-    margin: 0 0 24px;
-    font-family: var(--reader-serif);
-    font-size: 24px;
-    font-weight: 600;
-    color: var(--reader-ink);
+  margin: 0;
+  font: var(--text-h2);
+  letter-spacing: var(--tracking-h2);
 }
 
 .reader-comments__compose {
-    margin-bottom: 32px;
-    padding: 14px;
-    border: 1px solid var(--reader-line);
-    border-radius: 10px;
-    background: var(--reader-bg);
+  display: grid;
+  gap: var(--space-3);
 }
 
-.reader-comments__signin {
-    margin-bottom: 32px;
-    padding: 18px 16px;
-    border: 1px solid var(--reader-line);
-    border-radius: 10px;
-    background: var(--reader-bg-2);
-    font-family: var(--reader-mono);
-    font-size: 13px;
-    color: var(--reader-mute);
-    text-align: center;
-}
-
-.reader-comments__signin-link {
-    margin-right: 4px;
-    padding: 0 0 1px;
-    border: none;
-    border-bottom: 1px solid color-mix(in srgb, var(--reader-teal-d) 40%, transparent);
-    background: none;
-    font: inherit;
-    color: var(--reader-teal-d);
-    cursor: pointer;
-    transition: border-color 120ms;
-}
-
-.reader-comments__signin-link:hover {
-    border-bottom-color: var(--reader-teal-d);
-}
-
-.reader-comments__textarea {
-    width: 100%;
-    border: none;
-    background: transparent;
-    outline: none;
-    resize: none;
-    font: inherit;
-    font-size: 14px;
-    line-height: 1.6;
-    color: var(--reader-ink);
-}
-
-.reader-comments__textarea::placeholder {
-    color: var(--reader-faint);
-}
-
-.reader-comments__compose-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 10px;
+.reader-comments__compose-row,
+.note-comment__editrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .reader-comments__counter {
-    font-family: var(--reader-mono);
-    font-size: 11px;
-    color: var(--reader-faint);
+  font: var(--text-label-mono);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
 }
 
-.reader-comments__submit {
-    padding: 7px 16px;
-    border: 1px solid var(--reader-ink);
-    border-radius: 6px;
-    background: var(--reader-ink);
-    font-family: var(--reader-mono);
-    font-size: 12px;
-    /* The page's own paper, so this inverts with the theme instead of being
-       white text on a light slab in dark mode. */
-    color: var(--reader-bg);
-    cursor: pointer;
-    transition: opacity 140ms;
+.reader-comments__submit,
+.note-comment__save {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--surface-inverse);
+  font: 500 14px/1 var(--font-sans);
+  color: var(--ink-inverse);
+  cursor: pointer;
+  transition: opacity var(--duration) var(--ease-out);
 }
 
-.reader-comments__submit:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
+.reader-comments__submit:not(:disabled):hover,
+.note-comment__save:not(:disabled):hover { opacity: 0.88; }
 
-.reader-comments__submit:not(:disabled):hover {
-    opacity: 0.85;
-}
+.reader-comments__submit:disabled,
+.note-comment__save:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.reader-comments__error {
-    margin-top: 8px;
-    font-family: var(--reader-mono);
-    font-size: 12px;
-    color: var(--color-bad);
-}
-
+.reader-comments__signin,
 .reader-comments__loading,
 .reader-comments__empty {
-    padding: 24px 0;
-    font-family: var(--reader-mono);
-    font-size: 12px;
-    color: var(--reader-mute);
-    text-align: center;
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  font: var(--text-body-sm);
+  color: var(--ink-secondary);
 }
 
-.reader-comments__list > * + * {
-    margin-top: 24px;
+.reader-comments__signin-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
 }
 
-/* ---------- one note in the thread ---------- */
+.reader-comments__list {
+  display: grid;
+  gap: var(--space-6);
+}
+
 .note-comment {
-    display: flex;
-    gap: 12px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: var(--space-3);
 }
 
 .note-comment__avatar {
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: 6px;
-    object-fit: cover;
-    background: var(--reader-bg-2);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
 }
 
 .note-comment__avatar--initials {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--reader-mono);
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--reader-mute);
+  display: grid;
+  place-items: center;
+  background: var(--surface-inverse);
+  font: var(--text-label-mono);
+  color: var(--ink-inverse);
 }
 
 .note-comment__main {
-    flex: 1;
-    min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .note-comment__head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
 }
 
-.note-comment__who {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--reader-ink);
-}
+.note-comment__who { font: 500 15px/24px var(--font-sans); }
 
-.note-comment__lock {
-    width: 13px;
-    height: 13px;
-    color: var(--reader-faint);
-}
-
+.note-comment__lock,
 .note-comment__dot,
 .note-comment__when {
-    font-size: 12px;
-    color: var(--reader-faint);
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
 }
 
-/* Revealed on hover, so a thread at rest is the notes and not the chrome.
-   Always visible on touch, where there is no hover to reveal them with. */
 .note-comment__acts {
-    display: flex;
-    gap: 4px;
-    margin-left: auto;
-}
-
-@media (hover: hover) {
-    .note-comment__acts {
-        opacity: 0;
-        transition: opacity 140ms;
-    }
-
-    .note-comment:hover .note-comment__acts,
-    .note-comment:focus-within .note-comment__acts {
-        opacity: 1;
-    }
-}
-
-.note-comment__act {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    border: none;
-    border-radius: 6px;
-    background: none;
-    color: var(--reader-faint);
-    cursor: pointer;
-    transition: color 120ms, background 120ms;
-}
-
-.note-comment__act svg {
-    width: 15px;
-    height: 15px;
-}
-
-.note-comment__act:hover {
-    background: var(--reader-bg-2);
-    color: var(--reader-ink-2);
-}
-
-.note-comment__act--danger:hover {
-    color: var(--color-bad);
-}
-
-.note-comment__act:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-3);
 }
 
 .note-comment__body {
-    margin: 0 0 8px;
-    font-size: 15px;
-    line-height: 1.65;
-    color: var(--reader-ink);
-    white-space: pre-wrap;
+  margin: 0;
+  font: var(--text-body-sm);
+  color: var(--ink);
+  white-space: pre-wrap;
 }
 
-/* A button because it scrolls to the highlight, styled as the quotation it
-   is — anything that moves the page has to be reachable from the keyboard. */
 .note-comment__quote {
-    display: block;
-    width: 100%;
-    padding: 0 0 0 12px;
-    border: none;
-    border-left: 2px solid var(--reader-line);
-    background: none;
-    font-family: var(--reader-serif);
-    font-size: 14px;
-    font-style: italic;
-    line-height: 1.6;
-    text-align: left;
-    color: var(--reader-mute);
-    cursor: pointer;
-    transition: border-color 120ms, color 120ms;
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font: var(--text-caption);
+  color: var(--ink-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--duration) var(--ease-out);
 }
 
-.note-comment__quote:hover {
-    border-left-color: var(--color-mark-note-edge);
-    color: var(--reader-ink-2);
-}
+.note-comment__quote:hover { background: var(--surface-muted); }
 
-.note-comment__field {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid var(--reader-line);
-    border-radius: 8px;
-    background: var(--reader-bg);
-    font: inherit;
-    font-size: 14px;
-    line-height: 1.6;
-    color: var(--reader-ink);
-    resize: none;
-}
-
-.note-comment__field:focus {
-    outline: none;
-    border-color: var(--reader-mute);
-}
-
-.note-comment__editrow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 8px;
+.note-comment__edit {
+  display: grid;
+  gap: var(--space-2);
 }
 
 .note-comment__editacts {
-    display: flex;
-    gap: 8px;
-}
-
-.note-comment__cancel,
-.note-comment__save {
-    padding: 4px 12px;
-    border-radius: 6px;
-    font-size: 13px;
-    cursor: pointer;
-    transition: opacity 120ms;
-}
-
-.note-comment__cancel {
-    border: none;
-    background: none;
-    color: var(--reader-mute);
-}
-
-.note-comment__cancel:hover {
-    color: var(--reader-ink);
-}
-
-.note-comment__save {
-    border: 1px solid var(--reader-line);
-    background: var(--reader-bg);
-    font-weight: 500;
-    color: var(--reader-ink);
-}
-
-.note-comment__save:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-@media (max-width: 640px) {
-    .note-comment__avatar {
-        width: 32px;
-        height: 32px;
-    }
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }

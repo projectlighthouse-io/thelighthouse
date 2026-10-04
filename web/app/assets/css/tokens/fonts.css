@@ -1,0 +1,9 @@
+/* Fonts — Inter (sans), Libre Baskerville (serif), Geist Mono (mono).
+   Loaded by the stylesheet link in nuxt.config, which also carries Fredericka
+   the Great for the hero h1. */
+:root {
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-serif: "Libre Baskerville", Georgia, "Times New Roman", serif;
+  --font-mono: "Geist Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-hero: "Fredericka the Great", var(--font-serif);
+}

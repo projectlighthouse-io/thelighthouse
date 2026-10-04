@@ -66,11 +66,6 @@ const placement = computed(() => ({
         class="reader-selectmenu__item"
         @click="emit('note')"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-          <path d="M4 4h11l5 5v11H4z" />
-          <path d="M15 4v5h5" />
-          <path d="M8 13h8M8 16h5" />
-        </svg>
         write a note
       </button>
 
@@ -81,9 +76,6 @@ const placement = computed(() => ({
           class="reader-selectmenu__item"
           @click="emit('bookmark')"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-            <path d="M6 3h12v18l-6-4.5L6 21z" />
-          </svg>
           {{ bookmarked ? 'move bookmark here' : 'bookmark here' }}
         </button>
       </template>
@@ -97,10 +89,6 @@ const placement = computed(() => ({
       class="reader-selectmenu__item"
       @click="emit('signIn')"
     >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-        <path d="M4 4h11l5 5v11H4z" />
-        <path d="M15 4v5h5" />
-      </svg>
       sign in to take notes
     </button>
   </div>

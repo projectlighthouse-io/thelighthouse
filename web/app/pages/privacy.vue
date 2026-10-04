@@ -14,15 +14,14 @@ useJsonLd('page', {
 </script>
 
 <template>
-  <div class="reader-shell">
-    <div class="legal-layout">
-      <article class="reader-article">
-        <div class="reader-eyebrow">legal</div>
-        <h1>Privacy Policy</h1>
-        <p class="reader-dek">Last updated: February 2026</p>
+  <article class="page lh-text lh-gap">
+    <header class="lh-head">
+      <p class="lh-eyebrow">legal</p>
+      <h1 class="lh-h1">Privacy Policy</h1>
+      <p class="lh-sub">Last updated: February 2026</p>
+    </header>
 
-        <div class="reader-prose mt-11">
-          <div class="lesson-content" data-lesson-content>
+    <div class="lesson-content body is-legal">
             <p>Hi, it's Aryan again.</p>
 
             <p>
@@ -71,7 +70,7 @@ useJsonLd('page', {
             <p>
               Google Analytics uses cookies to do this. You can opt out by
               installing the
-              <a to="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">Google
+              <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">Google
                 Analytics Opt-out Add-on</a>, or by adjusting your browser's
               cookie settings.
             </p>
@@ -153,7 +152,7 @@ useJsonLd('page', {
               quietly change the rules on you.
             </p>
 
-            <hr class="legal-hr" >
+            <hr>
             <p>
               The short version of all of this: I don't collect your data
               myself&mdash;services like Google Analytics handle usage tracking,
@@ -161,30 +160,10 @@ useJsonLd('page', {
               sold. If you have questions, I'm reachable.
             </p>
             <p>&mdash; Aryan</p>
-          </div>
-        </div>
-      </article>
     </div>
-  </div>
+  </article>
 </template>
 
 <style scoped>
-.legal-layout {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 72px 40px 96px;
-}
-
-.legal-hr {
-  border: none;
-  height: 1px;
-  background: var(--color-read-line-soft);
-  margin: 40px 0 28px;
-}
-
-@media (max-width: 880px) {
-  .legal-layout {
-    padding: 40px 20px 80px;
-  }
-}
+.body { margin-top: var(--space-12); }
 </style>

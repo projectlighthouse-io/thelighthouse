@@ -43,7 +43,7 @@ const copy = computed<ErrorCopy>(() => {
 })
 
 const headline = computed<string>(
-  () => copy.value.headline ?? (isMissing.value ? 'nothing here' : 'something broke'),
+  () => copy.value.headline ?? (isMissing.value ? 'Where did this page go?' : 'What just broke?'),
 )
 
 const detail = computed<string>(
@@ -70,44 +70,18 @@ const retry = (): void => reloadNuxtApp({ persistState: false })
 
 <template>
   <NuxtLayout>
-    <div class="mx-auto flex max-w-2xl flex-col items-center px-4 py-32 text-center sm:px-6">
-      <p class="font-mono text-xs tracking-[0.2em] uppercase text-teal">
-        {{ error.statusCode }}
-      </p>
-
-      <h1 class="font-fredericka mt-4 text-5xl text-ink sm:text-6xl">
-        {{ headline }}
-      </h1>
-
-      <p class="mt-6 font-serif text-lg leading-relaxed text-quiet">
-        {{ detail }}
-      </p>
-
-      <div class="mt-10 flex flex-col gap-3 sm:flex-row">
-        <button
-          v-if="canRetry"
-          type="button"
-          class="rounded-md bg-ink px-5 py-3 text-base font-medium text-on-ink transition hover:bg-ink-hover"
-          @click="retry"
-        >
-          Try again
-        </button>
-        <NuxtLink
-          to="/books"
-          class="rounded-md px-5 py-3 text-base font-medium transition"
-          :class="canRetry
-            ? 'border border-stroke bg-panel text-ink hover:bg-paper-warm'
-            : 'bg-ink text-on-ink hover:bg-ink-hover'"
-        >
-          Browse the shelf
-        </NuxtLink>
-        <NuxtLink
-          to="/"
-          class="rounded-md border border-stroke bg-panel px-5 py-3 text-base font-medium text-ink transition hover:bg-paper-warm"
-        >
-          Go home
-        </NuxtLink>
-      </div>
+    <div class="lh-text lh-gap">
+      <EmptyState
+        as="h1"
+        :eyebrow="`${error.statusCode} · ${isMissing ? 'not found' : 'error'}`"
+        :heading="headline"
+        :detail="detail"
+        :action="canRetry ? undefined : { label: 'Browse the shelf →', to: '/books' }"
+      >
+        <template v-if="canRetry" #secondary>
+          <UiButton variant="inverse" size="lg" @click="retry">Try again</UiButton>
+        </template>
+      </EmptyState>
     </div>
   </NuxtLayout>
 </template>

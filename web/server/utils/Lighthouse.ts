@@ -28,13 +28,14 @@ const base = (): string =>
 export async function fromApi<T>(
   path: string,
   query?: Record<string, string>,
+  headers?: Record<string, string>,
 ): Promise<T> {
   try {
     // Cast because `$fetch<T>` returns `TypedInternalResponse<..., T>`, which
     // resolves to T for a concrete type but not for a type parameter — the
     // compiler cannot prove the two agree while T is still open. The runtime
     // value is exactly what T describes; only the generic is unprovable.
-    return await $fetch<T>(`${base()}${path}`, { query }) as T
+    return await $fetch<T>(`${base()}${path}`, { query, headers }) as T
   }
   catch (error: unknown) {
     const status = (error as { status?: number, statusCode?: number })?.status
@@ -105,9 +106,12 @@ export interface ApiLesson {
   chapter_id: number
   sort_order: number
   html: string
-  toc: { id: string, text: string }[]
+  /** Every heading; `locked` on the ones this reader cannot reach yet. */
+  toc: { id: string, text: string, locked: boolean }[]
   read_minutes: number
   has_paid_part: boolean
+  /** Whether the api answered with the whole lesson for this reader. */
+  unlocked: boolean
   remaining_sections: number
   position: number
   total: number

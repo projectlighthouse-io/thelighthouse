@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { RoadmapItem } from '@/types/Content'
 import { columns } from '@/data/Roadmap'
+import { manuscripts } from '@/data/Desk'
 
 const search = ref<string>('')
 
@@ -41,52 +42,110 @@ useJsonLd('roadmap', {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-2 py-16 sm:px-6 lg:px-8">
-    <div class="mx-auto max-w-3xl text-center">
-      <h1 class="mb-4 font-serif text-4xl tracking-tight text-ink sm:text-5xl">Roadmap</h1>
-      <p class="text-mono-body">what's shipped, what's building, what's still an idea.</p>
-    </div>
+  <div class="roadmap">
+    <MarketingOnTheDesk :manuscripts="manuscripts" eyebrow="roadmap · on the desk" heading="h1" />
 
-    <div class="mx-auto mt-10 max-w-md">
-      <input
-        v-model="search"
-        type="search"
-        placeholder="filter the roadmap…"
-        class="w-full rounded-md border border-rule bg-panel px-4 py-2.5 font-mono text-sm text-ink placeholder:text-faint focus:border-stroke focus:outline-none"
-      >
-      <p class="mt-2 text-center font-mono text-xs text-faint">{{ total }} items</p>
-    </div>
+    <section class="lh-figure lh-gap-lg board">
+      <div class="board-head">
+        <div class="lh-head">
+          <h2 class="lh-h2">Everything else</h2>
+          <p class="lh-sub">What has shipped, what is next, and what is still an idea.</p>
+        </div>
 
-    <div class="mt-12 grid gap-8 lg:grid-cols-4">
-      <section v-for="col in filtered" :key="col.label">
-        <header class="mb-5 flex items-center gap-2">
-          <span class="inline-block size-2 rounded-full" :class="col.dotClass" />
-          <h2 class="font-mono text-sm font-semibold" :class="col.headerClass">{{ col.label }}</h2>
-          <span class="font-mono text-xs text-faint">{{ col.items.length }}</span>
-        </header>
-
-        <ul class="space-y-4">
-          <li
-            v-for="item in col.items"
-            :key="item.title"
-            class="rounded-md bg-panel p-5"
-            :class="col.cardClass"
+        <div class="search">
+          <label class="lh-sr" for="roadmap-search">filter the roadmap</label>
+          <input
+            id="roadmap-search"
+            v-model="search"
+            type="search"
+            class="lh-input"
+            placeholder="filter the roadmap…"
           >
-            <div class="flex items-start justify-between gap-2">
-              <h3 class="font-editorial text-base text-ink font-semibold">
-                {{ item.title }}
-              </h3>
-              <span v-if="item.hot" class="font-mono text-xs text-rose">hot</span>
-            </div>
-            <p class="mt-2 text-sm leading-relaxed text-quiet">{{ item.description }}</p>
-            <div class="mt-3 flex flex-wrap gap-2">
-              <span v-for="tag in item.tags" :key="tag" class="font-mono text-xs text-teal">
-                #{{ tag }}
-              </span>
-            </div>
+          <span class="lh-mono lh-muted lh-num">{{ total }} items</span>
+        </div>
+      </div>
+
+      <section v-for="col in filtered" :key="col.label" class="column">
+        <div class="column-head">
+          <span class="lh-eyebrow">{{ col.label.toLowerCase() }} · {{ col.items.length }}</span>
+        </div>
+
+        <ul class="rows">
+          <li v-for="item in col.items" :key="item.title" class="item">
+            <span class="item-top">
+              <span class="lh-h3">{{ item.title }}</span>
+              <span v-if="item.hot" class="lh-mono lh-faint">hot</span>
+            </span>
+            <span class="lh-caption">{{ item.description }}</span>
+            <span v-if="item.tags.length" class="tags">
+              <span v-for="tag in item.tags" :key="tag">#{{ tag }}</span>
+            </span>
           </li>
         </ul>
+
+        <p v-if="!col.items.length" class="lh-hint empty">Nothing matches.</p>
       </section>
-    </div>
+    </section>
   </div>
 </template>
+
+<style scoped>
+.board {
+  display: grid;
+  gap: 72px;
+}
+
+.board-head {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: 480px;
+}
+
+.column {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.column-head { padding: 0 var(--space-4); }
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.item {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  transition: background-color var(--duration) var(--ease-out);
+}
+
+.item:hover { background: var(--surface-sunken); }
+
+.item-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px var(--space-4);
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+}
+
+.empty { padding: 0 var(--space-4); }
+</style>

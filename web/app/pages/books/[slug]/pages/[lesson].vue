@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Note } from '@/composables/UseNotes'
-import type { LessonResponse } from '@/types/Content'
+import type { Chapter, LessonResponse, LessonSummary } from '@/types/Content'
 // only this route needs the reader system
 import '@/assets/css/reader.css'
 
@@ -49,6 +49,27 @@ const book = computed(() => data.value?.book)
 const lesson = computed(() => data.value?.lesson)
 
 /**
+ * "chapter 03 · lesson 12". The lesson response says where the lesson falls
+ * in the book; which chapter it is in comes from the book's contents — the
+ * same request, and the same cache key, as the book page.
+ */
+const { data: contents } = await useAsyncData(
+  () => `book:${bookSlug.value}`,
+  () => $fetch<{ chapters: Chapter[], lessons: LessonSummary[] }>(`/_api/books/${bookSlug.value}`)
+    .catch(() => null),
+  { watch: [bookSlug] },
+)
+
+const eyebrow = computed<string>(() => {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  const lessonNo = `lesson ${pad(data.value?.position ?? 1)}`
+  const chapterId = contents.value?.lessons.find(l => l.slug === lessonSlug.value)?.chapterId
+  const chapterAt = contents.value?.chapters.findIndex(c => c.id === chapterId) ?? -1
+
+  return chapterAt === -1 ? lessonNo : `chapter ${pad(chapterAt + 1)} · ${lessonNo}`
+})
+
+/**
  * The half of the lesson a reader has to have bought.
  *
  * **Fetched in the browser, never during SSR.** This document is the same
@@ -60,7 +81,7 @@ const lesson = computed(() => data.value?.lesson)
  * A 404 is the ordinary answer for a reader who has not bought it, so it is
  * not logged or shown — the paywall below is what it looks like.
  */
-interface Heading { id: string, text: string, locked: boolean }
+interface Heading { id: string, text: string, locked?: boolean }
 
 /**
  * The whole lesson, once the api has been asked as *this reader*.
@@ -153,11 +174,11 @@ const readable = computed(() => unlockedHtml.value ?? data.value?.html ?? '')
 const activeId = ref<string>(data.value?.toc?.[0]?.id ?? '')
 
 /**
- * Where a heading counts as reached — just past the 110px `scroll-margin-top`
+ * Where a heading counts as reached — just past the 24px `scroll-margin-top`
  * the reader's headings carry, so a heading jumped to by its anchor lands on
  * the reading side of the line rather than a pixel above it.
  */
-const TOP_LINE = 116
+const TOP_LINE = 32
 
 /**
  * The last heading to have crossed the line, or the last heading outright once
@@ -621,51 +642,14 @@ useJsonLd('crumbs', () => ({
 
 <template>
   <div v-if="data && book && lesson" class="reader-shell">
-    <div class="reader-progress"><span :style="{ width: `${data.percent}%` }" /></div>
-
-    <div class="reader-subbar">
-      <div class="reader-subbar__inner">
-        <NuxtLink class="reader-subbar__book" :to="`/books/${book.slug}`">
-          {{ book.title }}
-        </NuxtLink>
-        <span class="reader-subbar__sep">›</span>
-        <span class="reader-subbar__cur">{{ lesson.title }}</span>
-        <span class="reader-subbar__spacer" />
-
-        <!-- Only once there is one. A control that is present and inert most of
-             the time reads as broken rather than as empty. -->
-        <button
-          v-if="currentBookmark"
-          type="button"
-          class="reader-iconbtn is-active"
-          @click="goToBookmark"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-            <path d="M6 3h12v18l-6-4.5L6 21z" />
-          </svg>
-          your bookmark
-        </button>
-        <button
-          v-if="currentBookmark"
-          type="button"
-          class="reader-iconbtn"
-          @click="removeBookmark"
-        >
-          remove
-        </button>
-
-        <span class="reader-subbar__rt">{{ data.readMinutes }} min read</span>
-      </div>
+    <div class="reader-progress" aria-hidden="true">
+      <span :style="{ width: `${data.percent}%` }" />
     </div>
 
-    <!-- No aside: this lesson has nothing to put in the third column. -->
-    <div class="reader-layout reader-layout--no-aside">
-      <!-- The aside stays in the dom even with nothing to list: it is the
-           first cell of `.reader-layout`'s `232px minmax(0, 796px) 184px`
-           grid, and removing it slides the article into the 232px column. -->
-      <aside class="reader-toc">
-        <div v-if="toc.length" class="reader-toc__label">On this page</div>
-        <nav v-if="toc.length" class="reader-toc__list">
+    <div class="reader-layout">
+      <aside v-if="toc.length" class="reader-toc" aria-label="on this page">
+        <span class="lh-eyebrow">on this page</span>
+        <nav class="reader-toc__list">
           <component
             :is="item.locked ? 'span' : 'a'"
             v-for="item in toc"
@@ -680,64 +664,71 @@ useJsonLd('crumbs', () => ({
       </aside>
 
       <article class="reader-article">
-        <h1>{{ lesson.title }}</h1>
-        <p v-if="lesson.description" class="reader-dek">{{ lesson.description }}</p>
+        <header class="reader-head">
+          <p class="lh-eyebrow">
+            <NuxtLink :to="`/books/${book.slug}`" class="lh-link">{{ book.title }}</NuxtLink>
+            · {{ eyebrow }}
+          </p>
+          <h1 class="lh-h1">{{ lesson.title }}</h1>
+          <p v-if="lesson.description" class="lh-lede">{{ lesson.description }}</p>
 
-        <div class="reader-prose" style="margin-top: 44px">
+          <div class="reader-meta">
+            <span class="lh-num">{{ data.readMinutes }} min read</span>
+            <span class="lh-num">{{ data.position }} of {{ data.total }}</span>
+            <!-- Only once there is one. A control that is present and inert
+                 most of the time reads as broken rather than as empty. -->
+            <template v-if="currentBookmark">
+              <button type="button" @click="goToBookmark">your bookmark →</button>
+              <button type="button" @click="removeBookmark">remove bookmark</button>
+            </template>
+          </div>
+        </header>
+
+        <div class="reader-body">
           <!-- eslint-disable-next-line vue/no-v-html -- authored markdown, rendered server side -->
           <div class="lesson-content" data-lesson-content v-html="readable" />
         </div>
 
-        <div
-          v-if="lesson.locked && !unlockedHtml"
-          class="paywalled mt-12 rounded-md border-2 border-dashed border-rule bg-paper p-8 text-center"
-        >
-          <p class="font-mono text-xs tracking-[0.2em] uppercase text-teal">keep reading</p>
-          <h2 class="mt-3 font-serif text-2xl text-ink">
-            The rest of this chapter is part of {{ book.title }}
-          </h2>
-          <p class="mx-auto mt-3 max-w-md text-mono-body">
-            {{ data.remainingSections }} more sections, and the project that goes with them.
+        <div v-if="lesson.locked && !unlockedHtml" class="reader-paywall paywalled">
+          <hr class="lh-dashed">
+          <span class="lh-eyebrow">pro · {{ data.remainingSections }} more sections</span>
+          <h2 class="lh-h2">The rest of this lesson is part of {{ book.title }}</h2>
+          <p class="lh-sub">
+            The remaining sections, and the project that goes with them, come with a plan
+            that includes this book.
           </p>
-          <div class="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <NuxtLink
-              to="/pricing"
-              class="rounded-md bg-ink px-5 py-3 text-base font-medium text-on-ink transition hover:bg-ink-hover"
-            >
-              Get the book
-            </NuxtLink>
-            <NuxtLink
-              to="/login"
-              class="rounded-md border border-stroke bg-panel px-5 py-3 text-base font-medium text-ink transition hover:bg-paper-warm"
+          <div class="reader-paywall__actions">
+            <UiButton variant="inverse" size="lg" cta="pro" flame to="/pricing">Get Pro</UiButton>
+            <UiButton
+              v-if="!isSignedIn"
+              variant="ghost"
+              size="lg"
+              cta="free"
+              :to="`/login?redirect=${encodeURIComponent(route.fullPath)}`"
             >
               I already own it
-            </NuxtLink>
+            </UiButton>
           </div>
         </div>
 
-        <!-- Above the thread: carrying on with the book is what most readers
-             want at the end of a lesson, and their own notes are what a few of
-             them want. Stacked on a phone — two lesson titles do not fit side
-             by side. -->
-        <div
-          class="mt-12 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center sm:gap-4"
-        >
-          <NuxtLink
+        <nav class="reader-pager" aria-label="lessons">
+          <UiButton
             v-if="data.previous"
+            variant="ghost"
+            size="lg"
             :to="`/books/${book.slug}/pages/${data.previous.slug}`"
-            class="btn-chalk text-sm text-ink"
           >
             ← {{ data.previous.title }}
-          </NuxtLink>
-          <span v-else />
-          <NuxtLink
+          </UiButton>
+          <UiButton
             v-if="data.next"
+            variant="ghost"
+            size="lg"
             :to="`/books/${book.slug}/pages/${data.next.slug}`"
-            class="btn-chalk text-sm text-ink"
           >
             {{ data.next.title }} →
-          </NuxtLink>
-        </div>
+          </UiButton>
+        </nav>
 
         <ReaderCommentsThread
           :notes="inReadingOrder"
@@ -756,11 +747,9 @@ useJsonLd('crumbs', () => ({
           @sign-in="signIn"
         />
       </article>
-
     </div>
 
-    <!-- The three floating pieces. Outside `.reader-layout` because all three
-         are `position: fixed` and belong to the viewport, not to the column. -->
+    <!-- The three floating pieces belong to the viewport, not the column. -->
     <ReaderSelectionMenu
       v-if="menuOpen && selected"
       :x="menuAt.x"

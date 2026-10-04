@@ -24,7 +24,7 @@ const emit = defineEmits<{
 
 <template>
   <div
-    class="reader-notepop border-pencil-light bg-panel"
+    class="reader-notepop"
     :style="{ left: `${x}px`, top: `${y}px` }"
     role="dialog"
     aria-label="Your note"
@@ -36,12 +36,12 @@ const emit = defineEmits<{
     </p>
 
     <div class="reader-notepop__foot">
-      <span v-if="!note.isPublic" class="font-mono text-[11px] text-faint">
+      <span v-if="!note.isPublic" class="lh-mono lh-faint">
         private
       </span>
       <span v-else />
 
-      <div class="flex items-center gap-3">
+      <div class="reader-notepop__actions">
         <button
           type="button"
           class="reader-notepop__action"

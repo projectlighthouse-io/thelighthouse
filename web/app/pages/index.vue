@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { faqs } from '@/data/Faqs'
-import { heroStats, horizonBooks } from '@/data/Home'
+import { manuscripts } from '@/data/Desk'
+import { testimonials } from '@/data/Testimonials'
 import type { Book, Project } from '@/types/Content'
 
 useSeo({
@@ -47,136 +48,45 @@ useJsonLd('shelf', () => ({
 const { data: allProjects } = await useAsyncData('home-projects', () =>
   $fetch<Project[]>('/_api/projects'))
 
-const projects = computed<Project[]>(() =>
-  (allProjects.value ?? []).filter(p => !p.isChallenge))
-const challenges = computed<Project[]>(() =>
-  (allProjects.value ?? []).filter(p => p.isChallenge))
+const projects = computed<Project[]>(() => allProjects.value ?? [])
+
+// Counted from the same listings the bands render, never typed in.
+const stats = computed(() => [
+  { value: books.value.length, label: 'books' },
+  { value: books.value.reduce((n, book) => n + book.pages, 0), label: 'pages' },
+  { value: projects.value.filter(p => !p.isChallenge).length, label: 'projects' },
+])
 </script>
 
 <template>
-  <div>
-    <MarketingHeroSection :stats="heroStats" />
+  <div class="home">
+    <MarketingHero :stats="stats" />
 
-    <!-- Inside the same 7xl column as every other band: at three cards the
-         shelf fits it, so running full width would only push the books wider
-         than the sections above and below them. -->
-    <section class="py-12">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
-        <div class="mx-auto mb-12 max-w-3xl text-center">
-          <h2 class="mb-3 font-serif text-4xl text-ink sm:text-5xl">Books</h2>
-          <p class="text-mono-body">Carefully crafted books to help you level up your skills</p>
-        </div>
-
-        <!-- `HomeShelf`, not the `Shelf` `/books` renders: the same books and
-             the same tabs, laid out three cards wide instead of eleven
-             full-width rows. Two columns halve the band's height, which is
-             what the scroll box was there to do — so the shelf sits on the
-             page in full and the page scrolls, rather than a panel scrolling
-             inside it.
-
-             `bg-panel` for the same reason `/books` carries it: the cards tint
-             on hover, and without a ground of their own they do it over the
-             body's dotted paper. -->
-        <div class="rounded-md bg-panel p-6 max-[820px]:p-4">
-          <BookHomeShelf :books="books" />
-        </div>
-
-        <div class="mt-10 text-center">
-          <NuxtLink
-            to="/books"
-            class="inline-flex items-center font-mono text-sm text-ink transition hover:text-teal"
-          >
-            view all books <span class="ml-2">———→</span>
-          </NuxtLink>
-        </div>
+    <section id="shelf" class="lh-text lh-gap">
+      <div class="lh-head">
+        <h2 class="lh-h2">Books</h2>
+        <p class="lh-sub">Carefully crafted books to help you level up your skills</p>
       </div>
     </section>
 
-    <section class="py-12">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
-        <MarketingFounderEditionCta />
-      </div>
-    </section>
+    <div class="lh-shelf shelf">
+      <BookGrid :books="books" fade />
+    </div>
 
-    <section id="projects-challenges" class="py-12">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
-        <div class="mb-6 text-center font-mono text-xs tracking-[0.2em] text-teal">
-          / PROJECTS &amp; CHALLENGES
-        </div>
+    <MarketingBuildAndDrill :projects="projects" fade />
 
-        <h2
-          class="mx-auto max-w-4xl text-center font-serif text-5xl leading-[1.05] text-ink sm:text-6xl"
-        >
-          build real <span class="italic text-teal">systems</span>,<br>
-          sharpen real <span class="italic text-teal">tools</span>.
-        </h2>
+    <MarketingPricingFrame :books="books" />
 
-        <p
-          class="mx-auto mt-8 max-w-2xl text-center font-serif text-lg leading-relaxed italic text-ink"
-        >
-          two ways to put what you've learned into your hands. pick a system to build from scratch,
-          or run a short drill on the unix tools that show up in every on-call.
-        </p>
+    <MarketingOnTheDesk :manuscripts="manuscripts" />
 
-        <!-- projects band -->
-        <div class="mt-20">
-          <div class="mb-2 font-mono text-xs text-teal">/ 01 · projects</div>
-          <div
-            class="mb-10 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end"
-          >
-            <h3 class="font-serif text-3xl text-ink sm:text-4xl">
-              build a <span class="italic text-teal">system</span> from scratch.
-            </h3>
-            <p class="max-w-sm font-serif text-base text-quiet md:text-right">
-              multi-day builds. each ends with a working thing you can run.
-              <NuxtLink to="/projects" class="ml-1 italic text-teal">— ship one →</NuxtLink>
-            </p>
-          </div>
-
-          <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <ProjectCard v-for="project in projects" :key="project.slug" :project="project" />
-          </div>
-        </div>
-
-        <!-- challenges band -->
-        <div class="mt-24">
-          <div class="mb-2 font-mono text-xs text-teal">/ 02 · challenges</div>
-          <div
-            class="mb-10 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end"
-          >
-            <h3 class="font-serif text-3xl text-ink sm:text-4xl">
-              drill a <span class="italic text-teal">tool</span> until it's reflex.
-            </h3>
-            <p class="max-w-sm font-serif text-base text-quiet md:text-right">
-              short scenarios. each is about a single unix tool every senior engineer reaches for.
-              <NuxtLink to="/projects" class="ml-1 italic text-teal">— pick one →</NuxtLink>
-            </p>
-          </div>
-
-          <ChallengeList :challenges="challenges" />
-        </div>
-
-        <div class="mt-16 text-center">
-          <NuxtLink
-            to="/projects"
-            class="inline-flex items-center font-mono text-sm text-ink transition hover:text-teal"
-          >
-            view all projects &amp; challenges <span class="ml-2">———→</span>
-          </NuxtLink>
-        </div>
-      </div>
-    </section>
-
-    <section class="pt-16 pb-12 sm:pt-24">
-      <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
-        <MarketingOnTheHorizon :books="horizonBooks" />
-      </div>
-    </section>
-
-    <MarketingTestimonialsSection />
+    <MarketingMailbox :letters="testimonials" />
 
     <MarketingFaqSection />
 
     <MarketingAuthorLetter />
   </div>
 </template>
+
+<style scoped>
+.shelf { margin-top: var(--space-12); }
+</style>
