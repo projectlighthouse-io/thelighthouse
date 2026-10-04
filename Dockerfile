@@ -39,14 +39,16 @@ WORKDIR /build
 
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
+# `sqlx::migrate!` embeds this directory into lighthouse-migrate at compile time.
+COPY migrations ./migrations
 
 # Cache mounts rather than a stub-manifest layer: the workspace has several
 # crates and every one needs a real manifest before cargo will resolve it. The
 # mounted target dir does not survive into the layer, hence the copy out.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/build/target \
-    cargo build --release --locked -p lighthouse-api \
-    && cp target/release/lighthouse-api /usr/local/bin/lighthouse-api
+    cargo build --release --locked -p lighthouse-api -p lighthouse-migrate \
+    && cp target/release/lighthouse-api target/release/lighthouse-migrate /usr/local/bin/
 
 # runtime
 FROM caddy:${CADDY_VERSION} AS runtime
@@ -77,6 +79,7 @@ COPY billing.yaml /app/billing.yaml
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --from=api-build /usr/local/bin/lighthouse-api /usr/local/bin/lighthouse-api
+COPY --from=api-build /usr/local/bin/lighthouse-migrate /usr/local/bin/lighthouse-migrate
 COPY --from=web-build /build/.output /app/web
 
 RUN chmod +x /usr/local/bin/entrypoint.sh \

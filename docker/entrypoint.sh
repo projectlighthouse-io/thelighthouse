@@ -15,6 +15,13 @@ API_PORT=${API_PORT:-9000}
 NUXT_PORT=${NUXT_PORT:-3000}
 export API_PORT NUXT_PORT
 
+# Pending migrations first, before anything serves. App Platform gives no
+# console to run them by hand. The cost: a migration that fails stops the
+# container here, under `set -e`, and the deploy never comes up — read the
+# log, fix the migration, deploy again.
+echo "==> migrating"
+/usr/local/bin/lighthouse-migrate run
+
 echo "==> api on :${API_PORT}"
 /usr/local/bin/lighthouse-api &
 api=$!
