@@ -7,16 +7,33 @@ import '@/assets/css/reader.css'
 const route = useRoute()
 const bookSlug = computed<string>(() => String(route.params.slug))
 const lessonSlug = computed<string>(() => String(route.params.lesson))
+/** `?lang=bn`. In the url, not a cookie, because the edge caches by url. */
+const lang = computed<string>(() => (typeof route.query.lang === 'string' ? route.query.lang : ''))
+const langQuery = computed(() => (lang.value ? { lang: lang.value } : {}))
 
 // Everything the page renders comes back already decided: which body, how far
 // through the book, what comes next. The paid half never enters this component,
 // which is the point — see docs/rebuild.md. During SSR this calls the handler
 // directly, so it costs no HTTP round trip.
 const { data, error } = await useAsyncData(
-  () => `lesson:${bookSlug.value}:${lessonSlug.value}`,
-  () => $fetch<LessonResponse>(`/_api/books/${bookSlug.value}/pages/${lessonSlug.value}`),
-  { watch: [bookSlug, lessonSlug] },
+  () => `lesson:${bookSlug.value}:${lessonSlug.value}:${lang.value}`,
+  () => $fetch<LessonResponse>(`/_api/books/${bookSlug.value}/pages/${lessonSlug.value}`, {
+    query: langQuery.value,
+  }),
+  { watch: [bookSlug, lessonSlug, lang] },
 )
+
+/** Each language in its own script, so a reader finds theirs by sight. */
+const LANGUAGE_NAMES: Record<string, string> = { en: 'English', bn: 'বাংলা' }
+
+// Every translation names the others, so search engines serve the right one.
+useHead({
+  link: () => (data.value?.locales ?? []).map(code => ({
+    rel: 'alternate',
+    hreflang: code,
+    href: `${SITE.url}${route.path}${code === 'en' ? '' : `?lang=${code}`}`,
+  })),
+})
 
 /**
  * Why the failure is read before the absence.
@@ -130,7 +147,7 @@ async function unlock(): Promise<void> {
       html: string
       toc: Heading[]
       unlocked: boolean
-    }>(`/api/books/${bookSlug.value}/lessons/${lessonSlug.value}`)
+    }>(`/api/books/${bookSlug.value}/lessons/${lessonSlug.value}`, { query: langQuery.value })
 
     if (!full.unlocked) return
 
@@ -591,7 +608,7 @@ onMounted(loadAnnotations)
 // After the free half is in the DOM, and again whenever the reader moves to
 // another lesson or their session resolves.
 onMounted(unlock)
-watch([lessonSlug, isSignedIn], unlock)
+watch([lessonSlug, lang, isSignedIn], unlock)
 
 /**
  * Prev and next stay on this route, so the component is reused and none of the
@@ -616,6 +633,7 @@ useSeo(() => ({
   title: `${lesson.value?.title} — ${book.value?.title}`,
   description: lesson.value?.description ?? '',
   type: 'article',
+  lang: data.value?.locale,
   image: book.value?.thumbnailUrl,
 }))
 
@@ -626,7 +644,7 @@ useJsonLd('lesson', () => ({
   '@type': 'Article',
   'headline': lesson.value?.title,
   'description': lesson.value?.description,
-  'inLanguage': 'en',
+  'inLanguage': data.value?.locale ?? 'en',
   'author': { '@type': 'Person', 'name': 'Aryan Ahmed' },
   'publisher': { '@type': 'Organization', 'name': SITE.name, 'url': SITE.url },
   'isPartOf': { '@type': 'Book', 'name': book.value?.title, 'url': `${SITE.url}/books/${bookSlug.value}` },
@@ -687,6 +705,15 @@ useJsonLd('crumbs', () => ({
           <div class="reader-meta">
             <span class="lh-num">{{ data.readMinutes }} min read</span>
             <span class="lh-num">{{ data.position }} of {{ data.total }}</span>
+            <span v-if="data.locales.length > 1" class="reader-langs">
+              <NuxtLink
+                v-for="code in data.locales"
+                :key="code"
+                :to="{ query: code === 'en' ? {} : { lang: code } }"
+                :hreflang="code"
+                :aria-current="code === data.locale ? 'true' : undefined"
+              >{{ LANGUAGE_NAMES[code] ?? code }}</NuxtLink>
+            </span>
             <!-- Only once there is one. A control that is present and inert
                  most of the time reads as broken rather than as empty. -->
             <template v-if="currentBookmark">

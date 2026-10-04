@@ -59,6 +59,11 @@
 
 .reader-meta button:hover { color: var(--ink); }
 
+.reader-langs { display: flex; gap: var(--space-2); }
+.reader-langs a { color: var(--ink-secondary); text-decoration: none; }
+.reader-langs a:hover,
+.reader-langs a[aria-current] { color: var(--ink); }
+
 .reader-body { margin-top: var(--space-12); }
 
 /* on this page — wide screens only */
