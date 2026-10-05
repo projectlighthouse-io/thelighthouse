@@ -56,6 +56,10 @@ const stats = computed(() => [
   { value: books.value.reduce((n, book) => n + book.pages, 0), label: 'pages' },
   { value: projects.value.length, label: 'projects & challenges' },
 ])
+
+// The Paperkites promo after the author's letter. Static, so the switch is
+// here rather than in the environment: false hides it on the next build.
+const showPaperkites = true
 </script>
 
 <template>
@@ -86,6 +90,8 @@ const stats = computed(() => [
     <MarketingFaqSection />
 
     <MarketingAuthorLetter />
+
+    <MarketingPaperkites v-if="showPaperkites" />
 
     <div class="lh-text lh-gap">
       <MarketingNewsletterSignup />
