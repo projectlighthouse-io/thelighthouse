@@ -27,7 +27,7 @@ API_PORT ?= 9000
 
 .DEFAULT_GOAL := help
 .PHONY: help web up dev api down db db-down db-reset psql migrate migrate-status fmt fmt-check \
-        lint test build check audit image run run-built login push clean \
+        lint test test-db build check audit image run run-built login push clean \
         content content-check content-sync content-db-sync content-reload \
         prices prices-apply catalogue
 
@@ -140,6 +140,15 @@ lint: ## clippy across all targets, warnings are errors
 
 test: ## run the test suite
 	cargo test --workspace --all-features
+
+# The tests whose subject is SQL — who may change an article is a `WHERE`
+# clause, and only running it proves it. Ignored by `make test` because they
+# need postgres; this migrates DATABASE_URL (from the environment, else .env)
+# and runs them. `make db` starts a local one.
+test-db: ## run the tests that need postgres
+	@set -a; [ -n "$$DATABASE_URL" ] || . ./.env; set +a; \
+	cargo run -q -p lighthouse-migrate -- run && \
+	cargo test -p lighthouse-api -- --ignored
 
 build: ## release build
 	cargo build --workspace --release
