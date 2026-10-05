@@ -41,7 +41,7 @@ export const plans: CataloguePlan[] = [
     "recurring": false,
     "amount": 59900,
     "currency": "usd",
-    "button_text": "Get Everything"
+    "button_text": "Get Everything, Keep Forever"
   }
 ]
 
