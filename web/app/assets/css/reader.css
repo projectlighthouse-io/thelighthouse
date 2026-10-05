@@ -12,7 +12,9 @@
   top: 0;
   z-index: 10;
   height: 2px;
-  background: var(--border);
+  /* The page's own colour, so the unread part is invisible: a bordered track
+     at 0% read as a stray rule across the top of the page. */
+  background: var(--surface-page);
 }
 
 .reader-progress > span {
