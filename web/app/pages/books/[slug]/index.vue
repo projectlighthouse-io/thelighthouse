@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Book, Chapter, LessonSummary, TocSection } from '@/types/Content'
 import { bookTopics } from '@/data/BookTopics'
+import { plans, shelf as catalogueShelf } from '@/data/Catalogue'
 
 interface BookDetailResponse {
   book: Book
@@ -147,12 +148,34 @@ useSeo(() => ({
   type: 'book',
 }))
 
+/**
+ * The plans that include this book, from the compiled catalogue — the same
+ * prices `/pricing` shows, so the structured data and the visible amounts are
+ * one answer. A plan on the `all` track covers every book; any other covers
+ * the books on its track.
+ */
+const bookOffers = computed(() => {
+  const onTracks = catalogueShelf.find(b => b.slug === slug.value)?.tracks ?? {}
+
+  return plans
+    .filter(plan => plan.track === 'all' || plan.track in onTracks)
+    .map(plan => ({
+      '@type': 'Offer',
+      'name': plan.plan,
+      'price': String(plan.amount / 100),
+      'priceCurrency': plan.currency.toUpperCase(),
+      'url': `${SITE.url}/pricing`,
+      'availability': 'https://schema.org/InStock',
+    }))
+})
+
 useJsonLd('book', () => ({
   '@type': 'Book',
   'name': book.value?.title,
   'description': book.value?.description,
   'image': book.value?.thumbnailUrl,
   'url': `${SITE.url}/books/${slug.value}`,
+  ...(bookOffers.value.length ? { offers: bookOffers.value } : {}),
   'bookFormat': 'https://schema.org/EBook',
   'numberOfPages': lessons.value.length,
   'inLanguage': 'en',
