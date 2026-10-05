@@ -21,24 +21,17 @@ export API_PORT NUXT_PORT
 # that sells a price stripe does not hold — run `lighthouse-prices apply` in the
 # console, then restart.
 #
-# PRICES_ON_BOOT=apply runs `apply` instead: it creates in stripe whatever
+# ENSURE_PRICES_AT_BOOT=true runs `apply` instead: it creates in stripe whatever
 # pricing.yaml declares and this account lacks, then writes the same config.
 # For a first deploy against an account nothing has been applied to — there is
 # no running container to open a console in until one boots. Unset it after.
-case "${PRICES_ON_BOOT:-resolve}" in
-	apply)
-		echo "==> applying prices to stripe (PRICES_ON_BOOT=apply)"
-		/usr/local/bin/lighthouse-prices apply
-		;;
-	resolve)
-		echo "==> resolving prices"
-		/usr/local/bin/lighthouse-prices resolve
-		;;
-	*)
-		echo "PRICES_ON_BOOT is ${PRICES_ON_BOOT}; expected apply or resolve" >&2
-		exit 1
-		;;
-esac
+if [ "${ENSURE_PRICES_AT_BOOT:-false}" = "true" ]; then
+	echo "==> ensuring prices in stripe (ENSURE_PRICES_AT_BOOT=true)"
+	/usr/local/bin/lighthouse-prices apply
+else
+	echo "==> resolving prices"
+	/usr/local/bin/lighthouse-prices resolve
+fi
 
 # Pending migrations first, before anything serves. App Platform gives no
 # console to run them by hand. The cost: a migration that fails stops the
