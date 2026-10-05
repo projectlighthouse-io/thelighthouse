@@ -213,7 +213,11 @@ mod tests {
     #[test]
     fn no_dsn_means_no_sentry() {
         assert!(sentry_options(from(&[])).unwrap().is_none());
-        assert!(sentry_options(from(&[("SENTRY_DSN", " ")])).unwrap().is_none());
+        assert!(
+            sentry_options(from(&[("SENTRY_DSN", " ")]))
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]

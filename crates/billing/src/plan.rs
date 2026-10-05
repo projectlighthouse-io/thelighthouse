@@ -473,8 +473,14 @@ plans:
         let plans = Plans::from_yaml(WITH_TIERS).unwrap();
         let yearly = plans.get(&"yearly".into()).unwrap();
 
-        assert_eq!(yearly.for_country(Some("BD")).map(Ppp::off), Some(Off::Percent(60)));
-        assert_eq!(yearly.for_country(Some("IN")).map(Ppp::code), Some("LH-BD"));
+        assert_eq!(
+            yearly.for_country(Some("BD")).map(Ppp::off),
+            Some(Off::Percent(60))
+        );
+        assert_eq!(
+            yearly.for_country(Some("IN")).map(Ppp::code),
+            Some("LH-BD")
+        );
         assert!(yearly.for_country(Some("GB")).is_none());
         // Compared as given: both sides are uppercase by the time they meet.
         assert!(yearly.for_country(Some("bd")).is_none());
