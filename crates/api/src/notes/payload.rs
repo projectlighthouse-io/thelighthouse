@@ -20,10 +20,16 @@ pub(crate) const MAX_SELECTION: usize = 5000;
 /// caller to file a note under somebody else's name. The laravel controller got
 /// there by spreading the input *then* overwriting `user_id` — one reordering
 /// away from a bug.
+///
+/// The strings default to empty, so a missing key is refused by the field's
+/// own check rather than as a body that could not be read.
 #[derive(Debug, Deserialize)]
 pub(crate) struct NewNoteRequest {
+    #[serde(default)]
     pub(crate) book: String,
+    #[serde(default)]
     pub(crate) lesson: String,
+    #[serde(default)]
     pub(crate) note_content: String,
     pub(crate) selected_text: Option<String>,
     /// Character offsets over the rendered lesson body. Both or neither.
@@ -74,6 +80,7 @@ impl LessonFilter {
 /// note.
 #[derive(Debug, Deserialize)]
 pub(crate) struct EditNoteRequest {
+    #[serde(default)]
     pub(crate) note_content: String,
 }
 
@@ -84,10 +91,16 @@ pub(crate) struct ValidNote<'a> {
     /// Start and end together, or neither.
     pub(crate) offsets: Option<(i32, i32)>,
 }
+/// Every field checked, not only up to the first failure, so the form can mark
+/// all of them at once.
 pub(crate) fn validate_new_note(
     payload: &NewNoteRequest,
-) -> Result<ValidNote<'_>, Refusal> {
-    let content = validate_note_body(&payload.note_content)?;
+) -> Result<ValidNote<'_>, Vec<Refusal>> {
+    let mut refused = Vec::new();
+
+    let content = validate_note_body(&payload.note_content)
+        .map_err(|cause| refused.push(cause))
+        .ok();
 
     let selection = payload
         .selected_text
@@ -96,7 +109,7 @@ pub(crate) fn validate_new_note(
         .filter(|text| !text.is_empty());
 
     if selection.is_some_and(|text| text.chars().count() > MAX_SELECTION) {
-        return Err(Refusal::SelectionTooLong);
+        refused.push(Refusal::SelectionTooLong);
     }
 
     // Both or neither, and in order. Laravel checks each offset is a
@@ -107,14 +120,20 @@ pub(crate) fn validate_new_note(
         (Some(start), Some(end)) if start >= 0 && end >= start => {
             Some((start, end))
         }
-        _ => return Err(Refusal::BadAnchor),
+        _ => {
+            refused.push(Refusal::BadAnchor);
+            None
+        }
     };
 
-    Ok(ValidNote {
-        content,
-        selection,
-        offsets,
-    })
+    match content {
+        Some(content) if refused.is_empty() => Ok(ValidNote {
+            content,
+            selection,
+            offsets,
+        }),
+        _ => Err(refused),
+    }
 }
 
 /// A note body, trimmed and checked.

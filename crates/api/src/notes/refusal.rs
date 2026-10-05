@@ -2,7 +2,7 @@
 
 use axum::response::Response;
 
-use crate::response::bad_request;
+use crate::response::{bad_request, invalid};
 
 /// Why a write was refused.
 ///
@@ -57,6 +57,38 @@ impl Refusal {
             }
         }
     }
+}
+
+impl Refusal {
+    /// The form field this refusal is about. `None` for the ones the reader
+    /// did not type — an anchor, a parent, a filter — which answer on their
+    /// own instead.
+    const fn field(self) -> Option<&'static str> {
+        match self {
+            Self::EmptyNote | Self::NoteTooLong => Some("note_content"),
+            Self::SelectionTooLong => Some("selected_text"),
+            Self::BadAnchor
+            | Self::NestedReply
+            | Self::NoSuchNote
+            | Self::HalfGivenFilter => None,
+        }
+    }
+}
+
+/// Every field that is wrong, as one 422 the form draws beside its inputs.
+///
+/// A refusal no input owns answers on its own, as a 400: there is nothing to
+/// draw it beside, and it is not something the reader can fix by typing.
+pub(crate) fn refuse_all(causes: &[Refusal]) -> Response {
+    if let Some(&unfielded) = causes.iter().find(|c| c.field().is_none()) {
+        return refuse(unfielded);
+    }
+
+    invalid(
+        causes
+            .iter()
+            .filter_map(|c| c.field().map(|field| (field, c.message()))),
+    )
 }
 
 /// The 400 a caller sees.

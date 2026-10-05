@@ -16,14 +16,14 @@ use super::{
         EditNoteRequest, LessonFilter, NewNoteRequest, validate_new_note,
         validate_note_body,
     },
-    refusal::{Refusal, refuse},
+    refusal::{Refusal, refuse, refuse_all},
     store::{self, StoreError},
     target::{self, NoteTarget},
 };
 use crate::{
     api::AppState,
     cache::CachePolicy,
-    request::{ListQuery, PageSize},
+    request::{JsonBody, ListQuery, PageSize},
     response::{self, PaginatedResponse, json},
     session::Session,
 };
@@ -100,11 +100,11 @@ fn empty_page(paging: crate::request::Paging) -> Response {
 pub(crate) async fn create(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
-    axum::Json(payload): axum::Json<NewNoteRequest>,
+    JsonBody(payload): JsonBody<NewNoteRequest>,
 ) -> Response {
     let checked = match validate_new_note(&payload) {
         Ok(checked) => checked,
-        Err(cause_of) => return refuse(cause_of),
+        Err(refused) => return refuse_all(&refused),
     };
 
     let lesson_id = match target::resolve(&state.db, &payload).await {
@@ -157,11 +157,11 @@ pub(crate) async fn update(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
     Path(id): Path<i64>,
-    axum::Json(payload): axum::Json<EditNoteRequest>,
+    JsonBody(payload): JsonBody<EditNoteRequest>,
 ) -> Response {
     let content = match validate_note_body(&payload.note_content) {
         Ok(content) => content,
-        Err(cause_of) => return refuse(cause_of),
+        Err(cause_of) => return refuse_all(&[cause_of]),
     };
 
     match store::rewrite(&state.db, id, session.user_id, content).await {
