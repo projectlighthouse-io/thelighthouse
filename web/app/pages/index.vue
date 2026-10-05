@@ -54,7 +54,7 @@ const projects = computed<Project[]>(() => allProjects.value ?? [])
 const stats = computed(() => [
   { value: books.value.length, label: 'books' },
   { value: books.value.reduce((n, book) => n + book.pages, 0), label: 'pages' },
-  { value: projects.value.filter(p => !p.isChallenge).length, label: 'projects' },
+  { value: projects.value.length, label: 'projects & challenges' },
 ])
 </script>
 
