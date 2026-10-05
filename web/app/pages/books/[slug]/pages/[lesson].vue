@@ -383,6 +383,10 @@ onMounted(() => {
 /** Signed in, as far as anything rendered is allowed to know. */
 const reading = computed(() => hydrated.value && isSignedIn.value)
 
+/** The neighbours, read safely: the pager's slots can run after `data` clears. */
+const previous = computed(() => data.value?.previous ?? null)
+const next = computed(() => data.value?.next ?? null)
+
 const scope = computed(() => ({
   book: bookSlug.value,
   lesson: lessonSlug.value,
@@ -800,32 +804,39 @@ useJsonLd('crumbs', () => ({
           footer. Client only: `Teleport` needs the target in the DOM, and the
           target arrives with `v-html`.
         -->
-        <Teleport v-if="lesson.locked && !unlockedHtml && paywallTopics" to="[data-paywall]">
-          <ReaderPaywall class="paywalled" :topics="paywallTopics" :book="book.title" :book-slug="book.slug" />
+        <!--
+          One card, moved rather than replaced: it renders in place until the
+          target is found, then `disabled` lifts and the same instance moves in.
+          Swapping an inline card for a teleported one right after hydration
+          unmounted a component mid-hydration and broke the page.
+        -->
+        <Teleport v-if="lesson.locked && !unlockedHtml" to="[data-paywall]" :disabled="!paywallTopics">
+          <ReaderPaywall
+            class="paywalled"
+            :topics="paywallTopics ?? undefined"
+            :book="book.title"
+            :book-slug="book.slug"
+          />
         </Teleport>
-        <ReaderPaywall
-          v-else-if="lesson.locked && !unlockedHtml"
-          class="paywalled"
-          :book="book.title"
-          :book-slug="book.slug"
-        />
 
+        <!-- Through `previous`/`next`, not `data.…`: the button text is a slot
+             closure that re-renders on its own, and can outlive `data`. -->
         <nav class="reader-pager" aria-label="lessons">
           <UiButton
-            v-if="data.previous"
+            v-if="previous"
             variant="ghost"
             size="lg"
-            :to="`/books/${book.slug}/pages/${data.previous.slug}`"
+            :to="`/books/${book.slug}/pages/${previous.slug}`"
           >
-            ← {{ data.previous.title }}
+            ← {{ previous?.title }}
           </UiButton>
           <UiButton
-            v-if="data.next"
+            v-if="next"
             variant="ghost"
             size="lg"
-            :to="`/books/${book.slug}/pages/${data.next.slug}`"
+            :to="`/books/${book.slug}/pages/${next.slug}`"
           >
-            {{ data.next.title }} →
+            {{ next?.title }} →
           </UiButton>
         </nav>
 
