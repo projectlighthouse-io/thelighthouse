@@ -5,7 +5,7 @@
  * Three variants and three sizes, plus the two CTA overrides the site uses
  * everywhere: `pro` (Get Pro — serif, dark gradient, usually with a flame) and
  * `free` (Start Free — an outlined ghost). `pro-dark` is the Get Pro that sits
- * on an inverse panel.
+ * on an inverse panel: yellow, so it stands out against the black.
  *
  * Renders a NuxtLink when given `to`, a real <button> otherwise, so a control
  * that does something is never a link pretending to be one.
@@ -117,13 +117,23 @@ const classes = computed(() => [
 
 .btn-pro-dark {
   font: 400 14px/1 var(--font-serif);
-  background: linear-gradient(180deg, #3a3a3a, #1e1e1e);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: var(--ink-inverse);
+  /* Yellow on the black panel: a dark button there disappeared into it. */
+  background: #f5c518;
+  border: 1px solid #f5c518;
+  color: #111;
 }
 
-.btn-pro:hover:not(:disabled),
-.btn-pro-dark:hover:not(:disabled) { opacity: 0.88; color: var(--ink-inverse); }
+.btn-pro:hover:not(:disabled) { opacity: 0.88; color: var(--ink-inverse); }
+.btn-pro-dark:hover:not(:disabled) { opacity: 0.88; color: #111; }
+
+/* The flame's orange glow is drawn for a dark button; on yellow it washes out.
+   A deep red with no glow keeps it legible. `!important` because the flicker
+   animates the stroke and the filter, and an animation outranks a rule — the
+   motion itself still plays. */
+.btn-pro-dark :deep(.flame) {
+  stroke: #a8320c !important;
+  filter: none !important;
+}
 
 .btn-free {
   font-size: 13px;
