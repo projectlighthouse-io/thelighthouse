@@ -187,7 +187,8 @@ export default defineNuxtConfig({
 
     // Session-dependent, so prerendering them would bake one user's view into a
     // file. They are noindex anyway, and rendering them on the client keeps the
-    // server out of it entirely.
+    // server out of it entirely. Which is also why noindex is a header here:
+    // the html a crawler gets is an empty shell, with no head to carry a meta.
     // no-store, not just private: these render per session, and the /** rule
     // above would otherwise hand a shared cache permission to keep them
     // The editor. Session-dependent, so prerendering it would bake one
@@ -196,8 +197,8 @@ export default defineNuxtConfig({
     // `/blog?author=` is *not* here and must not be: it is the same url as the
     // public listing, so a rule cannot tell the two apart. The page fetches
     // that listing in the browser instead — see `app/pages/blog/index.vue`.
-    '/blog/write-something-amazing': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
-    '/blog/edit/**': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
+    '/blog/write-something-amazing': { ssr: false, headers: { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' } },
+    '/blog/edit/**': { ssr: false, headers: { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' } },
 
     // Every other /blog/** is an article page: public, and the same bytes for
     // everyone. Listed after the three above so those win.
@@ -208,10 +209,10 @@ export default defineNuxtConfig({
       },
     },
 
-    '/dashboard': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
-    '/notes': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
-    '/profile': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
-    '/settings/**': { ssr: false, headers: { 'cache-control': 'private, no-store' } },
+    '/dashboard': { ssr: false, headers: { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' } },
+    '/notes': { ssr: false, headers: { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' } },
+    '/profile': { ssr: false, headers: { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' } },
+    '/settings/**': { ssr: false, headers: { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' } },
 
     // Per country, so never shared — see the handler.
     '/_api/billing/offer': { headers: { 'cache-control': 'private, no-store' } },
