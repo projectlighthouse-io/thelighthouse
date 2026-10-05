@@ -72,14 +72,14 @@ function dismiss(): void {
   <div v-if="offer && lead && !dismissed" class="ppp lh-figure">
     <div class="bar" role="region" aria-label="regional pricing">
       <!-- Two offers, two messages: a country with prices of its own hears
-           why, everyone else hears it as the launch price it is. -->
+           why; everyone else just gets the code. -->
       <p v-if="!lead.rest">
         <template v-if="countryName">You're in <strong>{{ countryName }}</strong>, so </template>
         {{ planName(lead.plan) }} is priced for where you live: use
         <code>{{ lead.code }}</code> at checkout for <strong>{{ offLabel(lead) }}</strong>.
       </p>
       <p v-else>
-        Launch offer: use <code>{{ lead.code }}</code> at checkout for
+        Use <code>{{ lead.code }}</code> at checkout for
         <strong>{{ offLabel(lead) }}</strong> {{ planName(lead.plan) }}.
       </p>
       <button type="button" class="dismiss" aria-label="dismiss" @click="dismiss">
@@ -104,7 +104,7 @@ function dismiss(): void {
   font: var(--text-body-sm);
 }
 
-p { margin: 0; min-width: 0; text-wrap: pretty; }
+p { flex: 1; margin: 0; min-width: 0; text-align: center; text-wrap: pretty; }
 
 strong { font-weight: var(--weight-medium); }
 
