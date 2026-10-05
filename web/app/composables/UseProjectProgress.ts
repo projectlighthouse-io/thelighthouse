@@ -28,6 +28,7 @@ const EVERY = 5_000
 
 export function useProjectProgress(slug: MaybeRefOrGetter<string>) {
   const progress = ref<ProjectProgress | null>(null)
+  const { isSignedIn } = useReader()
 
   // Distinct from `progress === null`, which cannot tell "not signed in" from
   // "not asked yet" — and the difference is a progress bar flashing empty at
@@ -44,6 +45,15 @@ export function useProjectProgress(slug: MaybeRefOrGetter<string>) {
     const project = toValue(slug)
 
     if (!project) return
+
+    // A signed-out reader would only earn a 401, every five seconds. The
+    // interval keeps ticking, so signing in starts the fetches on the next one.
+    if (!isSignedIn.value) {
+      progress.value = null
+      loaded.value = true
+
+      return
+    }
 
     try {
       progress.value = await $fetch<ProjectProgress>(
