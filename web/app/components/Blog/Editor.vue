@@ -34,8 +34,16 @@ const props = defineProps<{
   /** The line across the bottom of the art panel. */
   caption: string
   pending: boolean
+  /** For the form as a whole — a refusal no single field owns. */
   error: string | null
+  /** The api's refusals, by the field name it was sent under. */
+  fieldErrors: Record<string, string>
 }>()
+
+/** Characters, matching `articles::payload::MAX_BODY`, which enforces it. */
+const MAX_BODY = 50_000
+/** The counter only appears near the limit; nobody needs it at paragraph two. */
+const SHOW_COUNT_FROM = 45_000
 
 const emit = defineEmits<{
   (e: 'update:title' | 'update:subtitle' | 'update:body', value: string): void
@@ -156,9 +164,11 @@ function cancel(): void {
             required
             placeholder="Title"
             class="masthead-title w-full border-0 bg-transparent p-0 outline-none placeholder:text-faint"
+            :aria-invalid="!!fieldErrors.title"
             @input="emit('update:title', ($event.target as HTMLInputElement).value)"
           >
         </label>
+        <p v-if="fieldErrors.title" class="mt-2 text-sm text-bad" role="alert">{{ fieldErrors.title }}</p>
 
         <!-- Under the title and set in the dek face, so the pair reads as a
              masthead — the same relationship `/books/{slug}` has between its
@@ -174,9 +184,11 @@ function cancel(): void {
             required
             placeholder="Add a subtitle"
             class="dek-face w-full border-0 bg-transparent p-0 text-quiet outline-none placeholder:text-faint"
+            :aria-invalid="!!fieldErrors.subtitle"
             @input="emit('update:subtitle', ($event.target as HTMLInputElement).value)"
           >
         </label>
+        <p v-if="fieldErrors.subtitle" class="mt-2 text-sm text-bad" role="alert">{{ fieldErrors.subtitle }}</p>
 
         <!-- Chips, because an article can be about Go *and* Docker. See
              `BlogTopics`; the wire shape is `topics: string[]`. -->
@@ -185,6 +197,7 @@ function cancel(): void {
             :model-value="topics"
             @update:model-value="emit('update:topics', $event)"
           />
+          <p v-if="fieldErrors.topics" class="mt-2 text-sm text-bad" role="alert">{{ fieldErrors.topics }}</p>
         </div>
 
         <div class="mt-8">
@@ -193,6 +206,10 @@ function cancel(): void {
             :model-value="body"
             @update:model-value="emit('update:body', $event)"
           />
+          <p v-if="body.length >= SHOW_COUNT_FROM" class="mt-2 font-mono text-xs text-quiet">
+            {{ body.length.toLocaleString() }} / {{ MAX_BODY.toLocaleString() }} characters
+          </p>
+          <p v-if="fieldErrors.body" class="mt-2 text-sm text-bad" role="alert">{{ fieldErrors.body }}</p>
         </div>
 
         </div>

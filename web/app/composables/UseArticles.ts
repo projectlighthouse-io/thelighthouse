@@ -82,20 +82,6 @@ interface PageResponse<T> {
 /** Shown when the api refused but said nothing a reader can act on. */
 const GENERIC_FAILURE = 'That could not be saved. Please try again.'
 
-/**
- * The api's own message for a refused write, or something generic.
- *
- * Rust answers a validation failure with `{ code, error }`, and those messages
- * are written for the person who typed the article — showing them beats
- * replacing them with a guess. Anything else (a 403, a 429, the network) has
- * no message worth surfacing verbatim.
- */
-function problem(error: unknown): string {
-  const data = (error as { data?: { error?: unknown } } | undefined)?.data
-
-  return typeof data?.error === 'string' ? data.error : GENERIC_FAILURE
-}
-
 function toArticle(article: OwnArticleResponse): OwnArticle {
   return {
     id: article.id,
@@ -163,7 +149,7 @@ export function useArticles() {
   /**
    * Publishes an article. Live immediately — rust has no pending state.
    *
-   * Returns the saved article on success and a message on refusal, so a caller
+   * Returns the saved article on success and the refusal otherwise, so a caller
    * can navigate to the slug rust minted rather than guessing at one.
    */
   async function create(
@@ -171,7 +157,7 @@ export function useArticles() {
     subtitle: string,
     topics: string[],
     body: string,
-  ): Promise<{ article: OwnArticle } | { error: string }> {
+  ): Promise<{ article: OwnArticle } | { refused: Refused }> {
     try {
       const saved = await $fetch<OwnArticleResponse>('/api/articles', {
         method: 'POST',
@@ -186,7 +172,7 @@ export function useArticles() {
       return { article }
     }
     catch (error) {
-      return { error: problem(error) }
+      return { refused: refusedBy(error, GENERIC_FAILURE) }
     }
   }
 
@@ -202,7 +188,7 @@ export function useArticles() {
     subtitle: string,
     topics: string[],
     body: string,
-  ): Promise<{ article: OwnArticle } | { error: string }> {
+  ): Promise<{ article: OwnArticle } | { refused: Refused }> {
     try {
       const updated = await $fetch<OwnArticleResponse>(
         `/api/articles/${encodeURIComponent(slug)}`,
@@ -220,11 +206,11 @@ export function useArticles() {
       return { article }
     }
     catch (error) {
-      return { error: problem(error) }
+      return { refused: refusedBy(error, GENERIC_FAILURE) }
     }
   }
 
-  async function remove(slug: string): Promise<string | null> {
+  async function remove(slug: string): Promise<Refused | null> {
     try {
       await $fetch(`/api/articles/${encodeURIComponent(slug)}`, {
         method: 'DELETE',
@@ -237,7 +223,7 @@ export function useArticles() {
       return null
     }
     catch (error) {
-      return problem(error)
+      return refusedBy(error, GENERIC_FAILURE)
     }
   }
 

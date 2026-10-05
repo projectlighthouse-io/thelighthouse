@@ -17,18 +17,20 @@ const subtitle = ref('')
 const topics = ref<string[]>([])
 const body = ref('')
 const pending = ref(false)
-const error = ref<string | null>(null)
+const errors = useFieldErrors(['title', 'subtitle', 'topics', 'body'])
 
 async function publish(): Promise<void> {
+  if (pending.value) return
+
+  errors.clear()
   pending.value = true
-  error.value = null
 
   const result = await create(title.value, subtitle.value, topics.value, body.value)
 
   pending.value = false
 
-  if ('error' in result) {
-    error.value = result.error
+  if ('refused' in result) {
+    errors.show(result.refused)
     return
   }
 
@@ -46,7 +48,8 @@ async function publish(): Promise<void> {
     action="publish"
     caption="Write it down while it is still annoying you."
     :pending="pending"
-    :error="error"
+    :error="errors.message.value || null"
+    :field-errors="errors.fields.value"
     @submit="publish"
   />
 </template>

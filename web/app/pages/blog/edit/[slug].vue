@@ -22,7 +22,7 @@ const topics = ref<string[]>([])
 const body = ref('')
 const pending = ref(false)
 const loading = ref(true)
-const error = ref<string | null>(null)
+const errors = useFieldErrors(['title', 'subtitle', 'topics', 'body'])
 const missing = ref(false)
 
 // `mine` is the only endpoint that answers about an article of the reader's
@@ -45,15 +45,17 @@ onMounted(async () => {
 })
 
 async function save(): Promise<void> {
+  if (pending.value) return
+
+  errors.clear()
   pending.value = true
-  error.value = null
 
   const result = await edit(slug.value, title.value, subtitle.value, topics.value, body.value)
 
   pending.value = false
 
-  if ('error' in result) {
-    error.value = result.error
+  if ('refused' in result) {
+    errors.show(result.refused)
     return
   }
 
@@ -83,7 +85,8 @@ async function save(): Promise<void> {
     action="save"
     caption="Second drafts are where the thinking shows."
     :pending="pending"
-    :error="error"
+    :error="errors.message.value || null"
+    :field-errors="errors.fields.value"
     @submit="save"
   >
     <template #header>
