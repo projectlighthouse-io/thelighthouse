@@ -83,6 +83,8 @@
 
 mod article;
 mod handler;
+#[cfg(test)]
+mod ownership_tests;
 mod payload;
 mod refusal;
 mod store;
