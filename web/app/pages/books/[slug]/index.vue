@@ -125,6 +125,19 @@ onMounted(loadAccess)
 const hasPro = computed<boolean>(() => lessons.value.some(lesson => lesson.locked))
 const showPro = computed<boolean>(() => hasPro.value && !owns(slug.value))
 
+/**
+ * What the cover plate shows.
+ *
+ * `images` is the book's own list and the thumbnail is the fallback, so a book
+ * whose yaml has no `images:` yet still shows its cover rather than a gap.
+ */
+const covers = computed<string[]>(() => {
+  const listed = book.value?.images ?? []
+  if (listed.length) return listed
+
+  return book.value?.thumbnailUrl ? [book.value.thumbnailUrl] : []
+})
+
 useSeo(() => ({
   title: `${book.value?.title} — projectlighthouse`,
   description: book.value?.description ?? '',
@@ -161,7 +174,8 @@ useJsonLd('crumbs', () => ({
       :title="book.title"
       :description="book.description"
       :topics="topics"
-      :cover="book.thumbnailUrl || undefined"
+      :cover="covers[0]"
+      :covers="covers"
       :cover-alt="`${book.title} cover`"
     >
       <template v-if="firstLesson || showPro" #actions>

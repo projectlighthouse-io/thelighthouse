@@ -2,7 +2,8 @@
 /**
  * The head a book or project page opens on: mono eyebrow, serif title,
  * description, the CTAs, hashtags — and a plate on the right, the cover by
- * default or whatever the `figure` slot puts there.
+ * default, a slideshow when `covers` has several, or whatever the `figure` slot
+ * puts there.
  */
 defineProps<{
   eyebrow: string
@@ -11,11 +12,13 @@ defineProps<{
   topics?: string[]
   cover?: string
   coverAlt?: string
+  /** More than one image: they cycle in the plate instead of `cover`. */
+  covers?: string[]
 }>()
 </script>
 
 <template>
-  <div class="head lh-figure" :class="{ 'is-bare': !$slots.figure && !cover }">
+  <div class="head lh-figure" :class="{ 'is-bare': !$slots.figure && !cover && !covers?.length }">
     <div class="words">
       <p class="lh-eyebrow">{{ eyebrow }}</p>
       <h1 class="lh-title-serif">{{ title }}</h1>
@@ -30,11 +33,12 @@ defineProps<{
       </ul>
     </div>
 
-    <div v-if="$slots.figure || cover" class="figure">
+    <div v-if="$slots.figure || cover || covers?.length" class="figure">
       <slot name="figure">
         <div class="plate">
           <div class="plate-inner">
-            <img :src="cover" :alt="coverAlt ?? ''" width="600" height="400">
+            <BookCoverSlideshow v-if="covers && covers.length > 1" :images="covers" :title="coverAlt ?? ''" />
+            <img v-else :src="cover" :alt="coverAlt ?? ''" width="600" height="400">
           </div>
         </div>
       </slot>
