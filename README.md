@@ -201,40 +201,6 @@ install. One consequence worth knowing: adding a migration file needs a rebuild,
 because Cargo does not notice a new file appearing in a directory the macro
 read. A new migration that "isn't picked up" is a stale binary.
 
-### Migration 0 is the Laravel schema
-
-The rebuild replaces a Laravel app one phase at a time, against the database
-that app already owns. So migration 0 is a `pg_dump --schema-only` of it —
-41 tables, verbatim. It is a snapshot, not a design: nothing renamed, nothing
-pruned. Everything after it is a forward migration written normally.
-
-That gives one file two jobs, and which applies depends on the database:
-
-| database | command | what happens |
-|---|---|---|
-| fresh — local, CI, a clone | `run` | migration 0 executes and builds the schema |
-| one Laravel already built | `baseline` | migration 0 is recorded as applied, and **not** executed |
-
-`run` against the second kind fails on the first `CREATE TABLE`, which is
-correct — that schema does not need building, it needs adopting. Either way the
-version lands in `_sqlx_migrations`, so from the next forward migration onward
-both kinds of database behave identically.
-
-`baseline` is deliberately narrow, because a tool that marks migrations "already
-done" is otherwise one mistake from skipping a real one. It only ever records
-the **first** migration, refuses on a database that does not already have the
-schema, and refuses if that migration is already recorded.
-
-**Why not `CREATE TABLE IF NOT EXISTS` instead?** It would collapse the two
-commands into one, and it does not work here. Postgres has no
-`ADD CONSTRAINT IF NOT EXISTS` and the dump carries 115 of them, so each would
-need wrapping in a `DO` block that swallows `duplicate_object` — turning a
-verbatim `pg_dump` into a hand-edited file. More importantly `IF NOT EXISTS`
-compares nothing: it silently skips a table that exists with entirely different
-columns, reporting a clean migration over a schema that has drifted. Baselining
-records what is true instead, and leaves migration 0 meaning "build this from
-nothing" — which is what a fresh clone needs it to mean.
-
 ## Signing in
 
 Social auth only, GitHub and Google, and the API owns the whole dance — Nuxt
