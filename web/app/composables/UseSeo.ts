@@ -42,21 +42,25 @@ export function useSeo(input: MaybeRefOrGetter<SeoInput>) {
     return `${SITE.url}${route.path === '/' ? '' : route.path}${query}`
   })
   const image = computed(() => absolute(resolved.value.image ?? SITE.ogImage))
+  // Every page gets the site's name and a description that fits a results
+  // page, whatever it passed in — see `utils/Seo`.
+  const title = computed(() => pageTitle(resolved.value.title, SITE.name))
+  const description = computed(() => metaDescription(resolved.value.description))
 
   useSeoMeta({
-    title: () => resolved.value.title,
-    description: () => resolved.value.description,
+    title: () => title.value,
+    description: () => description.value,
 
     ogType: () => resolved.value.type ?? 'website',
-    ogTitle: () => resolved.value.title,
-    ogDescription: () => resolved.value.description,
+    ogTitle: () => title.value,
+    ogDescription: () => description.value,
     ogUrl: () => canonical.value,
     ogImage: () => image.value,
     ogSiteName: SITE.name,
 
     twitterCard: 'summary_large_image',
-    twitterTitle: () => resolved.value.title,
-    twitterDescription: () => resolved.value.description,
+    twitterTitle: () => title.value,
+    twitterDescription: () => description.value,
     twitterImage: () => image.value,
     twitterSite: SITE.twitter,
 

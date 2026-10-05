@@ -15,7 +15,7 @@ const description
   = 'Hands-on coding projects: build Docker, HTTP servers, and DNS resolvers from scratch, or sharpen your grep, sed, and CLI skills. Automated validation and hints, run on your own machine.'
 
 useSeo({
-  title: 'Hands-on Projects - Build, Practice, and Validate Your Skills',
+  title: 'Hands-on Projects: Build and Validate',
   description,
 })
 

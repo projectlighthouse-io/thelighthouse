@@ -694,7 +694,9 @@ watch(readable, async () => {
 onBeforeUnmount(unpaintAll)
 
 useSeo(() => ({
-  title: `${lesson.value?.title} — ${book.value?.title}`,
+  // The book's name only while the whole title still shows in a result; past
+  // that the lesson's own name is the part worth keeping.
+  title: lessonTitle(lesson.value?.title ?? '', book.value?.title ?? ''),
   description: lesson.value?.description ?? '',
   type: 'article',
   lang: data.value?.locale,
