@@ -70,10 +70,9 @@ async function onSignOut(): Promise<void> {
 
 <template>
   <header class="header lh-figure">
-    <NuxtLink to="/" class="brand">
-      <img src="/lighthouse.svg" alt="" width="22" height="22">
+    <NuxtLink to="/" class="brand" aria-label="Project Lighthouse home">
+      <UiLogo variant="tile" :size="24" />
       <span class="wordmark">projectlighthouse</span>
-      <span class="lh-sr">home</span>
     </NuxtLink>
 
     <nav class="nav" aria-label="primary">
@@ -154,8 +153,6 @@ async function onSignOut(): Promise<void> {
 }
 
 .brand:hover { color: var(--ink); }
-
-.brand img { width: 22px; height: 22px; }
 
 .wordmark { font: var(--text-label-mono); color: var(--ink); }
 

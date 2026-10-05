@@ -212,7 +212,7 @@ const { getPro } = useGetPro()
     </div>
 
     <div class="end" aria-hidden="true">
-      <img src="/lighthouse.svg" alt="" width="20" height="20">
+      <UiLogo variant="mark" :size="20" class="end-mark" />
     </div>
   </div>
 </template>
@@ -228,5 +228,5 @@ const { getPro } = useGetPro()
   margin-top: var(--space-24);
 }
 
-.end img { width: 20px; height: 20px; opacity: 0.35; }
+.end-mark { opacity: 0.35; }
 </style>

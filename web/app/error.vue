@@ -71,6 +71,7 @@ const retry = (): void => reloadNuxtApp({ persistState: false })
 <template>
   <NuxtLayout>
     <div class="lh-text lh-gap">
+      <UiLogo variant="tile" :size="32" label="Project Lighthouse" class="error-logo" />
       <EmptyState
         as="h1"
         :eyebrow="`${error.statusCode} · ${isMissing ? 'not found' : 'error'}`"
@@ -85,3 +86,7 @@ const retry = (): void => reloadNuxtApp({ persistState: false })
     </div>
   </NuxtLayout>
 </template>
+
+<style scoped>
+.error-logo { margin-bottom: var(--space-4); }
+</style>

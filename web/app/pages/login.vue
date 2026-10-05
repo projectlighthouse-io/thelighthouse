@@ -33,6 +33,8 @@ const error = computed<string | null>(() => (route.query.error as string) ?? nul
 <template>
   <div class="login lh-text lh-gap">
     <div class="lh-card card">
+      <!-- Decorative: the heading below already names the site. -->
+      <UiLogo variant="tile" :size="32" />
       <p class="lh-eyebrow">welcome aboard</p>
       <h1 class="lh-h2">Join projectlighthouse</h1>
       <p class="lh-sub">

@@ -4,7 +4,7 @@
 
     <div class="sheet">
       <div class="stamp" aria-hidden="true">
-        <img src="/lighthouse.svg" alt="" width="24" height="24">
+        <UiLogo variant="mark" :size="24" class="stamp-mark" />
       </div>
 
       <p class="lh-muted">to whoever reads this,</p>
@@ -72,7 +72,8 @@ strong { font-weight: var(--weight-medium); }
   transform: rotate(3deg);
 }
 
-.stamp img { width: 24px; height: 24px; opacity: 0.75; }
+/* Counter-rotated: the stamp tilts, the mark it carries must not. */
+.stamp-mark { opacity: 0.75; transform: rotate(-3deg); }
 
 .chip {
   display: inline-flex;

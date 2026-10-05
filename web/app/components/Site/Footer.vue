@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * The footer every page closes on: the wordmark, the links, the build.
+ * The footer every page closes on: the wordmark, the links, the lockup and
+ * the build.
  */
 interface FooterLink {
   to: string
@@ -96,6 +97,10 @@ const year = new Date().getFullYear()
     </div>
 
     <div class="build">
+      <NuxtLink to="/" class="lockup" aria-label="Project Lighthouse home">
+        <UiLogo variant="tile" :size="24" />
+        <span class="wordmark">projectlighthouse</span>
+      </NuxtLink>
       <span class="lh-mono lh-faint">{{ build }}</span>
       <span class="copyright">© {{ year }} projectlighthouse. all rights reserved.</span>
     </div>
@@ -174,8 +179,23 @@ const year = new Date().getFullYear()
 
 .build {
   display: grid;
+  justify-items: center;
   gap: var(--space-2);
 }
+
+/* The header's lockup, at the same size: tile, 8px, the wordmark. */
+.lockup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.lockup:hover { color: var(--ink); }
+
+.wordmark { font: var(--text-label-mono); color: var(--ink); }
 
 .copyright {
   font: var(--text-body-sm);

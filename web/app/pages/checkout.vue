@@ -51,6 +51,8 @@ onMounted(async () => {
 
 <template>
   <section class="checkout lh-text lh-gap">
+    <UiLogo variant="tile" :size="32" label="Project Lighthouse" />
+
     <template v-if="!plan">
       <h1 class="lh-h2">Pick a plan first</h1>
       <p class="lh-sub">That link does not name a plan on sale.</p>
