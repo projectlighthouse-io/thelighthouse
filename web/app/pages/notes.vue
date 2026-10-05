@@ -66,73 +66,75 @@ useSeo({
 
 <template>
   <AccountShell title="My notes" sub="Every passage you highlighted, with whatever you wrote next to it.">
-    <label class="lh-sr" for="notes-search">search your notes</label>
-    <input
-      id="notes-search"
-      v-model="search"
-      type="search"
-      placeholder="search your notes…"
-      class="lh-input"
-    >
+    <div class="lh-narrow">
+      <label class="lh-sr" for="notes-search">search your notes</label>
+      <input
+        id="notes-search"
+        v-model="search"
+        type="search"
+        placeholder="search your notes…"
+        class="lh-input"
+      >
 
-    <!-- Nothing at all until the first answer. An empty state drawn while the
-         request is still out is a lie shown to everybody who has notes. -->
-    <p v-if="!loaded" class="lh-sub state">Loading…</p>
+      <!-- Nothing at all until the first answer. An empty state drawn while the
+           request is still out is a lie shown to everybody who has notes. -->
+      <p v-if="!loaded" class="lh-sub state">Loading…</p>
 
-    <div v-else-if="failed" class="lh-card state empty">
-      <p class="lh-sub">Your notes could not be loaded.</p>
-      <UiButton variant="inverse" size="md" @click="load">Try again</UiButton>
-    </div>
+      <div v-else-if="failed" class="lh-card state empty">
+        <p class="lh-sub">Your notes could not be loaded.</p>
+        <UiButton variant="inverse" size="md" @click="load">Try again</UiButton>
+      </div>
 
-    <div v-else-if="notes.length === 0" class="lh-card state empty">
-      <p class="lh-sub">{{ search ? 'No notes match that.' : 'No notes yet.' }}</p>
-      <p v-if="!search" class="lh-hint">Select any passage while reading to save it here.</p>
-    </div>
+      <div v-else-if="notes.length === 0" class="lh-card state empty">
+        <p class="lh-sub">{{ search ? 'No notes match that.' : 'No notes yet.' }}</p>
+        <p v-if="!search" class="lh-hint">Select any passage while reading to save it here.</p>
+      </div>
 
-    <div v-else class="list" :class="{ 'is-pending': pending }">
-      <article v-for="note in notes" :key="note.id" class="lh-card note">
-        <div class="top">
-          <NuxtLink :to="`/books/${note.bookSlug}/pages/${note.lessonSlug}`" class="lh-mono lh-link">
-            {{ note.bookSlug }} — {{ note.lessonSlug }}
-          </NuxtLink>
+      <div v-else class="list" :class="{ 'is-pending': pending }">
+        <article v-for="note in notes" :key="note.id" class="lh-card note">
+          <div class="top">
+            <NuxtLink :to="`/books/${note.bookSlug}/pages/${note.lessonSlug}`" class="lh-mono lh-link">
+              {{ note.bookSlug }} — {{ note.lessonSlug }}
+            </NuxtLink>
 
-          <!-- Only the states worth flagging get a label. "private" is the one
-               that changes what a reader would say next; "reply" explains why a
-               note has no passage of its own. -->
-          <span v-if="!note.isPublic" class="lh-mono lh-faint">private</span>
-          <span v-else-if="note.parentId" class="lh-mono lh-faint">reply</span>
-        </div>
-
-        <blockquote v-if="note.selectedText" class="passage">{{ note.selectedText }}</blockquote>
-
-        <div v-if="editing === note.id" class="edit">
-          <textarea v-model="draft" rows="3" :maxlength="MAX_NOTE" class="lh-input" aria-label="your note" />
-
-          <div class="edit-row">
-            <UiButton variant="inverse" size="sm" :disabled="saving" @click="save(note.id)">Save</UiButton>
-            <button type="button" class="act" @click="stopEditing">Cancel</button>
-            <span class="lh-mono lh-faint lh-num count">{{ draft.trim().length }}/{{ MAX_NOTE }}</span>
+            <!-- Only the states worth flagging get a label. "private" is the one
+                 that changes what a reader would say next; "reply" explains why a
+                 note has no passage of its own. -->
+            <span v-if="!note.isPublic" class="lh-mono lh-faint">private</span>
+            <span v-else-if="note.parentId" class="lh-mono lh-faint">reply</span>
           </div>
+
+          <blockquote v-if="note.selectedText" class="passage">{{ note.selectedText }}</blockquote>
+
+          <div v-if="editing === note.id" class="edit">
+            <textarea v-model="draft" rows="3" :maxlength="MAX_NOTE" class="lh-input" aria-label="your note" />
+
+            <div class="edit-row">
+              <UiButton variant="inverse" size="sm" :disabled="saving" @click="save(note.id)">Save</UiButton>
+              <button type="button" class="act" @click="stopEditing">Cancel</button>
+              <span class="lh-mono lh-faint lh-num count">{{ draft.trim().length }}/{{ MAX_NOTE }}</span>
+            </div>
+          </div>
+
+          <p v-else-if="note.noteContent" class="lh-sub body">{{ note.noteContent }}</p>
+
+          <p v-if="refused && editing === note.id" class="lh-error" role="alert">{{ refused }}</p>
+
+          <div class="foot">
+            <span class="lh-mono lh-faint">{{ on(note.createdAt) }}</span>
+
+            <span v-if="editing !== note.id" class="acts">
+              <button type="button" class="act" @click="startEditing(note.id, note.noteContent)">Edit</button>
+              <button type="button" class="act" @click="discard(note.id)">Delete</button>
+            </span>
+          </div>
+        </article>
+
+        <div v-if="pages > 1" class="pager">
+          <UiButton variant="ghost" size="md" :disabled="page <= 1" @click="goTo(page - 1)">← Previous</UiButton>
+          <span class="lh-mono lh-muted lh-num">page {{ page }} of {{ pages }} — {{ total }} notes</span>
+          <UiButton variant="ghost" size="md" :disabled="page >= pages" @click="goTo(page + 1)">Next →</UiButton>
         </div>
-
-        <p v-else-if="note.noteContent" class="lh-sub body">{{ note.noteContent }}</p>
-
-        <p v-if="refused && editing === note.id" class="lh-error" role="alert">{{ refused }}</p>
-
-        <div class="foot">
-          <span class="lh-mono lh-faint">{{ on(note.createdAt) }}</span>
-
-          <span v-if="editing !== note.id" class="acts">
-            <button type="button" class="act" @click="startEditing(note.id, note.noteContent)">Edit</button>
-            <button type="button" class="act" @click="discard(note.id)">Delete</button>
-          </span>
-        </div>
-      </article>
-
-      <div v-if="pages > 1" class="pager">
-        <UiButton variant="ghost" size="md" :disabled="page <= 1" @click="goTo(page - 1)">← Previous</UiButton>
-        <span class="lh-mono lh-muted lh-num">page {{ page }} of {{ pages }} — {{ total }} notes</span>
-        <UiButton variant="ghost" size="md" :disabled="page >= pages" @click="goTo(page + 1)">Next →</UiButton>
       </div>
     </div>
   </AccountShell>

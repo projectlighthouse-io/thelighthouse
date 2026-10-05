@@ -109,99 +109,101 @@ async function save() {
 
 <template>
   <AccountShell title="Public profile" sub="What other learners see.">
-    <div v-if="username" class="lh-card known">
-      <dl class="lh-facts">
-        <dt>username</dt>
-        <dd>{{ username }}</dd>
-        <template v-if="githubUsername">
-          <dt>github</dt>
-          <dd>{{ githubUsername }}</dd>
-        </template>
-      </dl>
-    </div>
-
-    <form class="form" @submit.prevent="save">
-      <label class="lh-field">
-        <span class="lh-label">tagline</span>
-        <input
-          v-model="form.tagline"
-          type="text"
-          :maxlength="MAX.tagline"
-          placeholder="One line about you"
-          class="lh-input"
-        >
-      </label>
-      <label class="lh-field">
-        <span class="lh-label">bio</span>
-        <textarea v-model="form.bio" rows="3" :maxlength="MAX.bio" class="lh-input" />
-      </label>
-      <label class="lh-field">
-        <span class="lh-label">company</span>
-        <input
-          v-model="form.company"
-          type="text"
-          :maxlength="MAX.short"
-          class="lh-input"
-        >
-      </label>
-      <label class="lh-field">
-        <span class="lh-label">education</span>
-        <input
-          v-model="form.education"
-          type="text"
-          :maxlength="MAX.short"
-          class="lh-input"
-        >
-      </label>
-      <label class="lh-field">
-        <span class="lh-label">location</span>
-        <input
-          v-model="form.location"
-          type="text"
-          :maxlength="MAX.location"
-          placeholder="City, country"
-          class="lh-input"
-        >
-      </label>
-      <label class="lh-field">
-        <span class="lh-label">linkedin</span>
-        <input
-          v-model="form.linkedin_url"
-          type="url"
-          :maxlength="MAX.short"
-          placeholder="https://linkedin.com/in/your-handle"
-          class="lh-input"
-        >
-      </label>
-      <label class="lh-field">
-        <span class="lh-label">x</span>
-        <input
-          v-model="form.x_url"
-          type="url"
-          :maxlength="MAX.short"
-          placeholder="https://x.com/your-handle"
-          class="lh-input"
-        >
-      </label>
-      <label class="lh-field">
-        <span class="lh-label">website</span>
-        <input
-          v-model="form.website_url"
-          type="url"
-          :maxlength="MAX.short"
-          placeholder="https://yourdomain.dev"
-          class="lh-input"
-        >
-      </label>
-
-      <div class="actions">
-        <UiButton type="submit" variant="inverse" size="lg" :disabled="busy">
-          {{ busy ? 'Saving…' : 'Save' }}
-        </UiButton>
-        <span v-if="saved" class="lh-hint" role="status">Saved.</span>
-        <span v-if="problem" class="lh-error" role="alert">{{ problem }}</span>
+    <div class="lh-narrow">
+      <div v-if="username" class="lh-card known">
+        <dl class="lh-facts">
+          <dt>username</dt>
+          <dd>{{ username }}</dd>
+          <template v-if="githubUsername">
+            <dt>github</dt>
+            <dd>{{ githubUsername }}</dd>
+          </template>
+        </dl>
       </div>
-    </form>
+
+      <form class="form" @submit.prevent="save">
+        <label class="lh-field">
+          <span class="lh-label">tagline</span>
+          <input
+            v-model="form.tagline"
+            type="text"
+            :maxlength="MAX.tagline"
+            placeholder="One line about you"
+            class="lh-input"
+          >
+        </label>
+        <label class="lh-field">
+          <span class="lh-label">bio</span>
+          <textarea v-model="form.bio" rows="3" :maxlength="MAX.bio" class="lh-input" />
+        </label>
+        <label class="lh-field">
+          <span class="lh-label">company</span>
+          <input
+            v-model="form.company"
+            type="text"
+            :maxlength="MAX.short"
+            class="lh-input"
+          >
+        </label>
+        <label class="lh-field">
+          <span class="lh-label">education</span>
+          <input
+            v-model="form.education"
+            type="text"
+            :maxlength="MAX.short"
+            class="lh-input"
+          >
+        </label>
+        <label class="lh-field">
+          <span class="lh-label">location</span>
+          <input
+            v-model="form.location"
+            type="text"
+            :maxlength="MAX.location"
+            placeholder="City, country"
+            class="lh-input"
+          >
+        </label>
+        <label class="lh-field">
+          <span class="lh-label">linkedin</span>
+          <input
+            v-model="form.linkedin_url"
+            type="url"
+            :maxlength="MAX.short"
+            placeholder="https://linkedin.com/in/your-handle"
+            class="lh-input"
+          >
+        </label>
+        <label class="lh-field">
+          <span class="lh-label">x</span>
+          <input
+            v-model="form.x_url"
+            type="url"
+            :maxlength="MAX.short"
+            placeholder="https://x.com/your-handle"
+            class="lh-input"
+          >
+        </label>
+        <label class="lh-field">
+          <span class="lh-label">website</span>
+          <input
+            v-model="form.website_url"
+            type="url"
+            :maxlength="MAX.short"
+            placeholder="https://yourdomain.dev"
+            class="lh-input"
+          >
+        </label>
+
+        <div class="actions">
+          <UiButton type="submit" variant="inverse" size="lg" :disabled="busy">
+            {{ busy ? 'Saving…' : 'Save' }}
+          </UiButton>
+          <span v-if="saved" class="lh-hint" role="status">Saved.</span>
+          <span v-if="problem" class="lh-error" role="alert">{{ problem }}</span>
+        </div>
+      </form>
+    </div>
   </AccountShell>
 </template>
 

@@ -30,6 +30,10 @@ summary::-webkit-details-marker { display: none; }
 .lh-shelf { max-width: 1080px; }
 .lh-wide { max-width: 1200px; }
 
+/* a form inside a figure column: kept to a comfortable line on wide screens,
+   left-aligned with the heading above it */
+.lh-narrow { max-width: 768px; }
+
 /* the standing gaps between sections */
 .lh-gap { padding-top: var(--space-24); }
 .lh-gap-lg { padding-top: 128px; }

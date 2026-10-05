@@ -124,55 +124,57 @@ const when = (at: string | null): string =>
     title="API tokens"
     sub="luxctl authenticates with a bearer token. Create one, copy it once, keep it somewhere safe."
   >
-    <p v-if="problem" class="lh-error problem" role="alert">{{ problem }}</p>
+    <div class="lh-narrow">
+      <p v-if="problem" class="lh-error problem" role="alert">{{ problem }}</p>
 
-    <!-- Shown once. The api keeps only a hash, so this cannot be recovered. -->
-    <div v-if="justMinted" class="lh-card minted">
-      <p class="lh-eyebrow">copy “{{ justMinted.name }}” now — it is not shown again</p>
-      <div class="row">
-        <input
-          :value="justMinted.token_string"
-          readonly
-          class="lh-input token"
-          aria-label="your new token"
-          @focus="(e) => (e.target as HTMLInputElement).select()"
-        >
-        <UiButton variant="inverse" size="md" @click="copy">{{ copied ? 'Copied' : 'Copy' }}</UiButton>
-      </div>
-      <p class="lh-hint">Then run <code>luxctl auth --token &lt;token&gt;</code>.</p>
-    </div>
-
-    <form class="row create" @submit.prevent="create">
-      <label class="lh-sr" for="token-name">what the token is for</label>
-      <input
-        id="token-name"
-        v-model="name"
-        placeholder="What is it for? e.g. my laptop"
-        maxlength="60"
-        class="lh-input"
-      >
-      <UiButton type="submit" variant="inverse" size="md" :disabled="busy || !name.trim()">
-        Create token
-      </UiButton>
-    </form>
-
-    <ul v-if="tokens.length" class="tokens">
-      <li v-for="token in tokens" :key="token.id" class="lh-card item">
-        <div class="who">
-          <span class="lh-h3">{{ token.name }}</span>
-          <span class="lh-mono lh-muted">
-            created {{ when(token.created_at) }} · last used {{ when(token.last_used_at) }}
-          </span>
+      <!-- Shown once. The api keeps only a hash, so this cannot be recovered. -->
+      <div v-if="justMinted" class="lh-card minted">
+        <p class="lh-eyebrow">copy “{{ justMinted.name }}” now — it is not shown again</p>
+        <div class="row">
+          <input
+            :value="justMinted.token_string"
+            readonly
+            class="lh-input token"
+            aria-label="your new token"
+            @focus="(e) => (e.target as HTMLInputElement).select()"
+          >
+          <UiButton variant="inverse" size="md" @click="copy">{{ copied ? 'Copied' : 'Copy' }}</UiButton>
         </div>
-        <UiButton variant="ghost" size="sm" :disabled="busy" @click="revoke(token)">Revoke</UiButton>
-      </li>
-    </ul>
+        <p class="lh-hint">Then run <code>luxctl auth --token &lt;token&gt;</code>.</p>
+      </div>
 
-    <p v-else class="lh-card lh-sub none">No tokens yet.</p>
+      <form class="row create" @submit.prevent="create">
+        <label class="lh-sr" for="token-name">what the token is for</label>
+        <input
+          id="token-name"
+          v-model="name"
+          placeholder="What is it for? e.g. my laptop"
+          maxlength="60"
+          class="lh-input"
+        >
+        <UiButton type="submit" variant="inverse" size="md" :disabled="busy || !name.trim()">
+          Create token
+        </UiButton>
+      </form>
 
-    <p class="lh-hint after">
-      A token is shown once at creation and never again. If you lose it, revoke it and make another.
-    </p>
+      <ul v-if="tokens.length" class="tokens">
+        <li v-for="token in tokens" :key="token.id" class="lh-card item">
+          <div class="who">
+            <span class="lh-h3">{{ token.name }}</span>
+            <span class="lh-mono lh-muted">
+              created {{ when(token.created_at) }} · last used {{ when(token.last_used_at) }}
+            </span>
+          </div>
+          <UiButton variant="ghost" size="sm" :disabled="busy" @click="revoke(token)">Revoke</UiButton>
+        </li>
+      </ul>
+
+      <p v-else class="lh-card lh-sub none">No tokens yet.</p>
+
+      <p class="lh-hint after">
+        A token is shown once at creation and never again. If you lose it, revoke it and make another.
+      </p>
+    </div>
   </AccountShell>
 </template>
 
