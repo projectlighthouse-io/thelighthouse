@@ -38,7 +38,7 @@ defineProps<{
         <div class="plate">
           <div class="plate-inner">
             <BookCoverSlideshow v-if="covers && covers.length > 1" :images="covers" :title="coverAlt ?? ''" />
-            <img v-else :src="cover" :alt="coverAlt ?? ''" width="600" height="400">
+            <img v-else :src="cover" :alt="coverAlt ?? ''" width="600" height="400" fetchpriority="high">
           </div>
         </div>
       </slot>

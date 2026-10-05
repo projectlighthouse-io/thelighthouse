@@ -91,7 +91,7 @@ watch(() => props.images, () => {
   <div class="show">
     <button type="button" class="frame" :aria-label="`Enlarge image ${at + 1} of ${images.length}`" @click="zoom">
       <Transition name="fade">
-        <img :key="at" :src="images[at]" :alt="title">
+        <img :key="at" :src="images[at]" :alt="title" fetchpriority="high">
       </Transition>
     </button>
 
@@ -154,14 +154,17 @@ watch(() => props.images, () => {
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px var(--space-2);
+  gap: 0;
+  padding: 0 var(--space-1);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--surface-page) 85%, transparent);
   box-shadow: var(--shadow-hairline);
 }
 
+/* 24px hit areas (WCAG target size); the dots stay 6px to the eye */
 .arrow {
+  min-width: 24px;
+  min-height: 24px;
   padding: 0 4px;
   border: 0;
   background: none;
@@ -173,16 +176,16 @@ watch(() => props.images, () => {
 .arrow:hover { color: var(--ink); }
 
 .dot {
-  width: 6px;
-  height: 6px;
+  --dot: var(--border-strong);
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-full);
-  background: var(--border-strong);
+  background: radial-gradient(circle, var(--dot) 3px, transparent 3.5px);
   cursor: pointer;
 }
 
-.dot.is-on { background: var(--ink); }
+.dot.is-on { --dot: var(--ink); }
 
 .lightbox {
   position: fixed;
