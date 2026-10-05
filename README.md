@@ -302,3 +302,5 @@ separate private repository, and this repo gives you the platform, not the
 content.
 
 For permission beyond what the licence allows: hello@projectlighthouse.io.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or pull request.
