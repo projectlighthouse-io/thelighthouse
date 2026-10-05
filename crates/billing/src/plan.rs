@@ -147,21 +147,20 @@ impl Plan {
     /// are not already uppercase, and the api uppercases what cloudflare sends,
     /// so neither side normalises at request time.
     ///
-    /// The first match wins, and there is only ever one — a country claimed by
-    /// two of a plan's tiers is refused when the declaration is read, because a
-    /// reader in it would otherwise be offered whichever tier happened to be
-    /// listed first.
-    ///
-    /// **Every tier names countries.** There is no catch-all: a country no tier
-    /// claimed is offered nothing, and so is a request cloudflare put no country
-    /// header on — the caller has nothing to pass. A discount for everybody is a
-    /// list price with a discount off it, which is a different decision from
-    /// purchasing power and not this one.
+    /// A tier that names the country wins; otherwise the plan's rest tier, if
+    /// it has one — the price for everywhere no other tier names. `None` is a
+    /// request with no usable country header, which is somewhere, so it gets
+    /// the rest tier too. A country is never claimed by two named tiers of one
+    /// plan: the declaration refuses that.
     #[must_use]
-    pub fn for_country(&self, country: &str) -> Option<&Ppp> {
-        self.ppp
-            .iter()
-            .find(|tier| tier.countries.iter().any(|c| c == country))
+    pub fn for_country(&self, country: Option<&str>) -> Option<&Ppp> {
+        let named = country.and_then(|country| {
+            self.ppp
+                .iter()
+                .find(|tier| tier.countries.iter().any(|c| c == country))
+        });
+
+        named.or_else(|| self.ppp.iter().find(|tier| tier.rest))
     }
 }
 
@@ -198,7 +197,8 @@ pub struct Plans {
     plans: Vec<Plan>,
 }
 
-/// A discount offered to readers in particular countries.
+/// A discount offered to readers in particular countries — or, as a plan's
+/// rest tier, everywhere its other tiers do not name.
 ///
 /// A coupon is a billing object, so it lives here — unlike which books a plan
 /// unlocks, which is the application's question. What is *not* here is how the
@@ -215,13 +215,29 @@ pub struct Ppp {
     code: String,
     /// The promotion code's own id — stripe's answer, not a decision.
     promotion: String,
-    /// Percent off, so a page can show the reduced price before anyone types
-    /// anything.
-    percent: u8,
-    /// ISO 3166-1 alpha-2, uppercase, as cloudflare reports them. Never empty
-    /// — `lighthouse-prices` refuses a tier that names none.
+    /// Percent off. Exactly one of this and `amount_off`.
+    #[serde(default)]
+    percent: Option<u8>,
+    /// Minor units off, in the plan's currency — 2000 is $20. Exactly one of
+    /// this and `percent`.
+    #[serde(default)]
+    amount_off: Option<i64>,
+    /// ISO 3166-1 alpha-2, uppercase, as cloudflare reports them. Empty only
+    /// on the rest tier.
     #[serde(default)]
     countries: Vec<String>,
+    /// The plan's tier for every country its other tiers do not name. At most
+    /// one per plan, and it names no countries of its own.
+    #[serde(default)]
+    rest: bool,
+}
+
+/// How much a tier takes off.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Off {
+    Percent(u8),
+    /// Minor units, in the plan's currency.
+    Amount(i64),
 }
 
 impl Ppp {
@@ -235,9 +251,22 @@ impl Ppp {
         &self.promotion
     }
 
+    /// How much this tier takes off. [`Plans::from_yaml`] refuses a tier that
+    /// does not say exactly once, so a loaded tier always has an answer; the
+    /// zero percent here is unreachable rather than a default anybody gets.
     #[must_use]
-    pub const fn percent(&self) -> u8 {
-        self.percent
+    pub const fn off(&self) -> Off {
+        match (self.percent, self.amount_off) {
+            (_, Some(amount)) => Off::Amount(amount),
+            (Some(percent), None) => Off::Percent(percent),
+            (None, None) => Off::Percent(0),
+        }
+    }
+
+    /// Whether this is the plan's tier for everywhere not named elsewhere.
+    #[must_use]
+    pub const fn is_rest(&self) -> bool {
+        self.rest
     }
 }
 
@@ -313,6 +342,29 @@ impl Plans {
                 .any(|earlier| earlier.id == plan.id)
             {
                 return Err(malformed(format!("{} is listed twice", plan.id)));
+            }
+
+            for tier in &plan.ppp {
+                if tier.percent.is_some() == tier.amount_off.is_some() {
+                    return Err(malformed(format!(
+                        "{} on {} must give exactly one of percent and amount_off",
+                        tier.code, plan.id
+                    )));
+                }
+
+                if tier.rest != tier.countries.is_empty() {
+                    return Err(malformed(format!(
+                        "{} on {} must either name countries or be the rest tier",
+                        tier.code, plan.id
+                    )));
+                }
+            }
+
+            if plan.ppp.iter().filter(|tier| tier.rest).count() > 1 {
+                return Err(malformed(format!(
+                    "{} has more than one rest tier",
+                    plan.id
+                )));
             }
         }
 
@@ -421,11 +473,11 @@ plans:
         let plans = Plans::from_yaml(WITH_TIERS).unwrap();
         let yearly = plans.get(&"yearly".into()).unwrap();
 
-        assert_eq!(yearly.for_country("BD").map(Ppp::percent), Some(60));
-        assert_eq!(yearly.for_country("IN").map(Ppp::code), Some("LH-BD"));
-        assert!(yearly.for_country("GB").is_none());
+        assert_eq!(yearly.for_country(Some("BD")).map(Ppp::off), Some(Off::Percent(60)));
+        assert_eq!(yearly.for_country(Some("IN")).map(Ppp::code), Some("LH-BD"));
+        assert!(yearly.for_country(Some("GB")).is_none());
         // Compared as given: both sides are uppercase by the time they meet.
-        assert!(yearly.for_country("bd").is_none());
+        assert!(yearly.for_country(Some("bd")).is_none());
     }
 
     const TWO_PLANS: &str = "
@@ -453,14 +505,14 @@ plans:
             plans
                 .get(&"lifetime".into())
                 .unwrap()
-                .for_country("BD")
+                .for_country(Some("BD"))
                 .is_some()
         );
         assert!(
             plans
                 .get(&"yearly".into())
                 .unwrap()
-                .for_country("BD")
+                .for_country(Some("BD"))
                 .is_none()
         );
     }
@@ -474,8 +526,122 @@ plans:
             plans
                 .get(&"yearly".into())
                 .unwrap()
-                .for_country("BD")
+                .for_country(Some("BD"))
                 .is_none()
         );
+    }
+
+    const EVERYONE: &str = "
+plans:
+  - id: yearly
+    price: price_x
+    interval: year
+    money:
+      amount: 11900
+      currency: usd
+    ppp:
+      - code: YEARLY-LOWER
+        promotion: promo_lower
+        amount_off: 7000
+        countries: [IN, BD]
+      - code: YEARLY-EVERYONE
+        promotion: promo_everyone
+        amount_off: 2000
+        rest: true
+";
+
+    #[test]
+    fn a_tier_can_take_a_fixed_amount_off() {
+        let plans = Plans::from_yaml(EVERYONE).unwrap();
+        let yearly = plans.get(&"yearly".into()).unwrap();
+
+        assert_eq!(
+            yearly.for_country(Some("IN")).map(Ppp::off),
+            Some(Off::Amount(7000))
+        );
+    }
+
+    #[test]
+    fn a_country_no_tier_names_gets_the_rest_tier() {
+        let plans = Plans::from_yaml(EVERYONE).unwrap();
+        let yearly = plans.get(&"yearly".into()).unwrap();
+
+        assert_eq!(
+            yearly.for_country(Some("GB")).map(Ppp::code),
+            Some("YEARLY-EVERYONE")
+        );
+        // A named country is never offered the rest tier instead, whichever
+        // order the tiers are listed in.
+        assert_eq!(
+            yearly.for_country(Some("BD")).map(Ppp::code),
+            Some("YEARLY-LOWER")
+        );
+    }
+
+    #[test]
+    fn a_reader_whose_country_is_unknown_gets_the_rest_tier() {
+        // No header is "somewhere", and the rest tier is for everywhere no
+        // other tier names.
+        let plans = Plans::from_yaml(EVERYONE).unwrap();
+        let yearly = plans.get(&"yearly".into()).unwrap();
+
+        assert_eq!(
+            yearly.for_country(None).map(Ppp::code),
+            Some("YEARLY-EVERYONE")
+        );
+    }
+
+    #[test]
+    fn without_a_rest_tier_an_unknown_country_gets_nothing() {
+        let plans = Plans::from_yaml(WITH_TIERS).unwrap();
+
+        assert!(
+            plans
+                .get(&"yearly".into())
+                .unwrap()
+                .for_country(None)
+                .is_none()
+        );
+    }
+
+    fn tier_file(tier: &str) -> String {
+        format!(
+            "
+plans:
+  - id: yearly
+    price: price_x
+    interval: year
+    ppp:
+{tier}"
+        )
+    }
+
+    #[test]
+    fn a_tier_must_say_how_much_off_exactly_once() {
+        for tier in [
+            // Both.
+            "      - code: A\n        promotion: p\n        percent: 10\n        amount_off: 100\n        countries: [IN]\n",
+            // Neither.
+            "      - code: A\n        promotion: p\n        countries: [IN]\n",
+        ] {
+            assert!(Plans::from_yaml(&tier_file(tier)).is_err(), "{tier}");
+        }
+    }
+
+    #[test]
+    fn a_tier_names_countries_or_is_the_rest_never_both_nor_neither() {
+        for tier in [
+            "      - code: A\n        promotion: p\n        percent: 10\n        rest: true\n        countries: [IN]\n",
+            "      - code: A\n        promotion: p\n        percent: 10\n",
+        ] {
+            assert!(Plans::from_yaml(&tier_file(tier)).is_err(), "{tier}");
+        }
+    }
+
+    #[test]
+    fn a_plan_has_at_most_one_rest_tier() {
+        let two = "      - code: A\n        promotion: p\n        percent: 10\n        rest: true\n      - code: B\n        promotion: q\n        percent: 20\n        rest: true\n";
+
+        assert!(Plans::from_yaml(&tier_file(two)).is_err());
     }
 }

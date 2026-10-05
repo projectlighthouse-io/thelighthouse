@@ -87,7 +87,7 @@ pub use drivers::stripe::{Stripe, StripeConfig};
 pub use error::Error;
 pub use event::Event;
 pub use gateway::Gateway;
-pub use plan::{Interval, Money, Plan, PlanId, Plans};
+pub use plan::{Interval, Money, Off, Plan, PlanId, Plans, Ppp};
 pub use registry::{Providers, Registration, providers};
 pub use request::{Attempts, IdempotencyKey, RequestStrategy};
 pub use subscription::{Cancel, Status, Subscription};
