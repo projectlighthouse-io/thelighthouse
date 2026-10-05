@@ -16,8 +16,8 @@
   /* ink */
   --ink: #202020;
   --ink-secondary: #424242;
-  --ink-muted: #838383;
-  --ink-faint: #a8a8a8;
+  --ink-muted: #636363;
+  --ink-faint: #737373;
   --ink-inverse: #ffffff;
 
   /* lines */
@@ -47,8 +47,8 @@
   --surface-inverse: #202020;
   --ink: #202020;
   --ink-secondary: #424242;
-  --ink-muted: #838383;
-  --ink-faint: #a8a8a8;
+  --ink-muted: #636363;
+  --ink-faint: #737373;
   --ink-inverse: #ffffff;
   --border: #e8e8e8;
   --border-strong: #e0e0e0;
