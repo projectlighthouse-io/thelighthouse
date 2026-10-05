@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The footer every page closes on: the block wordmark, the links, the build.
+ * The footer every page closes on: the wordmark, the links, the build.
  */
 interface FooterLink {
   to: string
@@ -11,8 +11,6 @@ interface FooterLink {
 const links: FooterLink[] = [
   { to: '/books', label: 'books' },
   { to: '/projects', label: 'projects' },
-  { to: '/syntax', label: 'syntax' },
-  { to: '/roadmap', label: 'roadmap' },
   { to: '/connecting-the-dots', label: 'connecting the dots' },
   { to: '/terms', label: 'terms' },
   { to: '/privacy', label: 'privacy' },
@@ -23,7 +21,7 @@ const links: FooterLink[] = [
   { to: '/blog', label: 'blog' },
 ]
 
-/** 5×7 glyphs, each lit cell doubled so the block reads square in a mono face. */
+/** 5×7 glyphs for the wordmark; a `█` is a lit cell. */
 const GLYPHS: Record<string, string[]> = {
   P: ['████ ', '█   █', '█   █', '████ ', '█    ', '█    ', '█    '],
   R: ['████ ', '█   █', '█   █', '████ ', '█ █  ', '█  █ ', '█   █'],
@@ -40,12 +38,16 @@ const GLYPHS: Record<string, string[]> = {
   S: [' ████', '█    ', '█    ', ' ███ ', '    █', '    █', '████ '],
 }
 
-const ascii = Array.from({ length: 7 }, (_, row) =>
-  'PROJECTLIGHTHOUSE'
-    .split('')
-    .map(ch => (GLYPHS[ch]?.[row] ?? '     ').replace(/█/g, '██').replace(/ /g, '  '))
-    .join('  '),
-).join('\n')
+const WORD = 'PROJECTLIGHTHOUSE'
+
+/** Every lit cell as an x, y on a grid one unit per cell, a column between letters. */
+const cells = [...WORD].flatMap((ch, i) =>
+  (GLYPHS[ch] ?? []).flatMap((row, y) =>
+    [...row].flatMap((c, x) => (c === '█' ? [{ x: i * 6 + x, y }] : [])),
+  ),
+)
+
+const GRID_W = WORD.length * 6 - 1
 
 const { version, commit } = useRuntimeConfig().public
 const build = [`v${version}`, commit].filter(Boolean).join(' · ')
@@ -54,7 +56,24 @@ const year = new Date().getFullYear()
 
 <template>
   <footer class="footer lh-wide">
-    <pre class="ascii" role="img" aria-label="projectlighthouse">{{ ascii }}</pre>
+    <svg
+      class="mark"
+      :viewBox="`0 0 ${GRID_W + 0.4} 7.4`"
+      role="img"
+      aria-label="projectlighthouse"
+    >
+      <!-- The outline shadow, offset down and right, behind the lit cells. -->
+      <rect
+        v-for="c in cells"
+        :key="`s${c.x}-${c.y}`"
+        class="shadow"
+        :x="c.x + 0.32"
+        :y="c.y + 0.32"
+        width="0.88"
+        height="0.88"
+      />
+      <rect v-for="c in cells" :key="`c${c.x}-${c.y}`" class="cell" :x="c.x" :y="c.y" width="0.88" height="0.88" />
+    </svg>
 
     <div class="middle">
       <nav class="links" aria-label="footer">
@@ -92,14 +111,38 @@ const year = new Date().getFullYear()
   text-align: center;
 }
 
-.ascii {
-  margin: 0;
+.mark {
+  display: block;
+  width: max(50%, 300px);
   max-width: 100%;
-  overflow: hidden;
-  font: 400 clamp(3px, 0.55vw, 7px) / 1 var(--font-mono);
-  letter-spacing: 0;
-  color: var(--ink-secondary);
-  white-space: pre;
+  height: auto;
+  opacity: 0.85;
+}
+
+.cell { fill: var(--ink); }
+
+.shadow {
+  fill: none;
+  stroke: var(--ink-muted);
+  stroke-width: 0.06;
+}
+
+/* Rises in as it scrolls into view, where the browser can tie an animation
+   to scroll; elsewhere it is simply there. */
+@supports (animation-timeline: view()) {
+  .mark {
+    animation: rise linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 80%;
+  }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(24px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark { animation: none; }
 }
 
 .middle {
