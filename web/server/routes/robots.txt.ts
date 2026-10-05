@@ -3,6 +3,9 @@
  * URL live next to the routes they describe.
  */
 const DISALLOW = [
+  // the Rust api, and this app's own endpoints in front of it — data, not pages
+  '/api/',
+  '/_api/',
   '/settings/',
   '/dashboard',
   '/notes',
