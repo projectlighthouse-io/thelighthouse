@@ -27,7 +27,7 @@
 
 use axum::http::{HeaderValue, header::RETRY_AFTER};
 use axum::{
-    Json, Router,
+    Router,
     extract::{Request, State},
     http::StatusCode,
     middleware::{Next, from_fn_with_state},
@@ -37,16 +37,20 @@ use axum::{
 use serde::Deserialize;
 
 use crate::{
-    api::AppState, cache::CachePolicy, middleware::rate::caller, response,
-    settings::kit,
+    api::AppState, cache::CachePolicy, middleware::rate::caller,
+    request::JsonBody, response, settings::kit,
 };
 
 /// What `users.email` holds, and what Kit will take.
 const EMAIL_LIMIT: usize = 254;
 
 /// What the form sends.
+///
+/// Defaulted, so a missing key is refused as an empty address rather than as
+/// a body that could not be read.
 #[derive(Debug, Deserialize)]
 pub(crate) struct Subscribe {
+    #[serde(default)]
     email: String,
 }
 
@@ -62,16 +66,19 @@ pub(crate) fn routes(state: &AppState) -> Router<AppState> {
 /// whether it turns into mail is Kit's to say, not this endpoint's.
 async fn subscribe(
     State(state): State<AppState>,
-    Json(body): Json<Subscribe>,
+    JsonBody(body): JsonBody<Subscribe>,
 ) -> Response {
     let email = body.email.trim();
 
+    if email.is_empty() {
+        return response::invalid([("email", "Enter your email address.")]);
+    }
+
     if !is_email(email) {
-        return refuse(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "not_an_email",
-            "Enter an email address.",
-        );
+        return response::invalid([(
+            "email",
+            "That does not look like an email address.",
+        )]);
     }
 
     if !kit::subscribe(&state.config.kit_api_key, email).await {
