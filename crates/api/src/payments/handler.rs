@@ -69,6 +69,36 @@ fn country_of(headers: &HeaderMap) -> Option<String> {
     plausible.then(|| code.to_ascii_uppercase())
 }
 
+/// The discount `plan` offers a reader in `country`, as the page reads it:
+/// the code, how much it takes off — `percent` or `amount_off` in minor
+/// units, whichever the tier declares — and whether it is the plan's rest
+/// tier, the price for everywhere no other tier names. `None` is the list
+/// price.
+fn offer(
+    plan: &billing::Plan,
+    country: Option<&str>,
+) -> Option<serde_json::Value> {
+    let tier = plan.for_country(country)?;
+
+    let mut offered = serde_json::json!({
+        "code": tier.code(),
+        "rest": tier.is_rest(),
+    });
+
+    if let Some(fields) = offered.as_object_mut() {
+        match tier.off() {
+            billing::Off::Percent(percent) => {
+                fields.insert("percent".to_owned(), percent.into());
+            }
+            billing::Off::Amount(amount) => {
+                fields.insert("amount_off".to_owned(), amount.into());
+            }
+        }
+    }
+
+    Some(offered)
+}
+
 /// What is for sale, and where the asker is.
 ///
 /// **`no-store`, where this used to be edge-cached.** The answer now depends on
@@ -87,27 +117,14 @@ pub(crate) async fn catalogue(
         .plans
         .all()
         .map(|plan| {
-            // No country, no tier. Every tier names countries — there is no
-            // catch-all — so a request cloudflare put no header on has nothing
-            // to look up.
-            //
             // Asked of the plan rather than of the catalogue, because a coupon
             // is declared inside the plan it comes off and restricted to that
             // plan's product at stripe. A page told only "this country gets
             // 70% off" would strike out a price nobody can ever pay.
             //
-            // Advertised, not applied. The reader types the code at stripe,
-            // which is what keeps a spoofable header from being the only thing
-            // standing between anybody and a discount.
-            let coupon = country
-                .as_deref()
-                .and_then(|code| plan.for_country(code))
-                .map(|tier| {
-                    serde_json::json!({
-                        "code": tier.code(),
-                        "percent": tier.percent(),
-                    })
-                });
+            // The same tier checkout applies — see `checkout` — so the price
+            // a page shows is the price stripe asks for.
+            let coupon = offer(plan, country.as_deref());
 
             serde_json::json!({
                 "plan": plan.id.as_str(),
@@ -312,6 +329,7 @@ pub(crate) async fn checkout(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
     Path(provider): Path<String>,
+    headers: HeaderMap,
     axum::Json(payload): axum::Json<ChosenPlan>,
 ) -> Response {
     let Some(driver) = driver_named(&state, &provider) else {
@@ -357,10 +375,20 @@ pub(crate) async fn checkout(
 
     let reference = session.user_id.to_string();
 
+    // The tier this reader's country is offered on this plan — the one the
+    // catalogue advertised to them — applied up front, so the price they saw
+    // is the price stripe asks for. The header is the same one the catalogue
+    // read, and spoofing it buys nothing a shared code would not.
+    let country = country_of(&headers);
+    let promotion = plan
+        .for_country(country.as_deref())
+        .map(billing::Ppp::promotion);
+
     let who = Customer {
         reference: &reference,
         email: &email,
         existing: existing.as_deref(),
+        promotion,
     };
 
     // The plan's own interval decides which kind of checkout this is. One
@@ -603,4 +631,82 @@ async fn owner(
 /// Our own reference, back as the id it was made from.
 fn reader(reference: &str) -> Option<i64> {
     reference.parse().ok()
+}
+
+#[cfg(test)]
+mod offer_tests {
+    use billing::Plans;
+
+    use super::offer;
+
+    const TIERS: &str = "
+plans:
+  - id: foundation_yearly
+    price: price_x
+    interval: year
+    money:
+      amount: 11900
+      currency: usd
+    ppp:
+      - code: FOUNDATION-LOWER
+        promotion: promo_lower
+        amount_off: 7000
+        countries: [IN]
+      - code: FOUNDATION-PERCENT
+        promotion: promo_percent
+        percent: 40
+        countries: [BR]
+      - code: FOUNDATION-EVERYONE
+        promotion: promo_everyone
+        amount_off: 2000
+        rest: true
+";
+
+    fn plans() -> Plans {
+        Plans::from_yaml(TIERS).unwrap()
+    }
+
+    #[test]
+    fn a_fixed_amount_tier_is_offered_as_an_amount() {
+        let plans = plans();
+        let plan = plans.all().next().unwrap();
+
+        assert_eq!(
+            offer(plan, Some("IN")),
+            Some(serde_json::json!({
+                "code": "FOUNDATION-LOWER",
+                "amount_off": 7000,
+                "rest": false,
+            }))
+        );
+    }
+
+    #[test]
+    fn a_percentage_tier_is_offered_as_a_percentage() {
+        let plans = plans();
+        let plan = plans.all().next().unwrap();
+
+        assert_eq!(
+            offer(plan, Some("BR")),
+            Some(serde_json::json!({
+                "code": "FOUNDATION-PERCENT",
+                "percent": 40,
+                "rest": false,
+            }))
+        );
+    }
+
+    #[test]
+    fn everywhere_else_and_nowhere_get_the_rest_tier() {
+        let plans = plans();
+        let plan = plans.all().next().unwrap();
+        let everyone = Some(serde_json::json!({
+            "code": "FOUNDATION-EVERYONE",
+            "amount_off": 2000,
+            "rest": true,
+        }));
+
+        assert_eq!(offer(plan, Some("GB")), everyone);
+        assert_eq!(offer(plan, None), everyone);
+    }
 }
