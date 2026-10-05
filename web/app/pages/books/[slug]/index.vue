@@ -138,10 +138,13 @@ const covers = computed<string[]>(() => {
   return book.value?.thumbnailUrl ? [book.value.thumbnailUrl] : []
 })
 
+// No `image`: the share card falls back to the site's 1200×630 og-image.
+// The cover would only be used if it were known to be at least 1200px wide,
+// and the api sends a cover url with no dimensions.
 useSeo(() => ({
   title: `${book.value?.title} — projectlighthouse`,
   description: book.value?.description ?? '',
-  image: book.value?.thumbnailUrl,
+  type: 'book',
 }))
 
 useJsonLd('book', () => ({

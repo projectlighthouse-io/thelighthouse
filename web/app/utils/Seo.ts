@@ -10,14 +10,14 @@ const DESCRIPTION_MAX = 160
 const TITLE_MAX = 70
 
 /**
- * The site's name as search results show it. Only in titles: everywhere else
- * on the site — the wordmark, the copy — it stays lowercase.
+ * The site's name as search results show it. Only in titles and cards:
+ * everywhere else on the site — the wordmark, the copy — it stays lowercase.
  */
-const TITLE_NAME = 'ProjectLighthouse'
+const TITLE_NAME = 'Project Lighthouse'
 
 /** A site name a page already wrote at the end of its title, in any case,
- *  after an em dash or a hyphen. */
-const WRITTEN_NAME = /\s*(?:—|-)?\s*projectlighthouse\s*$/i
+ *  with or without the space, after an em dash, a hyphen or a middle dot. */
+const WRITTEN_NAME = /\s*(?:—|-|·)?\s*project\s?lighthouse\s*$/i
 
 /**
  * The site's name on the end of every title, once, spelled for results.
@@ -27,7 +27,7 @@ const WRITTEN_NAME = /\s*(?:—|-)?\s*projectlighthouse\s*$/i
 export function pageTitle(title: string): string {
   const bare = title.replace(WRITTEN_NAME, '').trim()
 
-  return bare ? `${bare} — ${TITLE_NAME}` : TITLE_NAME
+  return bare ? `${bare} · ${TITLE_NAME}` : TITLE_NAME
 }
 
 /**

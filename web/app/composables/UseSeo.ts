@@ -1,16 +1,32 @@
 export const SITE = {
   url: 'https://projectlighthouse.io',
-  name: 'projectlighthouse',
-  ogImage: '/projectlighthouse.png',
+  /** As search results, social cards and structured data spell it. The
+   *  wordmark on the page stays lowercase `projectlighthouse`. */
+  name: 'Project Lighthouse',
+  /** The site's share card, from the brand assets: 1200×630. */
+  ogImage: '/og-image.png',
+  ogImageWidth: 1200,
+  ogImageHeight: 630,
+  ogImageAlt: 'Project Lighthouse: fundamentals of software engineering',
+  /** The square icon, for structured data that asks for a logo. */
+  logo: '/icon-512.png',
   twitter: '@thearyanahmed',
 } as const
 
 export interface SeoInput {
   title: string
   description: string
-  /** og:type — 'website' for listings, 'article' for anything with a body */
-  type?: 'website' | 'article'
-  /** absolute path from an image in /public, or a full URL for remote art */
+  /** The title exactly as given, without the site's name after it. For the
+   *  home page, whose title already leads with the name. */
+  bare?: boolean
+  /** og:type — 'website' for listings, 'book' for a book, 'article' for a
+   *  lesson or a post */
+  type?: 'website' | 'article' | 'book'
+  /**
+   * absolute path from an image in /public, or a full URL for remote art.
+   * Leave it out unless the image is known to suit a share card (1200px wide
+   * or more): the default is the site's card, whose size is known.
+   */
   image?: string
   publishedAt?: string
   /** private pages: keep them out of the index entirely */
@@ -42,9 +58,13 @@ export function useSeo(input: MaybeRefOrGetter<SeoInput>) {
     return `${SITE.url}${route.path === '/' ? '' : route.path}${query}`
   })
   const image = computed(() => absolute(resolved.value.image ?? SITE.ogImage))
+  // Only the site's own card has a size we know; a page's own art does not
+  // claim one rather than claim a wrong one.
+  const isDefaultImage = computed(() => resolved.value.image === undefined)
   // Every page gets the site's name and a description that fits a results
   // page, whatever it passed in — see `utils/Seo`.
-  const title = computed(() => pageTitle(resolved.value.title))
+  const title = computed(() =>
+    resolved.value.bare ? resolved.value.title : pageTitle(resolved.value.title))
   const description = computed(() => metaDescription(resolved.value.description))
 
   useSeoMeta({
@@ -56,6 +76,9 @@ export function useSeo(input: MaybeRefOrGetter<SeoInput>) {
     ogDescription: () => description.value,
     ogUrl: () => canonical.value,
     ogImage: () => image.value,
+    ogImageWidth: () => (isDefaultImage.value ? SITE.ogImageWidth : undefined),
+    ogImageHeight: () => (isDefaultImage.value ? SITE.ogImageHeight : undefined),
+    ogImageAlt: () => (isDefaultImage.value ? SITE.ogImageAlt : title.value),
     ogSiteName: SITE.name,
 
     twitterCard: 'summary_large_image',

@@ -14,21 +14,41 @@ const bare = computed<boolean>(() => route.meta.chrome === false)
 // uncacheable to render one avatar. See useReader.
 onMounted(resolve)
 
-// site-level identity, emitted once for every page that uses this layout
+// Site-level identity, emitted once for every page that uses this layout: the
+// organization on its own, and the website pointing at it by `@id`.
+const ORGANIZATION_ID = `${SITE.url}/#organization`
+
+useJsonLd('organization', {
+  '@type': 'Organization',
+  '@id': ORGANIZATION_ID,
+  'name': SITE.name,
+  'url': SITE.url,
+  'logo': `${SITE.url}${SITE.logo}`,
+  'sameAs': [
+    'https://www.linkedin.com/company/projectlighthouse-io',
+    'https://projectlighthouse.substack.com/',
+  ],
+})
+
 useJsonLd('site', {
   '@type': 'WebSite',
   'name': SITE.name,
   'url': SITE.url,
-  'publisher': {
-    '@type': 'Organization',
-    'name': SITE.name,
-    'url': SITE.url,
-    'logo': `${SITE.url}/projectlighthouse.png`,
-    'sameAs': [
-      'https://www.linkedin.com/company/projectlighthouse-io',
-      'https://projectlighthouse.substack.com/',
-    ],
-  },
+  'publisher': { '@id': ORGANIZATION_ID },
+})
+
+// The defaults every page starts from. A page's own `useSeo` registers after
+// this and replaces each one it sets; a page that sets none — the error page —
+// still shares as the site's card rather than as nothing. No image width and
+// height here: `useSeo` sets those only for the site's own card, and a default
+// left over under a page's own image would claim a size it does not have.
+useSeoMeta({
+  ogSiteName: SITE.name,
+  ogType: 'website',
+  ogImage: `${SITE.url}${SITE.ogImage}`,
+  ogImageAlt: SITE.ogImageAlt,
+  twitterCard: 'summary_large_image',
+  twitterImage: `${SITE.url}${SITE.ogImage}`,
 })
 </script>
 

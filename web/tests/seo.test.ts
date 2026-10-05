@@ -182,7 +182,7 @@ describe.runIf(BASE)('seo', () => {
         const { titles } = page(path)
 
         expect.soft(titles, path).toHaveLength(1)
-        expect.soft(titles[0], path).toMatch(/ — ProjectLighthouse$|^ProjectLighthouse$/)
+        expect.soft(titles[0], path).toMatch(/ · Project Lighthouse$|^Project Lighthouse/)
         expect.soft(titles[0]?.length, `${path}: "${titles[0]}"`).toBeLessThanOrEqual(70)
       }
     })
@@ -212,7 +212,7 @@ describe.runIf(BASE)('seo', () => {
 
         expect.soft(meta('og:title'), path).toBeTruthy()
         expect.soft(meta('og:description'), path).toBeTruthy()
-        expect.soft(meta('og:type'), path).toMatch(/^(website|article)$/)
+        expect.soft(meta('og:type'), path).toMatch(/^(website|article|book)$/)
         expect.soft(meta('og:url'), path).toBe(canonical)
         expect.soft(meta('og:image'), path).toMatch(/^https:\/\//)
         expect.soft(meta('twitter:card'), path).toBe('summary_large_image')

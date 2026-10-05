@@ -834,10 +834,14 @@ useSeo(() => ({
   // The book's name only while the whole title still shows in a result; past
   // that the lesson's own name is the part worth keeping.
   title: lessonTitle(lesson.value?.title ?? '', book.value?.title ?? ''),
+  // The lesson's own description from its front matter — the line the page
+  // shows as its lede to everyone, paid or not. Never the body: on a locked
+  // lesson the paid half is not even in this payload.
   description: lesson.value?.description ?? '',
   type: 'article',
   lang: data.value?.locale,
-  image: book.value?.thumbnailUrl,
+  // No `image`, for the reason the book page has none: a cover url with no
+  // known width is not safe as a share card, so the site's og-image is used.
 }))
 
 // Google cannot tell a paywall from cloaking without this. isAccessibleForFree
