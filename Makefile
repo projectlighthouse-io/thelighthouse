@@ -26,7 +26,7 @@ CONTAINER ?= thelighthouse
 API_PORT ?= 9000
 
 .DEFAULT_GOAL := help
-.PHONY: help web up dev api down db db-down db-reset psql migrate migrate-status fmt fmt-check \
+.PHONY: help up dev api down db db-down db-reset psql migrate migrate-status fmt fmt-check \
         lint test test-db build check audit image run run-built login push clean \
         content content-check content-sync content-db-sync content-reload \
         prices prices-apply catalogue
@@ -34,12 +34,6 @@ API_PORT ?= 9000
 help: ## show this
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
-
-# The frontend is a submodule, so a fresh clone has an empty web/ until this
-# runs. Building without it fails inside docker with a confusing missing-file
-# error rather than an obvious one.
-web: ## fetch or update the frontend submodule
-	git submodule update --init --remote web
 
 # Everything development needs that is not the code: postgres, and the caddy
 # that fronts it. The api and nuxt you start yourself — caddy proxies to them on
@@ -263,7 +257,7 @@ prices-apply: ## make stripe match pricing.yaml, then regenerate both outputs
 	$(MAKE) catalogue
 
 # No stripe key and no network: two files in, one file out. Its output is
-# committed to the web submodule, because `/pricing` is prerendered and the
+# committed under web/, because `/pricing` is prerendered and the
 # image is built from web/ alone — the build cannot reach pricing.yaml, ohara,
 # or the api.
 catalogue: ## write the frontend's build-time catalogue from pricing.yaml + ohara

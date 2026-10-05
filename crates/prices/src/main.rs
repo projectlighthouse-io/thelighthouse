@@ -1147,8 +1147,7 @@ fn catalogue(declaration: &Declaration, path: &str) -> Result<String, String> {
         && !parent.is_dir()
     {
         return Err(format!(
-            "{} is not a directory — is the web submodule checked out? \
-             `make web` fetches it",
+            "{} is not a directory — run this from the repository root",
             parent.display()
         ));
     }

@@ -3,9 +3,9 @@
 Deployment for [projectlighthouse.io](https://projectlighthouse.io). One image,
 three processes: Caddy in front, the Nuxt frontend and the Rust API behind it.
 
-The frontend lives in [lighthouse-web](https://github.com/projectlighthouse-io/lighthouse-web)
-and is pulled in as a submodule at `web/`. This repo owns the API, the routing
-and the deploy.
+The frontend is the Nuxt app in `web/`. This repo owns it, the API, the
+routing and the deploy. Content is the separate ohara repo, read from
+`CONTENT_PATH`.
 
 ## Shape
 
@@ -26,14 +26,12 @@ does so on a reader's behalf.
 
 ```bash
 cp .env.example .env   # then fill it in — every key is required
-make web               # fetch the frontend submodule
 make image             # build the combined image
 make run               # runs it, configured from .env
 ```
 
 | | |
 |---|---|
-| `make web` | fetch or update the frontend submodule |
 | `make image` | build caddy + nuxt + api into one image |
 | `make run` | run it locally, reading `.env` |
 | `make push` | push to the DO registry |
