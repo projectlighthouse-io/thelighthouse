@@ -5,7 +5,7 @@ import { testimonials } from '@/data/Testimonials'
 import type { Book, Project } from '@/types/Content'
 
 useSeo({
-  title: 'projectlighthouse — Software Engineering Fundamentals',
+  title: 'Software Engineering Fundamentals',
   description: 'Build your own Docker, HTTP server, DNS resolver and more from scratch. Interactive courses on Go, Rust, DSA, networking, and OS fundamentals. Hands-on projects validated on your own machine by an open-source CLI.',
 })
 

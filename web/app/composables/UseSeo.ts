@@ -44,7 +44,7 @@ export function useSeo(input: MaybeRefOrGetter<SeoInput>) {
   const image = computed(() => absolute(resolved.value.image ?? SITE.ogImage))
   // Every page gets the site's name and a description that fits a results
   // page, whatever it passed in — see `utils/Seo`.
-  const title = computed(() => pageTitle(resolved.value.title, SITE.name))
+  const title = computed(() => pageTitle(resolved.value.title))
   const description = computed(() => metaDescription(resolved.value.description))
 
   useSeoMeta({

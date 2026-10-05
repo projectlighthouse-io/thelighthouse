@@ -9,12 +9,25 @@ const DESCRIPTION_MAX = 160
 /** Past this a results page truncates a title. */
 const TITLE_MAX = 70
 
-/** The site's name, as `useSeo` appends it. */
-const SITE_NAME = 'projectlighthouse'
+/**
+ * The site's name as search results show it. Only in titles: everywhere else
+ * on the site — the wordmark, the copy — it stays lowercase.
+ */
+const TITLE_NAME = 'ProjectLighthouse'
 
-/** The site's name on the end of every title, once. */
-export function pageTitle(title: string, site: string): string {
-  return title.includes(site) ? title : `${title} — ${site}`
+/** A site name a page already wrote at the end of its title, in any case,
+ *  after an em dash or a hyphen. */
+const WRITTEN_NAME = /\s*(?:—|-)?\s*projectlighthouse\s*$/i
+
+/**
+ * The site's name on the end of every title, once, spelled for results.
+ * Pages write titles their own way; whatever they ended with is respelled
+ * here rather than doubled.
+ */
+export function pageTitle(title: string): string {
+  const bare = title.replace(WRITTEN_NAME, '').trim()
+
+  return bare ? `${bare} — ${TITLE_NAME}` : TITLE_NAME
 }
 
 /**
@@ -25,7 +38,7 @@ export function pageTitle(title: string, site: string): string {
 export function lessonTitle(lesson: string, book: string): string {
   const full = `${lesson} — ${book}`
 
-  return pageTitle(full, SITE_NAME).length <= TITLE_MAX ? full : lesson
+  return pageTitle(full).length <= TITLE_MAX ? full : lesson
 }
 
 /**

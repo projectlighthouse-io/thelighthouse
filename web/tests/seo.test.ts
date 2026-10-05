@@ -181,7 +181,7 @@ describe.runIf(BASE)('seo', () => {
         const { titles } = page(path)
 
         expect.soft(titles, path).toHaveLength(1)
-        expect.soft(titles[0], path).toMatch(/projectlighthouse/)
+        expect.soft(titles[0], path).toMatch(/ — ProjectLighthouse$|^ProjectLighthouse$/)
         expect.soft(titles[0]?.length, `${path}: "${titles[0]}"`).toBeLessThanOrEqual(70)
       }
     })

@@ -4,11 +4,16 @@ import { lessonTitle, metaDescription, pageTitle } from './Seo'
 
 describe('pageTitle', () => {
   it('names the site after a title that does not', () => {
-    expect(pageTitle('Programming Books', 'projectlighthouse')).toBe('Programming Books — projectlighthouse')
+    expect(pageTitle('Programming Books')).toBe('Programming Books — ProjectLighthouse')
   })
 
-  it('leaves a title that already names the site alone', () => {
-    expect(pageTitle('Pricing — projectlighthouse', 'projectlighthouse')).toBe('Pricing — projectlighthouse')
+  it('respells a site name the page already wrote, rather than adding a second', () => {
+    expect(pageTitle('Pricing — projectlighthouse')).toBe('Pricing — ProjectLighthouse')
+    expect(pageTitle('Blog - projectlighthouse')).toBe('Blog — ProjectLighthouse')
+  })
+
+  it('names a page that is only the site', () => {
+    expect(pageTitle('projectlighthouse')).toBe('ProjectLighthouse')
   })
 })
 
