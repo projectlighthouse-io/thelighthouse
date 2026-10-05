@@ -38,6 +38,8 @@ plans:
   - id: foundation_lifetime
     amount: 14900
     name: Foundation, forever
+    # What the buy button on this plan's panel says. Absent is "Get Pro".
+    button_text: Own it forever
     books:
       - os-fundamentals
       - networking-fundamentals

@@ -245,7 +245,7 @@ const IMAGE = '/pricing-lighthouse.jpg'
               :disabled="!panel.lead"
               @click="buy(panel.lead?.plan)"
             >
-              Get Pro
+              {{ panel.lead?.button_text ?? 'Get Pro' }}
             </UiButton>
           </div>
         </div>

@@ -147,6 +147,11 @@ struct Declared {
     /// which is what every declaration written before this field said.
     #[serde(default)]
     ppp: Vec<DeclaredPpp>,
+    /// What the buy button on this plan's pricing panel says. Absent is the
+    /// page's default, "Get Pro". Copy, not a price — it goes to the frontend's
+    /// catalogue and nowhere near stripe.
+    #[serde(default)]
+    button_text: Option<String>,
 }
 
 impl Declared {
@@ -1288,6 +1293,10 @@ struct WirePlan {
     recurring: bool,
     amount: i64,
     currency: String,
+    /// The buy button's text; omitted when the plan does not set one, and
+    /// the page says "Get Pro".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    button_text: Option<String>,
 }
 
 /// A book, reduced to what a price card needs: what it is called, and which
@@ -1360,6 +1369,7 @@ fn catalogue(declaration: &Declaration, path: &str) -> Result<String, String> {
             recurring: interval != "once",
             amount: plan.amount,
             currency: declaration.currency.clone(),
+            button_text: plan.button_text.clone(),
         });
     }
 
@@ -1395,7 +1405,7 @@ fn catalogue(declaration: &Declaration, path: &str) -> Result<String, String> {
          // with, so nothing downstream can tell which one it came from.\n\
          export interface CataloguePlan {{\n  \
            plan: string\n  track: string\n  recurring: boolean\n  \
-           amount: number\n  currency: string\n\
+           amount: number\n  currency: string\n  button_text?: string\n\
          }}\n\n\
          // A book, and the tracks it is on with its position in each.\n\
          export interface CatalogueBook {{\n  \
@@ -1433,6 +1443,7 @@ mod tests {
             books: vec!["a-book".to_owned()],
             everything: false,
             ppp: Vec::new(),
+            button_text: None,
         }
     }
 

@@ -17,6 +17,7 @@ export interface CataloguePlan {
   recurring: boolean
   amount: number
   currency: string
+  button_text?: string
 }
 
 // A book, and the tracks it is on with its position in each.
@@ -39,7 +40,8 @@ export const plans: CataloguePlan[] = [
     "track": "all",
     "recurring": false,
     "amount": 59900,
-    "currency": "usd"
+    "currency": "usd",
+    "button_text": "Get Everything"
   }
 ]
 
