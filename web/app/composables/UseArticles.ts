@@ -56,6 +56,9 @@ export interface OwnArticle {
   takenDownAt: string | null
   /** Why, shown to its author and to nobody else. */
   takenDownReason: string | null
+  /** Set when the author archived it: hidden from everyone else until they
+   *  bring it back. */
+  archivedAt: string | null
 }
 
 /** The wire shape, which is snake_case because the columns are. */
@@ -70,6 +73,7 @@ interface OwnArticleResponse {
   updated_at: string | null
   taken_down_at: string | null
   taken_down_reason: string | null
+  archived_at: string | null
 }
 
 interface PageResponse<T> {
@@ -94,6 +98,7 @@ function toArticle(article: OwnArticleResponse): OwnArticle {
     updatedAt: article.updated_at,
     takenDownAt: article.taken_down_at,
     takenDownReason: article.taken_down_reason,
+    archivedAt: article.archived_at,
   }
 }
 
@@ -227,5 +232,27 @@ export function useArticles() {
     }
   }
 
-  return { articles, total, loaded, pending, load, find, create, edit, remove }
+  /**
+   * Archives one of the reader's own, or brings it back. The api answers with
+   * the article as stored, which replaces the copy in the list.
+   */
+  async function archive(slug: string, archived: boolean): Promise<{ article: OwnArticle } | { refused: Refused }> {
+    try {
+      const saved = await $fetch<OwnArticleResponse>(
+        `/api/articles/${encodeURIComponent(slug)}/archive`,
+        { method: archived ? 'POST' : 'DELETE', headers: csrfHeader() },
+      )
+
+      const article = toArticle(saved)
+      const at = articles.value.findIndex(it => it.slug === slug)
+      if (at !== -1) articles.value[at] = article
+
+      return { article }
+    }
+    catch (error) {
+      return { refused: refusedBy(error, GENERIC_FAILURE) }
+    }
+  }
+
+  return { articles, total, loaded, pending, load, find, create, edit, remove, archive }
 }
