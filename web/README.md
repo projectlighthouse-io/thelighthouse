@@ -23,6 +23,8 @@ make dev       # http://localhost:3000
 
 `make` on its own lists every target.
 
+The logo, the icons and the rules for using them are in [BRAND.md](BRAND.md).
+
 | | |
 |---|---|
 | `make check` | lint, typecheck, build — run this before pushing |
