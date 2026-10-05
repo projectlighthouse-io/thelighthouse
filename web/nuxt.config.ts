@@ -63,9 +63,20 @@ export default defineNuxtConfig({
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'theme-color', content: '#fcfcfc', media: '(prefers-color-scheme: light)' },
+        { name: 'theme-color', content: '#202020', media: '(prefers-color-scheme: dark)' },
       ],
+      // The icon set, every file in public/ as the brand assets gave it. The
+      // .ico first for anything that only reads one; browsers that take svg
+      // prefer it, and the pngs cover the rest. See BRAND.md.
       link: [
-        { rel: 'icon', type: 'image/svg+xml', href: '/lighthouse.svg' },
+        { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
+        { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+        { rel: 'icon', href: '/favicon-32.png', type: 'image/png', sizes: '32x32' },
+        { rel: 'icon', href: '/favicon-16.png', type: 'image/png', sizes: '16x16' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+        { rel: 'mask-icon', href: '/safari-pinned-tab.svg', color: '#202020' },
+        { rel: 'manifest', href: '/site.webmanifest' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         {
