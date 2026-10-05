@@ -93,6 +93,8 @@ const showPaperkites = true
 
     <MarketingPaperkites v-if="showPaperkites" />
 
+    <MarketingClimate />
+
     <div class="lh-text lh-gap">
       <MarketingNewsletterSignup />
     </div>
