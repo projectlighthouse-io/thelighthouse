@@ -77,6 +77,10 @@ pub(crate) struct OwnArticle {
     pub(crate) taken_down_at: Option<NaiveDateTime>,
     /// Why it was taken down, shown to the author and to nobody else.
     pub(crate) taken_down_reason: Option<String>,
+    /// Set when the author archived it: off the public listing and its page,
+    /// still on their own shelf, and theirs to bring back.
+    #[serde(serialize_with = "as_utc")]
+    pub(crate) archived_at: Option<NaiveDateTime>,
 }
 
 #[cfg(test)]
@@ -164,6 +168,7 @@ mod tests {
             updated_at: Some(at("2026-09-04 10:00:00")),
             taken_down_at: Some(at("2026-09-04 12:00:00")),
             taken_down_reason: Some("Reposted without attribution.".to_owned()),
+            archived_at: None,
         })
         .unwrap();
 
@@ -189,6 +194,7 @@ mod tests {
             updated_at: None,
             taken_down_at: None,
             taken_down_reason: None,
+            archived_at: None,
         })
         .unwrap();
 

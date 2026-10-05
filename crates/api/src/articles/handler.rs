@@ -358,3 +358,48 @@ pub(crate) async fn remove(
         }
     }
 }
+
+/// `POST /api/articles/{slug}/archive` — off the public listing and its page,
+/// still on the author's shelf. 404 for an article that is not theirs.
+pub(crate) async fn archive(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    Path(slug): Path<String>,
+) -> Response {
+    set_archived(&state, &session, &slug, true).await
+}
+
+/// `DELETE /api/articles/{slug}/archive` — back where readers can find it.
+pub(crate) async fn unarchive(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    Path(slug): Path<String>,
+) -> Response {
+    set_archived(&state, &session, &slug, false).await
+}
+
+/// Both directions answer with the article as stored, so the page shows what
+/// the database now holds.
+async fn set_archived(
+    state: &AppState,
+    session: &Session,
+    slug: &str,
+    archived: bool,
+) -> Response {
+    match store::archive(&state.db, slug, session.user_id, archived).await {
+        Ok(Some(article)) => {
+            json(StatusCode::OK, article, CachePolicy::NoStore)
+        }
+        Ok(None) => response::not_found(),
+        Err(error) => {
+            tracing::error!(
+                ?error,
+                slug,
+                user_id = session.user_id,
+                archived,
+                "failed to archive the article"
+            );
+            response::server_error()
+        }
+    }
+}

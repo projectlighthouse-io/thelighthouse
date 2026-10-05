@@ -137,6 +137,8 @@ pub(crate) fn routes(state: &AppState) -> Router<AppState> {
         .route("/api/articles", post(handler::create))
         .route("/api/articles/{slug}", patch(handler::update))
         .route("/api/articles/{slug}", delete(handler::remove))
+        .route("/api/articles/{slug}/archive", post(handler::archive))
+        .route("/api/articles/{slug}/archive", delete(handler::unarchive))
         .route_layer(from_fn_with_state(state.clone(), throttle))
         .route_layer(from_fn(require_csrf))
         .route_layer(from_fn_with_state(state.clone(), require_reader));

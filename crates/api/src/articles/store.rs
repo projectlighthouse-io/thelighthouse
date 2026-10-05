@@ -80,7 +80,8 @@ const OWN_COLUMNS: &str = "
     a.created_at,
     a.updated_at,
     a.taken_down_at,
-    a.taken_down_reason
+    a.taken_down_reason,
+    a.archived_at
 ";
 
 /// What a listing is narrowed by, whoever is reading it.
@@ -138,7 +139,7 @@ pub(crate) async fn page(
         SELECT {COLUMNS}
         FROM articles a
         JOIN users u ON u.id = a.user_id
-        WHERE a.taken_down_at IS NULL AND {MATCHING}
+        WHERE a.taken_down_at IS NULL AND a.archived_at IS NULL AND {MATCHING}
         -- `id` breaks ties, so two articles posted in the same second cannot
         -- swap between pages, which is how a listing drops and repeats rows.
         ORDER BY a.created_at DESC, a.id DESC
@@ -167,7 +168,7 @@ pub(crate) async fn count(
 ) -> Result<i64, StoreError> {
     let sql = format!(
         "SELECT count(a.id) FROM articles a
-         WHERE a.taken_down_at IS NULL AND {MATCHING}"
+         WHERE a.taken_down_at IS NULL AND a.archived_at IS NULL AND {MATCHING}"
     );
 
     let (total,) = sqlx::query_as::<_, (i64,)>(&sql)
@@ -208,6 +209,7 @@ pub(crate) async fn find(
         JOIN users u ON u.id = a.user_id
         WHERE a.slug = $1
           AND a.taken_down_at IS NULL
+          AND a.archived_at IS NULL
         "
     );
 
@@ -417,6 +419,49 @@ async fn read_own(
         .bind(id)
         .fetch_optional(&mut **tx)
         .await?)
+}
+
+/// Archives one article, or brings it back, and reads it back.
+///
+/// Scoped by owner in the statement, as [`rewrite`] is: `None` means no such
+/// article *or* not this author's. Archiving an archived article keeps its
+/// original date rather than moving it, so a second click changes nothing.
+///
+/// Independent of a takedown: unarchiving does not put a taken down article
+/// back, because the public reads check both columns.
+pub(crate) async fn archive(
+    db: &PgPool,
+    slug: &str,
+    user_id: i64,
+    archived: bool,
+) -> Result<Option<OwnArticle>, StoreError> {
+    let mut tx = db.begin().await?;
+
+    let updated = sqlx::query_as::<_, (i64,)>(
+        "
+        UPDATE articles
+        SET archived_at = CASE WHEN $3 THEN COALESCE(archived_at, NOW()) END
+        WHERE slug = $1
+          AND user_id = $2
+        RETURNING id
+        ",
+    )
+    .bind(slug)
+    .bind(user_id)
+    .bind(archived)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some((id,)) = updated else {
+        tx.rollback().await?;
+        return Ok(None);
+    };
+
+    let saved = read_own(&mut tx, id).await?;
+
+    tx.commit().await?;
+
+    Ok(saved)
 }
 
 /// Deletes one article. `false` when nothing matched — see [`rewrite`].
