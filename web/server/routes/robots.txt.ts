@@ -13,6 +13,7 @@ const DISALLOW = [
   '/billing/',
   '/blog/write-something-amazing',
   '/blog/edit/',
+  '/checkout',
 ]
 
 export default defineEventHandler((event) => {

@@ -13,6 +13,17 @@ const dialog = useTemplateRef<HTMLDialogElement>('dialog')
 const route = useRoute()
 
 /**
+ * Where signing in lands: this page — or, on `/login`, the page that sent the
+ * reader there. Returning to `/login` itself would show a signed-in reader the
+ * sign-in page again and lose where they were going (a checkout, say).
+ */
+const returnTo = computed<string>(() => {
+  const onward = route.query.redirect
+
+  return route.path === '/login' && typeof onward === 'string' && onward ? onward : route.fullPath
+})
+
+/**
  * Opens from where it was asked for: the offset from the trigger's centre to
  * the viewport's is where the grow animation starts.
  */
@@ -58,7 +69,7 @@ defineExpose({ open })
         progress, in one place. No passwords, no reset emails.
       </p>
 
-      <AuthOauthButtons :redirect="route.fullPath" />
+      <AuthOauthButtons :redirect="returnTo" />
 
       <p class="lh-hint">
         By continuing, you agree to the

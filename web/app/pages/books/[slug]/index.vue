@@ -167,7 +167,7 @@ useJsonLd('crumbs', () => ({
 }))
 
 // Straight to checkout for the plan on sale; sign-in first when signed out.
-const { getPro, busy: proBusy, reason: proReason } = useGetPro()
+const { getPro } = useGetPro()
 </script>
 
 <template>
@@ -193,10 +193,9 @@ const { getPro, busy: proBusy, reason: proReason } = useGetPro()
         </UiButton>
         <!-- `owns` is false until the browser asks, so the server and the
              first client render agree and the button only ever disappears. -->
-        <UiButton v-if="showPro" variant="ghost" size="lg" cta="free" flame :disabled="proBusy" @click="getPro">
+        <UiButton v-if="showPro" variant="ghost" size="lg" cta="free" flame @click="getPro">
           Get Pro
         </UiButton>
-        <p v-if="proReason" class="lh-error" role="alert">{{ proReason }}</p>
       </template>
     </DetailHead>
 

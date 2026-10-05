@@ -89,7 +89,7 @@ useJsonLd('project', () => ({
 }))
 
 // Straight to checkout for the plan on sale; sign-in first when signed out.
-const { getPro, busy: proBusy, reason: proReason } = useGetPro()
+const { getPro } = useGetPro()
 </script>
 
 <template>
@@ -109,10 +109,9 @@ const { getPro, busy: proBusy, reason: proReason } = useGetPro()
         >
           {{ progress && progress.completed > 0 ? 'Continue →' : `Start the ${label} →` }}
         </UiButton>
-        <UiButton v-if="hasPro" variant="ghost" size="lg" cta="free" flame :disabled="proBusy" @click="getPro">
+        <UiButton v-if="hasPro" variant="ghost" size="lg" cta="free" flame @click="getPro">
           Get Pro
         </UiButton>
-        <p v-if="proReason" class="lh-error" role="alert">{{ proReason }}</p>
       </template>
     </DetailHead>
 

@@ -47,6 +47,7 @@ const PRIVATE_GUARDED = [
   '/blog/write-something-amazing',
   '/admin',
   '/billing/thanks',
+  '/checkout?plan=foundation_yearly',
 ]
 
 interface Head {
@@ -305,7 +306,7 @@ describe.runIf(BASE)('seo', () => {
     expect.soft(robots).toContain(`Sitemap: ${SITE}/sitemap.xml`)
     for (const path of [
       '/settings/', '/dashboard', '/notes', '/profile', '/login', '/register', '/admin',
-      '/billing/', '/blog/write-something-amazing', '/blog/edit/',
+      '/billing/', '/blog/write-something-amazing', '/blog/edit/', '/checkout',
     ]) {
       expect.soft(robots, path).toContain(`Disallow: ${path}`)
     }

@@ -151,24 +151,16 @@ function priced(offer: CataloguePlan | undefined): string {
   return offer?.amount ? money(offer.amount) : '—'
 }
 
-const { checkout, busy, reason } = useBilling()
-const { isSignedIn } = useReader()
-const route = useRoute()
 
 /**
- * Buying needs a session, because the api ties the purchase to an account.
- * An anonymous reader signs in first and comes back to where they were.
+ * Buying goes through `/checkout`, which signs an anonymous reader in first and
+ * comes back with the plan intact — then stripe, or billing for a reader who
+ * already pays. See `pages/checkout.vue`.
  */
 async function buy(plan: string | undefined): Promise<void> {
   if (!plan) return
 
-  if (!isSignedIn.value) {
-    await navigateTo(`/login?redirect=${encodeURIComponent(`${route.path}#pricing`)}`)
-
-    return
-  }
-
-  await checkout(plan)
+  await navigateTo(checkoutUrl(plan))
 }
 
 // Served from public/, so it ships in the image rather than off the CDN.
@@ -192,7 +184,6 @@ const IMAGE = '/pricing-lighthouse.jpg'
       </div>
 
       <div class="plans">
-        <p v-if="reason" class="reason" role="alert">{{ reason }}</p>
 
         <div v-for="panel in panels" :key="panel.key" class="plan" :class="{ 'is-featured': panel.featured }">
           <div class="plan-head">
@@ -240,7 +231,6 @@ const IMAGE = '/pricing-lighthouse.jpg'
               v-if="panel.outright"
               type="button"
               class="outright"
-              :disabled="busy"
               @click="buy(panel.outright?.plan)"
             >
               or {{ reduced(panel.outright) ?? priced(panel.outright) }} once, yours to keep{{
@@ -252,10 +242,10 @@ const IMAGE = '/pricing-lighthouse.jpg'
               size="lg"
               cta="pro-dark"
               flame
-              :disabled="busy || !panel.lead"
+              :disabled="!panel.lead"
               @click="buy(panel.lead?.plan)"
             >
-              {{ busy ? 'One moment…' : 'Get Pro' }}
+              Get Pro
             </UiButton>
           </div>
         </div>
@@ -326,13 +316,6 @@ const IMAGE = '/pricing-lighthouse.jpg'
   align-content: start;
 }
 
-.reason {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.08);
-  font: var(--text-body-sm);
-}
 
 .plan {
   display: grid;

@@ -19,6 +19,14 @@ const redirect = computed<string | undefined>(() => {
 })
 
 const status = computed<string | null>(() => (route.query.status as string) ?? null)
+
+// Already signed in — back from the provider, or here by a stale link: go on to
+// where the reader was headed rather than asking them to sign in again.
+const { resolve, isSignedIn } = useReader()
+onMounted(async () => {
+  await resolve()
+  if (isSignedIn.value) await navigateTo(redirect.value ?? '/', { replace: true })
+})
 const error = computed<string | null>(() => (route.query.error as string) ?? null)
 </script>
 

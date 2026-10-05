@@ -59,6 +59,9 @@ export function useBilling() {
 
   const busy = ref(false)
   const reason = ref<string | null>(null)
+  /** The api's code for the last refusal — what a caller branches on, where
+   *  `reason` is what it shows. */
+  const refusal = ref<string | null>(null)
 
   /** Paid up. Grace — a failed payment being retried — deliberately is not. */
   const subscribed = computed(() => membership.value?.status === 'active')
@@ -105,6 +108,7 @@ export function useBilling() {
 
     busy.value = true
     reason.value = null
+    refusal.value = null
 
     try {
       const { url } = await $fetch<{ url: string }>(
@@ -118,6 +122,7 @@ export function useBilling() {
     }
     catch (failure) {
       reason.value = reasonFor(failure)
+      refusal.value = (failure as { data?: Refusal })?.data?.code ?? null
       busy.value = false
     }
   }
@@ -152,6 +157,7 @@ export function useBilling() {
     resolved,
     busy,
     reason,
+    refusal,
     subscribed,
     ending,
     track,
