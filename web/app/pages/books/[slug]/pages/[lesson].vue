@@ -809,10 +809,16 @@ useJsonLd('crumbs', () => ({
 
       <article class="reader-article">
         <header class="reader-head">
-          <p class="lh-eyebrow">
-            <NuxtLink :to="`/books/${book.slug}`" class="lh-link">{{ book.title }}</NuxtLink>
-            · {{ eyebrow }}
-          </p>
+          <!-- No chapter crumb: a chapter has no page of its own to go back to.
+               The eyebrow under it still says which chapter this is. -->
+          <ReaderCrumbs
+            :items="[
+              { label: 'Books', to: '/books' },
+              { label: book.title, to: `/books/${book.slug}` },
+              { label: lesson.title },
+            ]"
+          />
+          <p class="lh-eyebrow">{{ eyebrow }}</p>
           <h1 class="lh-h1">{{ lesson.title }}</h1>
           <p v-if="lesson.description" class="lh-lede">{{ lesson.description }}</p>
 
