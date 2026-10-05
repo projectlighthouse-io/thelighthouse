@@ -211,10 +211,7 @@ pub(crate) async fn record(
     provider: &str,
     subscription: &Subscription,
 ) -> Result<(), sqlx::Error> {
-    let plan = subscription
-        .plan
-        .as_ref()
-        .map_or("unknown", billing::PlanId::as_str);
+    let plan = super::track::plan_of(subscription);
 
     sqlx::query(
         "INSERT INTO memberships \

@@ -14,17 +14,53 @@
 //! orders and groups the books pages. It is simply no longer what decides who
 //! may read what.
 
-use billing::{PlanId, Plans};
+use billing::{PlanId, Plans, Subscription};
 use ohara::catalog::Snapshot;
+
+/// The laravel app's plan, honoured for readers still subscribed to it.
+///
+/// Laravel sold one product, and it opened every book. Readers who bought it
+/// there keep renewing it at Stripe, so it has to keep meaning what they paid
+/// for. **It is never sold here**, which is why it lives in code rather than in
+/// `pricing.yaml`: a plan in that file is one the pricing page offers, and one
+/// `lighthouse-prices` needs a live Stripe price for.
+pub(crate) const VOYAGE: &str = "voyage";
+
+/// The prefix of every price lookup key the laravel app sold [`VOYAGE`] on:
+/// `_monthly`, `_yearly` and `_lifetime`.
+const VOYAGE_PRICES: &str = "lighthouse_voyage_";
 
 /// Whether a plan unlocks this book.
 ///
 /// `everything` is the one thing a list cannot say, because the point of it is
 /// the books that do not exist yet. Anything else is membership of the list.
+///
+/// [`VOYAGE`] unlocks everything without being declared, because it never is.
 pub(crate) fn covers(plans: &Plans, plan: &PlanId, slug: &str) -> bool {
+    if plan.as_str() == VOYAGE {
+        return true;
+    }
+
     plans.get(plan).is_some_and(|held| {
         held.everything || held.books.iter().any(|named| named == slug)
     })
+}
+
+/// The plan a subscription is recorded under.
+///
+/// The plan this application wrote into metadata when it has one. Failing
+/// that, a laravel price is [`VOYAGE`] — the metadata is what laravel never
+/// wrote, and its price is the only way left to recognise it. Anything else is
+/// `unknown`, which covers nothing.
+pub(crate) fn plan_of(subscription: &Subscription) -> &str {
+    if let Some(plan) = subscription.plan.as_ref() {
+        return plan.as_str();
+    }
+
+    match subscription.price_key.as_deref() {
+        Some(key) if key.starts_with(VOYAGE_PRICES) => VOYAGE,
+        _ => "unknown",
+    }
 }
 
 /// Every book a plan unlocks, by the id an entitlement points at.
@@ -152,6 +188,60 @@ mod tests {
         );
 
         assert!(!covers(&plans, &"go_yearly".into(), "anything"));
+    }
+
+    #[test]
+    fn the_laravel_voyage_plan_covers_every_book() {
+        // Declared nowhere, and still everything: the readers who bought it in
+        // the laravel app are paying for every book.
+        let plans = plans_from(
+            "plans:\n  - id: foundation_yearly\n    price: price_x\n    \
+             interval: year\n    books: [os-fundamentals]\n",
+        );
+
+        assert!(covers(&plans, &VOYAGE.into(), "written-next-year"));
+    }
+
+    fn subscription(
+        plan: Option<&str>,
+        price_key: Option<&str>,
+    ) -> Subscription {
+        Subscription {
+            reference: "sub_1".to_owned(),
+            account: None,
+            customer: None,
+            price_key: price_key.map(str::to_owned),
+            plan: plan.map(PlanId::from),
+            status: billing::Status::Active,
+            period_ends_at: None,
+            cancel_at: None,
+        }
+    }
+
+    #[test]
+    fn the_plan_in_metadata_wins_over_a_voyage_price() {
+        let held = subscription(
+            Some("foundation_yearly"),
+            Some("lighthouse_voyage_yearly"),
+        );
+
+        assert_eq!(plan_of(&held), "foundation_yearly");
+    }
+
+    #[test]
+    fn a_voyage_price_with_no_metadata_is_voyage() {
+        let held = subscription(None, Some("lighthouse_voyage_monthly"));
+
+        assert_eq!(plan_of(&held), VOYAGE);
+    }
+
+    #[test]
+    fn neither_metadata_nor_a_voyage_price_is_unknown() {
+        assert_eq!(plan_of(&subscription(None, None)), "unknown");
+        assert_eq!(
+            plan_of(&subscription(None, Some("somebody_elses_price"))),
+            "unknown"
+        );
     }
 
     #[test]
