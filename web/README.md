@@ -4,9 +4,15 @@ The frontend for [projectlighthouse.io](https://projectlighthouse.io) — books,
 hands-on projects and CLI challenges for people who want to know how the
 machinery under their code actually works.
 
-Nuxt 4 renders every page. A Rust API will own the data; until it does, the
-content in `app/data` and `server/data` is real content extracted from the
-private content repo, so the pages render the same shapes the API will return.
+Nuxt 4 renders every page. Books, lessons, projects and the blog come from the
+Rust API in `../crates/api`, which reads them from the private content repo and
+the database; this app reaches it over loopback, server side only. What is left
+in `app/data` and `server/data` is static: site copy, the catalogue generated
+by `make catalogue` at the repo root, and the syntax references.
+
+In production this app ships inside the combined image built from the repo
+root — see the [root README](../README.md). The `Dockerfile` and `make image`
+here build it on its own.
 
 ## Running it
 
@@ -23,42 +29,47 @@ make dev       # http://localhost:3000
 | `make lint` / `make fix` | ESLint |
 | `make types` | `vue-tsc` over templates and script blocks |
 | `make build` / `make preview` | production build, then serve it |
-| `make image` / `make push` | container build, then push to the DO registry |
+| `make image` / `make push` | standalone container build, then push to the DO registry |
 | `make bench` | benchmark the container, writes an HTML report |
 | `make audit` / `make outdated` | dependency health |
 
-Node version lives in `.nvmrc` and is shared by CI and the Dockerfile.
+Node version lives in `.nvmrc`, which CI reads; the Dockerfiles pin the same
+version.
 
 ## Layout
 
 ```
 app/
-  assets/css/     theme tokens, the pencil border system, prose, reader
-  components/     grouped by domain: Marketing, Book, Project, Challenge, Chrome
-  composables/    UseTheme, UseSeo, UsePreviewAuth
-  data/           content metadata — no prose
-  layouts/        Default, Settings
+  assets/css/     design tokens, prose, reader
+  components/     grouped by domain: Marketing, Book, Reader, Blog, Nav, Site, …
+  composables/    UseTheme, UseSeo, UseReader, UseNotes, UseBilling, …
+  data/           static data and the generated Catalogue.ts — no lesson prose
+  layouts/        Default
   middleware/     Auth
-  pages/          29 pages, file-based routing
+  pages/          file-based routing
   types/
+  utils/
 server/
-  routes/_api/    frontend's own endpoints; renders markdown and picks the body
-  data/           markdown — server only, cannot be imported by a page
+  routes/_api/    frontend's own endpoints; fetch from the Rust API, shape the answer
+  data/           syntax-reference markdown — server only, cannot be imported by a page
   middleware/     legacy /{locale}/ redirects
   routes/         robots.txt, sitemap.xml
-  utils/
+  utils/          the API client, markdown sanitising
 bench/            k6 load harness and HTML report
+tests/            SEO checks against a running server
 ```
 
 ## Decisions worth knowing before you change something
 
-**Content never reaches the browser as markdown.** `server/data` holds the
-prose and `server/routes/_api` renders it. The `_api` prefix is deliberate:
-`/api/*` belongs to the Rust backend, which Caddy routes to separately. Pages fetch the rendered HTML with
-`useAsyncData`, which during SSR calls the handler directly — no HTTP round
-trip. Importing `server/data` from a page is not possible, and that is the
-point: the browser was previously downloading ~190kb of markdown to display one
-already-rendered page.
+**Content never reaches the browser as markdown.** The Rust API renders
+lessons to HTML; `server/routes/_api` fetches them from it, and renders blog
+articles (sanitised) and the syntax references in `server/data` itself. The
+`_api` prefix is deliberate: `/api/*` belongs to the Rust backend, which Caddy
+routes to separately. Pages fetch the rendered HTML with `useAsyncData`, which
+during SSR calls the handler directly — no HTTP round trip. Importing
+`server/data` from a page is not possible, and that is the point: the browser
+was previously downloading ~190kb of markdown to display one already-rendered
+page.
 
 **The backend decides free versus paid, not the frontend.** A locked lesson's
 paid half never enters the client at all — the server picks one half and sends
@@ -66,15 +77,17 @@ it. The page renders whatever it is given and shows a CTA when a flag says
 there is more. A frontend bug can fail to show content someone paid for; it
 cannot leak content they did not.
 
-**Pages are prerendered.** 275 static HTML files. Only session-dependent routes
-(`/dashboard`, `/notes`, `/profile`, `/settings/*`) render at request time, and
-those are `ssr: false` — prerendering them would bake one person's view into a
-file.
+**Static pages are prerendered; content pages are not.** `/syntax/**`,
+`/pricing` and the other pages built from static data are HTML files. The home
+page, `/books/**`, `/projects/**` and `/blog/**` render per request, because
+their content comes from the API and changes without a deploy — see the
+`routeRules` in `nuxt.config.ts`. Session-dependent routes (`/dashboard`,
+`/notes`, `/profile`, `/settings/*`, the blog editor) are `ssr: false` —
+prerendering them would bake one person's view into a file.
 
 **Themes swap CSS variables, not classes.** Every colour is a token in
-`app/assets/css/theme.css`; `.dark` overrides the variables. No component knows
-which theme is active. An inline script in `nuxt.config.ts` sets the class
-before first paint, so there is no flash.
+`app/assets/css/tokens/colors.css`; `data-theme="dark"` on `<html>` overrides
+the variables. No component knows which theme is active. Dark is opt-in only.
 
 **Legacy `/{locale}/` URLs 301 to their unprefixed equivalent.** Those URLs are
 indexed and in newsletters. The redirect strips every leading locale segment in
@@ -91,24 +104,27 @@ one hop and remembers the language in a cookie.
 
 ## CI
 
-Runs on pull requests and pushes to `master`: lint, typecheck, build, `npm
-audit`, and a container build that boots the image and curls it. Nothing is
-deployed from CI — `make push` is run by hand.
+The `web` jobs in `../.github/workflows/ci.yml`: lint, typecheck, unit tests,
+build and `npm audit`. The workflow is currently manual-only
+(`workflow_dispatch`). Nothing is deployed from CI — `make push` at the repo
+root is run by hand.
 
 ## Licence
 
 **PolyForm Strict 1.0.0** — see [LICENSE](../LICENSE).
 
 The source is available to read, study and run for noncommercial purposes. It
-is not open source: the licence grants no right to modify or distribute it.
+is not open source: the licence grants no right to modify or distribute it, or
+to use it commercially.
 
 The licence covers the code in this repository. The name, branding, visual
 design, images and written content are **not** covered by it — all rights are
 reserved; see [NOTICE](../NOTICE). The books, lessons and project briefs live
-in a separate private repository, and forking this repo gives you the platform,
-not the content.
+in a separate private repository, and this repo gives you the platform, not the
+content.
 
 ## Architecture
 
 The full rebuild plan, including the Rust API split, entitlements and the
-paywall design, is in `docs/rebuild.md` in the projectlighthouse.io repo.
+paywall design, is `docs/rebuild.md` in the earlier Laravel app's repository,
+which is private.
