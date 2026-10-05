@@ -1,46 +1,60 @@
 /**
- * What comes after the desk: the books planned but not yet being written, and
- * the luxctl projects planned beside them. For the home page's horizon list.
+ * What comes after the desk: the books planned but not yet being written,
+ * grouped into the tracks they are meant for, and the luxctl projects planned
+ * beside them. For the home page's "And after that" section.
  *
- * The books are the plan's #4–#15, in its order and grouped by the bundle each
- * is meant for; #1–#3 are the published foundations. The projects are the
- * headline builds from docs/lighthouse-roadmap.md that are not on the shelf
- * yet. Titles and one line each — nothing here claims progress, so nothing
- * here has to be kept honest beyond the list itself.
+ * Titles and a line each — nothing here claims progress, so nothing here has
+ * to be kept honest beyond the list itself. Every count on the page is derived
+ * from these arrays; add a book or a project here and the numbers follow.
  */
 
-export interface PlannedBook {
-  title: string
-  /** The bundle the plan puts it in. */
-  bundle: string
+export interface PlannedTrack {
+  name: string
+  /** In reading order. */
+  books: string[]
 }
 
 export interface PlannedProject {
   title: string
   /** What you build, in a line. */
-  line: string
+  blurb: string
 }
 
-export const plannedBooks: PlannedBook[] = [
-  { title: 'Build Your Own Container', bundle: 'Containers & Orchestration' },
-  { title: 'Containerizing Your App', bundle: 'Containers & Orchestration' },
-  { title: 'Orchestration Without Kubernetes', bundle: 'Containers & Orchestration' },
-  { title: 'Orchestrating Containers', bundle: 'Containers & Orchestration' },
-  { title: 'Kubernetes Networking', bundle: 'Platform Engineering' },
-  { title: 'Programming Kubernetes', bundle: 'Platform Engineering' },
-  { title: 'Operating Kubernetes at Scale', bundle: 'Platform Engineering' },
-  { title: 'eBPF & Kernel Observability', bundle: 'Platform Engineering' },
-  { title: 'Build Your Own Prometheus', bundle: 'Platform Engineering' },
-  { title: 'System Design', bundle: 'Architect' },
-  { title: 'Distributed System Design', bundle: 'Architect' },
-  { title: 'Database Internals', bundle: 'Architect' },
+export const plannedTracks: PlannedTrack[] = [
+  {
+    name: 'Containers & Orchestration',
+    books: [
+      'Build Your Own Container',
+      'Containerizing Your App',
+      'Orchestration Without Kubernetes',
+      'Orchestrating Containers',
+    ],
+  },
+  {
+    name: 'Platform Engineering',
+    books: [
+      'Kubernetes Networking',
+      'Programming Kubernetes',
+      'Operating Kubernetes at Scale',
+      'eBPF & Kernel Observability',
+      'Build Your Own Prometheus',
+    ],
+  },
+  {
+    name: 'Architect',
+    books: [
+      'System Design',
+      'Distributed System Design',
+      'Database Internals',
+    ],
+  },
 ]
 
 export const plannedProjects: PlannedProject[] = [
-  { title: 'Build Your Own Redis', line: 'The RESP protocol, a key-value store and persistence, in Go or Rust.' },
-  { title: 'Build Your Own Git', line: 'Objects, refs and packfiles — the content-addressed store underneath.' },
-  { title: 'Build Your Own Orchestrator', line: 'An agent, a scheduler and a state store, without Kubernetes.' },
-  { title: 'Build Your Own Raft', line: 'Leader election and log replication behind a replicated key-value store.' },
-  { title: 'Build Your Own Operator', line: 'A custom resource and the reconcile loop that keeps it true.' },
-  { title: 'Build Your Own Kubernetes', line: 'An API server, a scheduler and a kubelet, assembled from your own parts.' },
+  { title: 'Build Your Own Redis', blurb: 'The RESP protocol, a key-value store and persistence, in Go or Rust.' },
+  { title: 'Build Your Own Git', blurb: 'Objects, refs and packfiles: the content-addressed store underneath.' },
+  { title: 'Build Your Own Orchestrator', blurb: 'An agent, a scheduler and a state store, without Kubernetes.' },
+  { title: 'Build Your Own Raft', blurb: 'Leader election and log replication behind a replicated key-value store.' },
+  { title: 'Build Your Own Operator', blurb: 'A custom resource and the reconcile loop that keeps it true.' },
+  { title: 'Build Your Own Kubernetes', blurb: 'An API server, a scheduler and a kubelet, assembled from your own parts.' },
 ]
