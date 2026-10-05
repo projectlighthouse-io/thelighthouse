@@ -69,16 +69,24 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
     <!-- Hidden once the set is full, rather than shown disabled: there is
          nothing left to pick, and a dead `+` invites a click that does
          nothing. -->
+    <!-- Words, not just a `+`, until one is picked: an empty row of chips
+         gives no hint that a topic is required. -->
     <button
       v-if="!full && available.length"
       type="button"
       title="add a topic"
-      class="flex size-7 cursor-pointer items-center justify-center rounded-sm text-base leading-none text-faint ring-1 ring-rule-soft transition hover:bg-paper-warm hover:text-ink"
+      class="flex h-7 cursor-pointer items-center justify-center gap-1 rounded-sm px-2 text-[13px] leading-none text-faint ring-1 ring-rule-soft transition hover:bg-paper-warm hover:text-ink"
+      :class="{ 'w-7 px-0 text-base': modelValue.length }"
       @click="picking = !picking"
     >
       <span aria-hidden="true">+</span>
-      <span class="sr-only">add a topic</span>
+      <span v-if="!modelValue.length">pick a topic</span>
+      <span v-else class="sr-only">add a topic</span>
     </button>
+
+    <span class="text-[12px] leading-5 text-faint">
+      {{ modelValue.length ? `${modelValue.length} of ${MAX_TOPICS}` : `required · up to ${MAX_TOPICS}` }}
+    </span>
 
     <!-- Dark, like the editor's bubble menu — the two are the same kind of
          thing (a surface that floats over the page while you are working) and

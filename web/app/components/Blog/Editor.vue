@@ -162,7 +162,7 @@ function cancel(): void {
             type="text"
             maxlength="200"
             required
-            placeholder="Title"
+            placeholder="Title (required)"
             class="bare-field masthead-title w-full border-0 bg-transparent p-0 outline-none placeholder:text-faint"
             :aria-invalid="!!fieldErrors.title"
             @input="emit('update:title', ($event.target as HTMLInputElement).value)"
@@ -182,7 +182,7 @@ function cancel(): void {
             type="text"
             maxlength="200"
             required
-            placeholder="Add a subtitle"
+            placeholder="Subtitle: one line readers decide from (required)"
             class="bare-field dek-face w-full border-0 bg-transparent p-0 text-quiet outline-none placeholder:text-faint"
             :aria-invalid="!!fieldErrors.subtitle"
             @input="emit('update:subtitle', ($event.target as HTMLInputElement).value)"

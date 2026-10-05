@@ -113,7 +113,8 @@ onMounted(() => {
       // this is a prompt on an empty document rather than a new dependency.
       Placeholder.configure({
         placeholder:
-          'markdown shortcuts work as you type — ## for a heading, - for a '
+          'Write the article here (required). Markdown shortcuts work as you '
+          + 'type: ## for a heading, - for a '
           + 'list, ``` for code. Any raw HTML is removed when the article '
           + 'renders.',
       }),
@@ -215,6 +216,9 @@ onBeforeUnmount(() => editor.value?.destroy())
 .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   color: var(--color-faint);
+  /* A hint, not the first line of the article: smaller than the prose it
+     sits in, so it does not read as something already written. */
+  font: var(--text-body-sm);
   float: left;
   height: 0;
   pointer-events: none;
