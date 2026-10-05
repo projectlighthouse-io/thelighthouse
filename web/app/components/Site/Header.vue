@@ -17,6 +17,7 @@ const links: NavLink[] = [
   { to: '/books', label: 'books' },
   { to: '/projects', label: 'projects' },
   { to: '/pricing', label: 'pricing' },
+  { to: '/blog', label: 'blog' },
 ]
 
 const menu: NavLink[] = [
