@@ -159,6 +159,15 @@ const summary = computed<string>(() =>
 const { checkout, busy, reason } = useBilling()
 const { isSignedIn } = useReader()
 
+// `isSignedIn` reads a cookie hint on the client and is always false on the
+// server, so anything rendered from it must wait for mount — otherwise a
+// signed-in reader hydrates against markup that says the opposite. Same guard
+// as the lesson page's `hydrated`.
+const hydrated = ref(false)
+onMounted(() => {
+  hydrated.value = true
+})
+
 const route = useRoute()
 
 async function buy(): Promise<void> {
@@ -286,7 +295,7 @@ async function buy(): Promise<void> {
            `buy`, so the card knew and asked anyway — a signed-in reader was
            being told to sign in, on the one card that is asking them to
            spend money. -->
-      <p v-if="!isSignedIn" class="wall__note">
+      <p v-if="!(hydrated && isSignedIn)" class="wall__note">
         Already a member?
         <NuxtLink to="/login">Sign in</NuxtLink>
       </p>
