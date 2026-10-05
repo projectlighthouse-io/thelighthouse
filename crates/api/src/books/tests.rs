@@ -233,6 +233,42 @@ async fn the_contents_list_covers_the_whole_lesson() {
 }
 
 #[tokio::test]
+async fn a_locked_section_names_its_place_and_peeks_without_telling() {
+    let lesson = json("/api/books/fixture-book/lessons/split-lesson").await;
+
+    // The fixture's one chapter, and the book's last lesson: nothing after it.
+    assert_eq!(at(&lesson, "/chapter_number"), 1);
+    assert_eq!(at(&lesson, "/more_lessons"), 0);
+    assert_eq!(at(&lesson, "/more_lesson_chapters"), 0);
+
+    // The first lesson has the split one still to come, in the same chapter.
+    let first = json("/api/books/fixture-book/lessons/free-lesson").await;
+    assert_eq!(at(&first, "/more_lessons"), 1);
+    assert_eq!(at(&first, "/more_lesson_chapters"), 1);
+
+    assert_eq!(at(&lesson, "/toc/0/n"), "01.1");
+    assert_eq!(at(&lesson, "/toc/2/n"), "01.3");
+    assert!(at(&lesson, "/toc/1/minutes").as_u64().unwrap() >= 1);
+
+    // An open section is on the page already, so it carries no peek.
+    assert!(lesson.pointer("/toc/0/peek").is_none(), "{lesson}");
+
+    // A locked one opens on its first paragraph, marked as cut.
+    assert_eq!(at(&lesson, "/toc/1/peek"), "Below the marker too…");
+    assert_eq!(
+        at(&lesson, "/toc/2/peek"),
+        "And so is this, which makes the withheld count two…"
+    );
+
+    // The paid paragraph under the *open* heading has no peek to ride out on,
+    // and must not find another way into the response.
+    assert!(
+        !lesson.to_string().contains("must never appear"),
+        "{lesson}"
+    );
+}
+
+#[tokio::test]
 async fn the_free_half_never_carries_the_paid_half() {
     let response = get("/api/books/fixture-book/lessons/split-lesson").await;
 
