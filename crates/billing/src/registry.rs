@@ -262,6 +262,7 @@ mod tests {
                     reference: "1",
                     email: "reader@example.com",
                     existing: None,
+                    promotion: None,
                 },
                 &Returns {
                     success: "https://example.com/paid".to_owned(),

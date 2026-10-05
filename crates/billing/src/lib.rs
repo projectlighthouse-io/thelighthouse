@@ -23,6 +23,7 @@
 //!     reference: &user.id.to_string(),
 //!     email: &user.email,
 //!     existing: user.customer_id.as_deref(),
+//!     promotion: None,
 //! }).await?;
 //! redirect(handoff.url);
 //!
