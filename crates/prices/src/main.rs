@@ -60,17 +60,17 @@ struct Declaration {
     plans: Vec<Declared>,
 }
 
-/// One purchasing-power tier: a percentage, and the countries it is meant for.
+/// One purchasing-power tier: how much off, and where it is offered.
 ///
 /// Declared inside the plan it discounts, so nothing here says which plans it
 /// covers — the nesting says it, and it becomes that plan's product in the
 /// coupon's `applies_to` at stripe. A code belongs to one plan: two plans
-/// naming it would be two entries able to disagree about the percentage, which
+/// naming it would be two entries able to disagree about the discount, which
 /// is the edit stripe refuses.
 ///
-/// **Two stripe objects, not one.** A coupon holds the percentage; a promotion
-/// code is the string a reader types. The api advertises the code and stripe
-/// resolves it — which is why the code is declared here and the coupon id is
+/// **Two stripe objects, not one.** A coupon holds the discount; a promotion
+/// code is the string a reader types. The api advertises the code and applies
+/// it at checkout — which is why the code is declared here and the coupon id is
 /// not: the code is a decision, the id is stripe's answer to it.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -78,12 +78,44 @@ struct DeclaredPpp {
     /// What the reader types at checkout. Also the coupon's lookup id, so one
     /// name identifies the tier everywhere.
     code: String,
-    /// Percent off, 1 to 99. A hundred is a free plan, which is a different
-    /// decision and not this one.
-    percent: u8,
-    /// ISO 3166-1 alpha-2, the same codes cloudflare reports. At least one —
-    /// a tier for everybody is not a purchasing-power tier.
+    /// Percent off, 1 to 99. Exactly one of this and `amount_off`.
+    #[serde(default)]
+    percent: Option<u8>,
+    /// Minor units off, in the catalogue's currency — 2000 is $20. Exactly one
+    /// of this and `percent`, and less than the plan's own amount: a discount
+    /// that takes the whole price is a free plan, a different decision.
+    #[serde(default)]
+    amount_off: Option<i64>,
+    /// ISO 3166-1 alpha-2, the same codes cloudflare reports. Empty only on
+    /// the rest tier.
+    #[serde(default)]
     countries: Vec<String>,
+    /// The plan's tier for every country its other tiers do not name — and for
+    /// a reader whose country is not known. Spelled out rather than an empty
+    /// list, so a list somebody emptied by accident is an error and not a
+    /// discount for everybody. At most one per plan.
+    #[serde(default)]
+    rest: bool,
+}
+
+impl DeclaredPpp {
+    /// How the tier reads in a log line: `10%` or `2000 usd`.
+    fn describe(&self, currency: &str) -> String {
+        match (self.percent, self.amount_off) {
+            (_, Some(amount)) => format!("{amount} {currency}"),
+            (Some(percent), None) => format!("{percent}%"),
+            (None, None) => "nothing".to_owned(),
+        }
+    }
+
+    /// Where the tier is offered, for a log line.
+    fn reach(&self) -> String {
+        if self.rest {
+            "every other country".to_owned()
+        } else {
+            self.countries.join(", ")
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -249,8 +281,14 @@ async fn run() -> Result<(), String> {
                 println!("\npurchasing power");
             }
 
-            let promotions =
-                apply_ppp(&client, &key, &declaration.plans, &resolved).await?;
+            let promotions = apply_ppp(
+                &client,
+                &key,
+                &declaration.plans,
+                &declaration.currency,
+                &resolved,
+            )
+            .await?;
 
             let output = std::env::var("BILLING_PLANS")
                 .unwrap_or_else(|_| DEFAULT_OUTPUT.to_owned());
@@ -375,16 +413,45 @@ fn check_ppp(plans: &[Declared], path: &str) -> Result<(), String> {
                 ));
             }
 
-            if !(1..=99).contains(&tier.percent) {
+            match (tier.percent, tier.amount_off) {
+                (Some(percent), None) if !(1..=99).contains(&percent) => {
+                    return Err(format!(
+                        "{path}: {} is {percent} percent off, which is not \
+                         between 1 and 99",
+                        tier.code
+                    ));
+                }
+                (None, Some(amount))
+                    if amount <= 0 || amount >= plan.amount =>
+                {
+                    return Err(format!(
+                        "{path}: {} takes {amount} off {}, which costs {} — an \
+                         amount off must leave something to pay",
+                        tier.code, plan.id, plan.amount
+                    ));
+                }
+                (Some(_), None) | (None, Some(_)) => {}
+                _ => {
+                    return Err(format!(
+                        "{path}: {} must give exactly one of percent and \
+                         amount_off",
+                        tier.code
+                    ));
+                }
+            }
+
+            if tier.rest && !tier.countries.is_empty() {
                 return Err(format!(
-                    "{path}: {} is {} percent off, which is not between 1 and 99",
-                    tier.code, tier.percent
+                    "{path}: {} is the rest tier and names countries too — the \
+                     rest tier is every country the others do not name",
+                    tier.code
                 ));
             }
 
-            if tier.countries.is_empty() {
+            if !tier.rest && tier.countries.is_empty() {
                 return Err(format!(
-                    "{path}: {} names no countries",
+                    "{path}: {} names no countries — the tier for everywhere \
+                     else is spelled `rest: true`",
                     tier.code
                 ));
             }
@@ -410,6 +477,13 @@ fn check_ppp(plans: &[Declared], path: &str) -> Result<(), String> {
                     ));
                 }
             }
+        }
+
+        if plan.ppp.iter().filter(|tier| tier.rest).count() > 1 {
+            return Err(format!(
+                "{path}: {} has more than one rest tier",
+                plan.id
+            ));
         }
     }
 
@@ -672,6 +746,7 @@ async fn apply_ppp(
     client: &reqwest::Client,
     key: &SecretString,
     plans: &[Declared],
+    currency: &str,
     resolved: &BTreeMap<String, Resolved>,
 ) -> Result<BTreeMap<String, String>, String> {
     let mut promotion_codes = BTreeMap::new();
@@ -704,12 +779,14 @@ async fn apply_ppp(
 
             match held {
                 Some(coupon)
-                    if coupon.percent_off == Some(f64::from(tier.percent))
+                    if coupon.discounts_like(tier, currency)
                         && coupon.products() == wanted =>
                 {
                     println!(
-                        "  {} agrees at {}% off on {}",
-                        tier.code, tier.percent, plan.id
+                        "  {} agrees at {} off on {}",
+                        tier.code,
+                        tier.describe(currency),
+                        plan.id
                     );
                 }
                 Some(coupon) if coupon.products() != wanted => {
@@ -723,19 +800,21 @@ async fn apply_ppp(
                         wanted
                     ));
                 }
-                Some(coupon) => {
+                Some(_) => {
                     return Err(format!(
-                        "{} is {}% off at stripe and {}% off in pricing.yaml. A \
-                         coupon's percentage cannot be changed — give the new rate \
-                         its own code, and stripe keeps honouring the old one for \
-                         anybody already on it.",
+                        "{} takes a different discount at stripe than the {} \
+                         off in pricing.yaml. A coupon's discount cannot be \
+                         changed — give the new one its own code, and stripe \
+                         keeps honouring the old one for anybody already on it.",
                         tier.code,
-                        coupon.percent_off.unwrap_or_default(),
-                        tier.percent
+                        tier.describe(currency)
                     ));
                 }
                 None => {
-                    create_coupon(client, key, tier, &plan.id, &wanted).await?;
+                    create_coupon(
+                        client, key, tier, &plan.id, currency, &wanted,
+                    )
+                    .await?;
                 }
             }
 
@@ -774,6 +853,12 @@ async fn apply_ppp(
 #[derive(Debug, serde::Deserialize)]
 struct HeldCoupon {
     percent_off: Option<f64>,
+    /// Minor units, for a coupon that takes a fixed amount off.
+    #[serde(default)]
+    amount_off: Option<i64>,
+    /// The currency `amount_off` is in. Absent on a percentage coupon.
+    #[serde(default)]
+    currency: Option<String>,
     /// Absent on a coupon that applies to everything, which is how stripe says
     /// "unrestricted" — not an empty product list.
     ///
@@ -786,6 +871,24 @@ struct HeldCoupon {
 }
 
 impl HeldCoupon {
+    /// Whether this coupon takes off what `tier` declares: the same percentage,
+    /// or the same amount in the same currency. A percentage coupon never
+    /// agrees with an amount tier or the other way round.
+    fn discounts_like(&self, tier: &DeclaredPpp, currency: &str) -> bool {
+        match (tier.percent, tier.amount_off) {
+            (Some(percent), None) => {
+                self.amount_off.is_none()
+                    && self.percent_off == Some(f64::from(percent))
+            }
+            (None, Some(amount)) => {
+                self.percent_off.is_none()
+                    && self.amount_off == Some(amount)
+                    && self.currency.as_deref() == Some(currency)
+            }
+            _ => false,
+        }
+    }
+
     /// The products this coupon is restricted to, sorted. Empty is every
     /// product, which no declared tier asks for any more — a tier names the one
     /// plan it is declared inside, so an unrestricted coupon held at stripe is
@@ -817,19 +920,33 @@ async fn create_coupon(
     key: &SecretString,
     tier: &DeclaredPpp,
     plan: &str,
+    currency: &str,
     products: &[String],
 ) -> Result<(), String> {
     let mut form = vec![
         ("id".to_owned(), tier.code.clone()),
-        ("percent_off".to_owned(), tier.percent.to_string()),
         // Forever, because the tier is about where somebody lives rather than
         // when they arrived.
         ("duration".to_owned(), "forever".to_owned()),
         (
             "name".to_owned(),
-            format!("{}% — purchasing power", tier.percent),
+            format!("{} off — regional pricing", tier.describe(currency)),
         ),
     ];
+
+    match (tier.percent, tier.amount_off) {
+        (_, Some(amount)) => {
+            form.push(("amount_off".to_owned(), amount.to_string()));
+            form.push(("currency".to_owned(), currency.to_owned()));
+        }
+        (Some(percent), None) => {
+            form.push(("percent_off".to_owned(), percent.to_string()));
+        }
+        // `check_ppp` refuses a tier with neither before anything is sent.
+        (None, None) => {
+            return Err(format!("{} declares no discount", tier.code));
+        }
+    }
 
     // The plan the tier is declared inside, and only that one.
     for (i, product) in products.iter().enumerate() {
@@ -838,7 +955,12 @@ async fn create_coupon(
 
     let _: Created = post(client, key, "/v1/coupons", &form).await?;
 
-    println!("  {} created at {}% off on {plan}", tier.code, tier.percent);
+    println!(
+        "  {} created at {} off on {plan}, for {}",
+        tier.code,
+        tier.describe(currency),
+        tier.reach()
+    );
 
     Ok(())
 }
@@ -984,13 +1106,27 @@ fn write(
                         format!("{} was never resolved", tier.code)
                     })?;
 
+                let off = match (tier.percent, tier.amount_off) {
+                    (_, Some(amount)) => format!("amount_off: {amount}"),
+                    (Some(percent), None) => format!("percent: {percent}"),
+                    (None, None) => {
+                        return Err(format!(
+                            "{} declares no discount",
+                            tier.code
+                        ));
+                    }
+                };
+                let reach = if tier.rest {
+                    "rest: true".to_owned()
+                } else {
+                    format!("countries: [{}]", tier.countries.join(", "))
+                };
+
                 let _ = write!(
                     tiers,
                     "      - code: {}\n        promotion: {promotion}\n        \
-                     percent: {}\n        countries: [{}]\n",
+                     {off}\n        {reach}\n",
                     tier.code,
-                    tier.percent,
-                    tier.countries.join(", "),
                 );
             }
         }
@@ -1217,8 +1353,25 @@ mod tests {
     fn tier(code: &str, percent: u8, countries: &[&str]) -> DeclaredPpp {
         DeclaredPpp {
             code: code.to_owned(),
-            percent,
+            percent: Some(percent),
+            amount_off: None,
             countries: countries.iter().map(|c| (*c).to_owned()).collect(),
+            rest: false,
+        }
+    }
+
+    fn amount_tier(code: &str, off: i64, countries: &[&str]) -> DeclaredPpp {
+        DeclaredPpp {
+            percent: None,
+            amount_off: Some(off),
+            ..tier(code, 1, countries)
+        }
+    }
+
+    fn rest_tier(code: &str, off: i64) -> DeclaredPpp {
+        DeclaredPpp {
+            rest: true,
+            ..amount_tier(code, off, &[])
         }
     }
 
@@ -1269,10 +1422,9 @@ mod tests {
 
     #[test]
     fn a_tier_naming_no_countries_is_refused() {
-        // No catch-all. A discount for everybody is a list price with a
-        // discount off it, which is a different decision from purchasing
-        // power and must not be spelled as an empty list — least of all by
-        // somebody who emptied one by accident.
+        // The catch-all is spelled `rest: true`, never as an empty list — so a
+        // list somebody emptied by accident is an error rather than a discount
+        // for everybody.
         let refused =
             check_ppp(&with(vec![tier("EVERYONE", 50, &[])]), "pricing.yaml")
                 .unwrap_err();
@@ -1286,6 +1438,8 @@ mod tests {
         // an empty list — so the two have to read the same way here.
         let unrestricted = HeldCoupon {
             percent_off: Some(50.0),
+            amount_off: None,
+            currency: None,
             applies_to: None,
         };
 
@@ -1297,6 +1451,8 @@ mod tests {
         // Neither side promises an order, so both are sorted before comparing.
         let held = HeldCoupon {
             percent_off: Some(50.0),
+            amount_off: None,
+            currency: None,
             applies_to: Some(AppliesTo {
                 products: vec!["prod_b".to_owned(), "prod_a".to_owned()],
             }),
@@ -1352,6 +1508,100 @@ mod tests {
         let refused = check_ppp(&clash, "pricing.yaml").unwrap_err();
 
         assert!(refused.contains("SHARED"), "{refused}");
+    }
+
+    #[test]
+    fn a_rest_tier_names_no_countries_and_is_accepted() {
+        let plans = with(vec![
+            amount_tier("LOWER", 2500, &["IN"]),
+            rest_tier("EVERYONE", 1000),
+        ]);
+
+        assert!(check_ppp(&plans, "pricing.yaml").is_ok());
+    }
+
+    #[test]
+    fn a_rest_tier_that_also_names_countries_is_refused() {
+        let both = DeclaredPpp {
+            countries: vec!["IN".to_owned()],
+            ..rest_tier("EVERYONE", 1000)
+        };
+
+        assert!(check_ppp(&with(vec![both]), "pricing.yaml").is_err());
+    }
+
+    #[test]
+    fn a_plan_has_at_most_one_rest_tier() {
+        let two = with(vec![rest_tier("A", 1000), rest_tier("B", 2000)]);
+
+        assert!(check_ppp(&two, "pricing.yaml").is_err());
+    }
+
+    #[test]
+    fn a_tier_gives_exactly_one_of_percent_and_amount() {
+        let both = DeclaredPpp {
+            amount_off: Some(1000),
+            ..tier("A", 10, &["IN"])
+        };
+        let neither = DeclaredPpp {
+            percent: None,
+            ..tier("B", 10, &["IN"])
+        };
+
+        assert!(check_ppp(&with(vec![both]), "pricing.yaml").is_err());
+        assert!(check_ppp(&with(vec![neither]), "pricing.yaml").is_err());
+    }
+
+    #[test]
+    fn an_amount_off_must_leave_something_to_pay() {
+        // `with` declares rust_yearly at 4900: taking all of it, or more, or
+        // nothing, is not a discount.
+        for wrong in [0, 4900, 6000] {
+            assert!(
+                check_ppp(
+                    &with(vec![amount_tier("A", wrong, &["IN"])]),
+                    "pricing.yaml"
+                )
+                .is_err(),
+                "{wrong} off was accepted"
+            );
+        }
+        assert!(
+            check_ppp(
+                &with(vec![amount_tier("A", 4800, &["IN"])]),
+                "pricing.yaml"
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_held_coupon_agrees_only_with_the_same_discount() {
+        let amount = HeldCoupon {
+            percent_off: None,
+            amount_off: Some(2000),
+            currency: Some("usd".to_owned()),
+            applies_to: None,
+        };
+        let percent = HeldCoupon {
+            percent_off: Some(10.0),
+            amount_off: None,
+            currency: None,
+            applies_to: None,
+        };
+
+        assert!(amount.discounts_like(&amount_tier("A", 2000, &["IN"]), "usd"));
+        assert!(
+            !amount.discounts_like(&amount_tier("A", 2500, &["IN"]), "usd")
+        );
+        assert!(
+            !amount.discounts_like(&amount_tier("A", 2000, &["IN"]), "gbp")
+        );
+        assert!(!amount.discounts_like(&tier("A", 10, &["IN"]), "usd"));
+        assert!(percent.discounts_like(&tier("A", 10, &["IN"]), "usd"));
+        assert!(
+            !percent.discounts_like(&amount_tier("A", 2000, &["IN"]), "usd")
+        );
     }
 
     #[test]
