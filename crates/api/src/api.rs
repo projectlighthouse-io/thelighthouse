@@ -4,8 +4,9 @@
 //! top to bottom should be enough to say what any request can reach — which is
 //! why the layering lives here and not spread across the modules being mounted.
 //!
-//! Content is `books`. The entitlement and payment endpoints from
-//! docs/rebuild.md replace the stub routes below.
+//! Each feature module — `projects`, `books`, `payments` and the rest — owns
+//! its own routes; this builds the router from them and puts the gates around
+//! them.
 
 use std::sync::Arc;
 
