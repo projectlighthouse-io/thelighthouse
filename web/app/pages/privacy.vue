@@ -18,7 +18,7 @@ useJsonLd('page', {
     <header class="lh-head">
       <p class="lh-eyebrow">legal</p>
       <h1 class="lh-h1">Privacy Policy</h1>
-      <p class="lh-sub">Last updated: February 2026</p>
+      <p class="lh-sub">Last updated: October 2026</p>
     </header>
 
     <div class="lesson-content body is-legal">
@@ -56,33 +56,29 @@ useJsonLd('page', {
 
             <h2>Analytics</h2>
             <p>
-              We use <strong>Google Analytics</strong> to understand which pages
-              people visit, how they found us, and what devices they're using.
-              This data is aggregated and anonymous. I can't see <em>you</em>
+              We use <strong>Cloudflare Web Analytics</strong> to understand
+              which pages people visit, where they came from, and what devices
+              they're using. It sets no cookies, doesn't fingerprint you, and
+              doesn't follow you to other sites. I can't see <em>you</em>
               specifically&mdash;I can see that 40 people read the memory
               management chapter last Tuesday. That helps me know what to write
               next.
             </p>
             <p>
-              If you have concerns about this, please reach out. I'm open to
-              building a custom analytics solution if there's enough reason to.
-            </p>
-            <p>
-              Google Analytics uses cookies to do this. You can opt out by
-              installing the
-              <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">Google
-                Analytics Opt-out Add-on</a>, or by adjusting your browser's
-              cookie settings.
+              The site sits behind Cloudflare anyway, so this adds no new party
+              handling your visits. You can read how it works in
+              <a href="https://www.cloudflare.com/web-analytics/" target="_blank" rel="noopener">Cloudflare's
+                own description</a>. If you block its script, nothing on the site
+              breaks.
             </p>
 
             <h2>Cookies</h2>
             <p>
-              We use cookies for two things: keeping you logged in (session
-              cookies) and analytics (Google Analytics cookies). That's the full
-              list. No tracking pixels following you around the internet, no
-              advertising cookies, no third-party ad networks. If you block
-              cookies, the site will still work&mdash;you'll just need to log in
-              each time.
+              We use cookies for one thing: keeping you signed in. That's the
+              full list. No analytics cookies, no tracking pixels following you
+              around the internet, no advertising cookies, no third-party ad
+              networks. If you block cookies, the site still works&mdash;you
+              just can't stay signed in.
             </p>
 
             <h2>Your notes and progress</h2>
@@ -122,8 +118,8 @@ useJsonLd('page', {
                   <td>Payment and billing info</td>
                 </tr>
                 <tr>
-                  <td>Google Analytics</td>
-                  <td>Anonymous usage data</td>
+                  <td>Cloudflare</td>
+                  <td>Every request, as the network in front of the site, and anonymous, cookieless page views (Web Analytics)</td>
                 </tr>
                 <tr>
                   <td>Kit (ConvertKit)</td>
@@ -155,8 +151,8 @@ useJsonLd('page', {
             <hr>
             <p>
               The short version of all of this: I don't collect your data
-              myself&mdash;services like Google Analytics handle usage tracking,
-              and I only view aggregated info on their dashboards. Nothing is
+              myself&mdash;Cloudflare's cookieless analytics handle usage
+              counts, and I only view aggregated numbers on its dashboard. Nothing is
               sold. If you have questions, I'm reachable.
             </p>
             <p>&mdash; Aryan</p>
