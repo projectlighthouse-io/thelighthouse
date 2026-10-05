@@ -280,12 +280,18 @@ pub(crate) async fn delete(
 /// `LEFT JOIN` leaves both booleans null when no parent was asked for *and*
 /// when the id names nothing — the caller knows which it meant.
 ///
+/// **A parent is only joined if the reader may see it**: public, or their
+/// own. Otherwise a reader could reply into another reader's private note by
+/// guessing its id — and the answer is the same as for an id that names
+/// nothing, so the refusal does not confirm the note exists.
+///
 /// `None` means no such book or lesson.
 pub(crate) async fn lesson_and_parent(
     db: &PgPool,
     book: &str,
     lesson: &str,
     parent_id: Option<i64>,
+    reader: i64,
 ) -> Result<Option<(Uuid, Option<bool>, Option<bool>)>, StoreError> {
     Ok(sqlx::query_as::<_, (Uuid, Option<bool>, Option<bool>)>(
         r"
@@ -295,6 +301,7 @@ pub(crate) async fn lesson_and_parent(
         FROM lessons l
         JOIN books b ON b.id = l.book_id
         LEFT JOIN notes p ON p.id = $3
+                         AND (p.is_public OR p.user_id = $4)
         WHERE b.slug = $1
           AND l.slug = $2
         ",
@@ -302,6 +309,7 @@ pub(crate) async fn lesson_and_parent(
     .bind(book)
     .bind(lesson)
     .bind(parent_id)
+    .bind(reader)
     .fetch_optional(db)
     .await?)
 }

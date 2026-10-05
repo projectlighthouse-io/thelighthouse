@@ -23,15 +23,20 @@ pub(crate) enum NoteTarget {
 }
 
 /// Resolves the lesson from its slugs and checks the parent in one query.
+///
+/// `reader` is who is replying: a parent somebody else kept private is
+/// answered as missing, the same as a note id that names nothing.
 pub(crate) async fn resolve(
     db: &PgPool,
     payload: &NewNoteRequest,
+    reader: i64,
 ) -> NoteTarget {
     let found = store::lesson_and_parent(
         db,
         &payload.book,
         &payload.lesson,
         payload.parent_id,
+        reader,
     )
     .await;
 

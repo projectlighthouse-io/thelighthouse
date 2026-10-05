@@ -107,12 +107,13 @@ pub(crate) async fn create(
         Err(refused) => return refuse_all(&refused),
     };
 
-    let lesson_id = match target::resolve(&state.db, &payload).await {
-        NoteTarget::LessonId(id) => id,
-        NoteTarget::Missing => return response::not_found(),
-        NoteTarget::Refused(cause_of) => return refuse(cause_of),
-        NoteTarget::Failed => return response::server_error(),
-    };
+    let lesson_id =
+        match target::resolve(&state.db, &payload, session.user_id).await {
+            NoteTarget::LessonId(id) => id,
+            NoteTarget::Missing => return response::not_found(),
+            NoteTarget::Refused(cause_of) => return refuse(cause_of),
+            NoteTarget::Failed => return response::server_error(),
+        };
 
     let saved = store::insert(
         &state.db,
