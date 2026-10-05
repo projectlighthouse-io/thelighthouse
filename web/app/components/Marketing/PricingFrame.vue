@@ -200,11 +200,12 @@ const IMAGE = '/pricing-lighthouse.jpg'
               <span class="per">
                 {{ panel.lead?.recurring === false ? 'once · forever' : `per year · ${panel.count} books` }}
               </span>
-              <!-- Applied for the reader at checkout — the same tier this
-                   panel shows — so there is no code to type. Beside the plan
-                   it comes off, since a coupon is restricted to one plan. -->
+              <!-- Advertised, not applied: the reader types the code at
+                   stripe. Beside the plan it comes off, since a coupon is
+                   restricted to one plan and two panels can differ. -->
               <span v-if="couponFor(panel.lead)" class="coupon">
-                {{ offLabel(couponFor(panel.lead)!) }}, applied at checkout
+                {{ offLabel(couponFor(panel.lead)!) }} — enter
+                <code>{{ couponFor(panel.lead)?.code }}</code> at checkout
               </span>
             </div>
           </div>

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { PppOffer } from '@/types/Content'
+import { tracks } from '@/data/Tracks'
 
 /**
- * The purchasing-power banner.
+ * The discount banner: the code for each plan and what it takes off, typed at
+ * checkout. Shown whenever a plan is discounted for this reader — the
+ * everyone-else price included — unless DISCOUNT_BANNER=false switches it off.
  *
  * Fetched in the browser, never during SSR: the offer depends on where the
  * reader is, and the pages around it are prerendered or edge-cached for
@@ -15,15 +18,30 @@ const offer = ref<PppOffer | null>(null)
 const dismissed = ref(true)
 
 const countryName = computed<string>(() => {
-  if (!offer.value) return ''
+  const country = offer.value?.country
+  if (!country) return ''
 
   try {
-    return new Intl.DisplayNames(['en'], { type: 'region' }).of(offer.value.country) ?? offer.value.country
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(country) ?? country
   }
   catch {
-    return offer.value.country
+    return country
   }
 })
+
+/**
+ * The one offer the banner advertises: the plan "Get Pro" sells. Every plan's
+ * code is still on its own pricing panel; the banner is one line, not a list.
+ */
+const lead = computed(() => offer.value?.offers.find(o => o.plan === PRO_PLAN) ?? null)
+
+/** `foundation_yearly` reads as Foundations — the name its panel carries. */
+function planName(plan: string): string {
+  const track = plan.slice(0, plan.lastIndexOf('_'))
+
+  return tracks.find(t => t.key === track)?.name ?? plan
+}
+
 
 onMounted(async () => {
   try {
@@ -51,11 +69,18 @@ function dismiss(): void {
 </script>
 
 <template>
-  <div v-if="offer && !dismissed" class="ppp lh-figure">
+  <div v-if="offer && lead && !dismissed" class="ppp lh-figure">
     <div class="bar" role="region" aria-label="regional pricing">
-      <p>
-        Prices are adjusted for <strong>{{ countryName }}</strong>. The lower price is applied
-        automatically at checkout — see <NuxtLink to="/pricing" class="lh-inline">pricing</NuxtLink>.
+      <!-- Two offers, two messages: a country with prices of its own hears
+           why, everyone else hears it as the launch price it is. -->
+      <p v-if="!lead.rest">
+        <template v-if="countryName">You're in <strong>{{ countryName }}</strong>, so </template>
+        {{ planName(lead.plan) }} is priced for where you live: use
+        <code>{{ lead.code }}</code> at checkout for <strong>{{ offLabel(lead) }}</strong>.
+      </p>
+      <p v-else>
+        Launch offer: use <code>{{ lead.code }}</code> at checkout for
+        <strong>{{ offLabel(lead) }}</strong> {{ planName(lead.plan) }}.
       </p>
       <button type="button" class="dismiss" aria-label="dismiss" @click="dismiss">
         ✕

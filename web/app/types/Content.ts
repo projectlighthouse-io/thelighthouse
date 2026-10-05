@@ -238,11 +238,15 @@ export interface LessonResponse {
 }
 
 /** The purchasing-power offer for the reader's country, as `/_api/billing/offer` sends it. */
-/** A country with prices of its own: the banner names it. Nothing to type —
- *  checkout applies the reader's tier. */
+/**
+ * What the top banner advertises: each plan's code and discount for the asker,
+ * and their country when it is known. The reader types the code at checkout.
+ */
 export interface PppOffer {
-  /** ISO 3166 alpha-2. The page turns it into a name. */
-  country: string
+  /** ISO 3166 alpha-2, from cloudflare; null when it sent none. */
+  country: string | null
+  /** `rest`: the everyone-else tier, rather than one that names the country. */
+  offers: { plan: string, code: string, rest: boolean, percent?: number, amount_off?: number }[]
 }
 
 /** One row of a contents list — a lesson, a stage. */
