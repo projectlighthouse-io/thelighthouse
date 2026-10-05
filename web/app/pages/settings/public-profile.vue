@@ -37,6 +37,10 @@ interface Editable {
 
 const MAX = { tagline: 160, bio: 1000, short: 255, location: 120 }
 
+const fields = [
+  'tagline', 'bio', 'company', 'education', 'location', 'linkedin_url', 'x_url', 'website_url',
+] as const
+
 const form = reactive<Editable>({
   tagline: '',
   bio: '',
@@ -51,8 +55,16 @@ const form = reactive<Editable>({
 const username = ref<string | null>(null)
 const githubUsername = ref<string | null>(null)
 const busy = ref(false)
+/** Loading, which has no field to point at. */
 const problem = ref('')
+const errors = useFieldErrors(fields)
 const saved = ref(false)
+/**
+ * Whether the stored profile reached the form. Save stays off until it has:
+ * the api writes every field it is sent, so saving a form that never loaded
+ * would send eight blanks and wipe the profile.
+ */
+const loaded = ref(false)
 
 function fill(profile: Profile) {
   // Null is "not written", and an input's value is a string; the two meet here
@@ -73,17 +85,18 @@ function fill(profile: Profile) {
 onMounted(async () => {
   try {
     fill(await $fetch<Profile>('/api/settings/profile'))
+    loaded.value = true
   }
   catch {
-    problem.value = 'Could not load your profile.'
+    problem.value = 'Could not load your profile. Reload the page before editing it.'
   }
 })
 
 async function save() {
-  if (busy.value) return
+  if (busy.value || !loaded.value) return
 
   busy.value = true
-  problem.value = ''
+  errors.clear()
   saved.value = false
 
   try {
@@ -97,9 +110,7 @@ async function save() {
     saved.value = true
   }
   catch (error: unknown) {
-    // The api's wording when it sent one: it names the field that was wrong.
-    problem.value = (error as { data?: { error?: string } })?.data?.error
-      ?? 'Could not save your profile.'
+    errors.take(error, 'Could not save your profile.')
   }
   finally {
     busy.value = false
@@ -121,7 +132,10 @@ async function save() {
         </dl>
       </div>
 
-      <form class="form" @submit.prevent="save">
+      <!-- `novalidate`: the api is the judge, and its refusals are drawn beside
+           each field; the browser's own bubbles would say something else, in
+           another place, for only some of them. -->
+      <form class="form" novalidate @submit.prevent="save">
         <label class="lh-field">
           <span class="lh-label">tagline</span>
           <input
@@ -129,12 +143,20 @@ async function save() {
             type="text"
             :maxlength="MAX.tagline"
             placeholder="One line about you"
-            class="lh-input"
+            class="lh-input"            :aria-invalid="!!errors.fields.value.tagline"
           >
+          <span v-if="errors.fields.value.tagline" class="lh-error" role="alert">{{ errors.fields.value.tagline }}</span>
         </label>
         <label class="lh-field">
           <span class="lh-label">bio</span>
-          <textarea v-model="form.bio" rows="3" :maxlength="MAX.bio" class="lh-input" />
+          <textarea
+            v-model="form.bio"
+            rows="3"
+            :maxlength="MAX.bio"
+            class="lh-input"
+            :aria-invalid="!!errors.fields.value.bio"
+          />
+          <span v-if="errors.fields.value.bio" class="lh-error" role="alert">{{ errors.fields.value.bio }}</span>
         </label>
         <label class="lh-field">
           <span class="lh-label">company</span>
@@ -142,8 +164,9 @@ async function save() {
             v-model="form.company"
             type="text"
             :maxlength="MAX.short"
-            class="lh-input"
+            class="lh-input"            :aria-invalid="!!errors.fields.value.company"
           >
+          <span v-if="errors.fields.value.company" class="lh-error" role="alert">{{ errors.fields.value.company }}</span>
         </label>
         <label class="lh-field">
           <span class="lh-label">education</span>
@@ -151,8 +174,9 @@ async function save() {
             v-model="form.education"
             type="text"
             :maxlength="MAX.short"
-            class="lh-input"
+            class="lh-input"            :aria-invalid="!!errors.fields.value.education"
           >
+          <span v-if="errors.fields.value.education" class="lh-error" role="alert">{{ errors.fields.value.education }}</span>
         </label>
         <label class="lh-field">
           <span class="lh-label">location</span>
@@ -161,8 +185,9 @@ async function save() {
             type="text"
             :maxlength="MAX.location"
             placeholder="City, country"
-            class="lh-input"
+            class="lh-input"            :aria-invalid="!!errors.fields.value.location"
           >
+          <span v-if="errors.fields.value.location" class="lh-error" role="alert">{{ errors.fields.value.location }}</span>
         </label>
         <label class="lh-field">
           <span class="lh-label">linkedin</span>
@@ -171,8 +196,9 @@ async function save() {
             type="url"
             :maxlength="MAX.short"
             placeholder="https://linkedin.com/in/your-handle"
-            class="lh-input"
+            class="lh-input"            :aria-invalid="!!errors.fields.value.linkedin_url"
           >
+          <span v-if="errors.fields.value.linkedin_url" class="lh-error" role="alert">{{ errors.fields.value.linkedin_url }}</span>
         </label>
         <label class="lh-field">
           <span class="lh-label">x</span>
@@ -181,8 +207,9 @@ async function save() {
             type="url"
             :maxlength="MAX.short"
             placeholder="https://x.com/your-handle"
-            class="lh-input"
+            class="lh-input"            :aria-invalid="!!errors.fields.value.x_url"
           >
+          <span v-if="errors.fields.value.x_url" class="lh-error" role="alert">{{ errors.fields.value.x_url }}</span>
         </label>
         <label class="lh-field">
           <span class="lh-label">website</span>
@@ -191,16 +218,18 @@ async function save() {
             type="url"
             :maxlength="MAX.short"
             placeholder="https://yourdomain.dev"
-            class="lh-input"
+            class="lh-input"            :aria-invalid="!!errors.fields.value.website_url"
           >
+          <span v-if="errors.fields.value.website_url" class="lh-error" role="alert">{{ errors.fields.value.website_url }}</span>
         </label>
 
         <div class="actions">
-          <UiButton type="submit" variant="inverse" size="lg" :disabled="busy">
+          <UiButton type="submit" variant="inverse" size="lg" :disabled="busy || !loaded">
             {{ busy ? 'Saving…' : 'Save' }}
           </UiButton>
           <span v-if="saved" class="lh-hint" role="status">Saved.</span>
           <span v-if="problem" class="lh-error" role="alert">{{ problem }}</span>
+          <span v-if="errors.message.value" class="lh-error" role="alert">{{ errors.message.value }}</span>
         </div>
       </form>
     </div>

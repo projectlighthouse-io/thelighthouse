@@ -25,7 +25,10 @@ interface Minted extends Token {
 const tokens = ref<Token[]>([])
 const name = ref('')
 const busy = ref(false)
+/** Loading and revoking, which have no field to point at. */
 const problem = ref('')
+/** Creating one: the name field, and anything else the api says. */
+const errors = useFieldErrors(['name'])
 
 /**
  * The one time the secret exists outside the api's response.
@@ -55,6 +58,7 @@ async function create() {
 
   busy.value = true
   problem.value = ''
+  errors.clear()
 
   try {
     justMinted.value = await $fetch<Minted>('/api/settings/tokens', {
@@ -67,10 +71,7 @@ async function create() {
     await load()
   }
   catch (error: unknown) {
-    // The api's refusal wording, when it sent one — it is written for a person
-    // and is more use than anything this page could invent.
-    problem.value = (error as { data?: { error?: string } })?.data?.error
-      ?? 'Could not create the token.'
+    errors.take(error, 'Could not create the token.')
   }
   finally {
     busy.value = false
@@ -151,11 +152,14 @@ const when = (at: string | null): string =>
           placeholder="What is it for? e.g. my laptop"
           maxlength="60"
           class="lh-input"
+          :aria-invalid="!!errors.fields.value.name"
         >
         <UiButton type="submit" variant="inverse" size="md" :disabled="busy || !name.trim()">
           Create token
         </UiButton>
       </form>
+      <p v-if="errors.fields.value.name" class="lh-error" role="alert">{{ errors.fields.value.name }}</p>
+      <p v-if="errors.message.value" class="lh-error" role="alert">{{ errors.message.value }}</p>
 
       <ul v-if="tokens.length" class="tokens">
         <li v-for="token in tokens" :key="token.id" class="lh-card item">
