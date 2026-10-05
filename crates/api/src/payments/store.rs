@@ -108,6 +108,37 @@ pub(crate) async fn reader_of(
     Ok(found.map(|(id,)| id))
 }
 
+/// The reader a Stripe customer id belongs to.
+///
+/// `users.stripe_id` is Stripe's and nobody else's (see [`customer`]), so this
+/// is only ever asked on behalf of the stripe provider.
+///
+/// Two readers holding the same customer id is a state the column does not
+/// prevent, and guessing between them would hand one reader's subscription to
+/// the other. Either one reader, or nobody.
+pub(crate) async fn reader_by_customer(
+    db: &PgPool,
+    customer: &str,
+) -> Result<Option<i64>, sqlx::Error> {
+    let found: Vec<(i64,)> =
+        sqlx::query_as("SELECT id FROM users WHERE stripe_id = $1 LIMIT 2")
+            .bind(customer)
+            .fetch_all(db)
+            .await?;
+
+    match found.as_slice() {
+        [(id,)] => Ok(Some(*id)),
+        [] => Ok(None),
+        _ => {
+            tracing::warn!(
+                customer,
+                "more than one reader holds this stripe customer; naming none"
+            );
+            Ok(None)
+        }
+    }
+}
+
 /// Grant a reader every book in a bundle, forever.
 ///
 /// One statement rather than one per book: a purchase that granted four books

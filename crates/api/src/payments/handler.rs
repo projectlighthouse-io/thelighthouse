@@ -606,6 +606,12 @@ async fn grant_track(
 /// deliveries have no guaranteed order, and the subscription can be announced
 /// before the checkout that created it. The stored row is the fallback for a
 /// subscription made outside this application, which carries no reference.
+///
+/// The customer is the last resort, and only for Stripe. A subscription sold by
+/// the laravel app carries no reference and has no row until its first event
+/// arrives here, so without this a reader who renews one is never recorded and
+/// loses access. Stripe's customer id is the one thing both applications wrote
+/// down, in `users.stripe_id`.
 async fn owner(
     state: &AppState,
     provider: &str,
@@ -615,7 +621,18 @@ async fn owner(
         return Ok(Some(user_id));
     }
 
-    store::reader_of(&state.db, provider, &subscription.reference).await
+    if let Some(user_id) =
+        store::reader_of(&state.db, provider, &subscription.reference).await?
+    {
+        return Ok(Some(user_id));
+    }
+
+    match subscription.customer.as_deref() {
+        Some(customer) if provider == billing::drivers::stripe::NAME => {
+            store::reader_by_customer(&state.db, customer).await
+        }
+        _ => Ok(None),
+    }
 }
 
 /// Our own reference, back as the id it was made from.
