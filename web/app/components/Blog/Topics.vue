@@ -52,7 +52,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
     <span
       v-for="topic in modelValue"
       :key="topic"
-      class="inline-flex items-center gap-1.5 rounded-md bg-paper-warm py-1 pr-1.5 pl-2.5 text-[13px] text-ink ring-1 ring-rule-soft"
+      class="inline-flex items-center gap-1.5 rounded-sm bg-paper-warm py-1 pr-1.5 pl-2.5 text-[13px] leading-5 text-ink ring-1 ring-rule-soft"
     >
       {{ topic }}
       <button
@@ -73,7 +73,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
       v-if="!full && available.length"
       type="button"
       title="add a topic"
-      class="flex size-6 cursor-pointer items-center justify-center rounded-md text-base leading-none text-faint ring-1 ring-rule-soft transition hover:bg-paper-warm hover:text-ink"
+      class="flex size-7 cursor-pointer items-center justify-center rounded-sm text-base leading-none text-faint ring-1 ring-rule-soft transition hover:bg-paper-warm hover:text-ink"
       @click="picking = !picking"
     >
       <span aria-hidden="true">+</span>
@@ -88,13 +88,13 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
          had almost no edge and the whole panel looked washed out. -->
     <div
       v-if="picking"
-      class="absolute top-full left-0 z-10 mt-2 flex w-max max-w-full flex-wrap gap-1 rounded-lg bg-ink p-1.5 shadow-lg"
+      class="absolute top-full left-0 z-10 mt-2 flex w-max max-w-full flex-wrap gap-1 rounded-md bg-ink p-1.5 shadow-lg"
     >
       <button
         v-for="topic in available"
         :key="topic"
         type="button"
-        class="cursor-pointer rounded-md px-2.5 py-1.5 text-[13px] leading-none text-on-ink/70 transition hover:bg-on-ink/15 hover:text-on-ink"
+        class="cursor-pointer rounded-sm px-2.5 py-1.5 text-[13px] leading-none text-on-ink/70 transition hover:bg-on-ink/15 hover:text-on-ink"
         @click="add(topic)"
       >
         {{ topic }}

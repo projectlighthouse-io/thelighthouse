@@ -1,6 +1,14 @@
 <script setup lang="ts">
 const { resolve } = useReader()
 
+/**
+ * `definePageMeta({ chrome: false })`: no footer, and from `lg` up the page is
+ * exactly the viewport tall, so a full-height tool — the article editor — fits
+ * without the document scrolling around it.
+ */
+const route = useRoute()
+const bare = computed<boolean>(() => route.meta.chrome === false)
+
 // Client side, after hydration: the header is the only per-reader thing on an
 // otherwise identical page, and asking during SSR would make every page
 // uncacheable to render one avatar. See useReader.
@@ -25,7 +33,7 @@ useJsonLd('site', {
 </script>
 
 <template>
-  <div class="site">
+  <div class="site" :class="{ 'site--bare': bare }">
     <PppBanner />
     <SiteHeader />
 
@@ -33,7 +41,7 @@ useJsonLd('site', {
       <slot />
     </main>
 
-    <SiteFooter />
+    <SiteFooter v-if="!bare" />
   </div>
 </template>
 
@@ -53,4 +61,9 @@ useJsonLd('site', {
 }
 
 .main > :deep(*) { width: 100%; }
+
+@media (min-width: 1024px) {
+  .site--bare { height: 100dvh; min-height: 0; }
+  .site--bare .main { min-height: 0; }
+}
 </style>

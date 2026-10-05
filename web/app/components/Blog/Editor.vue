@@ -98,7 +98,7 @@ function cancel(): void {
 
 <template>
   <form
-    class="lg:grid lg:h-[calc(100vh-4rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
+    class="editor lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
     @submit.prevent="emit('submit')"
   >
     <ArtPanel :caption="caption" />
@@ -163,7 +163,7 @@ function cancel(): void {
             maxlength="200"
             required
             placeholder="Title"
-            class="masthead-title w-full border-0 bg-transparent p-0 outline-none placeholder:text-faint"
+            class="bare-field masthead-title w-full border-0 bg-transparent p-0 outline-none placeholder:text-faint"
             :aria-invalid="!!fieldErrors.title"
             @input="emit('update:title', ($event.target as HTMLInputElement).value)"
           >
@@ -183,7 +183,7 @@ function cancel(): void {
             maxlength="200"
             required
             placeholder="Add a subtitle"
-            class="dek-face w-full border-0 bg-transparent p-0 text-quiet outline-none placeholder:text-faint"
+            class="bare-field dek-face w-full border-0 bg-transparent p-0 text-quiet outline-none placeholder:text-faint"
             :aria-invalid="!!fieldErrors.subtitle"
             @input="emit('update:subtitle', ($event.target as HTMLInputElement).value)"
           >
@@ -221,33 +221,31 @@ function cancel(): void {
         <div
           class="-mx-6 mt-8 flex items-center justify-end gap-5 rounded-b-xl bg-page px-6 py-4 sm:-mx-10 sm:px-10 lg:mt-0 lg:shrink-0"
         >
-          <button
-            type="button"
-            class="dek-face cursor-pointer rounded-md border-0 bg-transparent px-4 py-2 text-faint transition hover:bg-paper-warm hover:text-ink"
-            @click="cancel"
-          >
-            cancel
-          </button>
+          <UiButton variant="ghost" size="sm" @click="cancel">cancel</UiButton>
 
-          <!-- Disabled is muted, not faded out. `opacity-40` on a solid button
-               leaves something that reads as broken rather than as "not yet" —
-               and this is the state an author sees for as long as the article
-               is unfinished, which is most of the time they are on the page.
-               A filled grey button at full opacity still says "this is the
-               thing you press", and `title` says what is missing. -->
-          <button
+          <!-- The site's own button, so publishing looks like every other
+               primary action. `title` says what is missing while disabled. -->
+          <UiButton
             type="submit"
+            variant="inverse"
+            size="sm"
             :disabled="!canSubmit"
             :title="canSubmit ? undefined : 'add a title, a subtitle, a topic and some words first'"
-            class="dek-face cursor-pointer rounded-md border-0 px-6 py-2 font-medium transition disabled:cursor-not-allowed"
-            :class="canSubmit
-              ? 'bg-ink text-on-ink hover:opacity-85'
-              : 'bg-paper-edge text-faint'"
           >
             {{ pending ? 'saving…' : action }}
-          </button>
+          </UiButton>
         </div>
       </div>
     </div>
   </form>
 </template>
+
+<style scoped>
+/* Borderless fields that read as the heading and prose they become: the
+   caret is the focus cue, and the site-wide focus ring would draw a box
+   around a title that is meant not to look like a form control. */
+.bare-field:focus-visible,
+.editor :deep(.ProseMirror:focus-visible) {
+  outline: none;
+}
+</style>

@@ -37,13 +37,13 @@ withDefaults(
 <template>
   <aside
     aria-hidden="true"
-    class="relative hidden p-4 lg:sticky lg:top-16 lg:block lg:h-[calc(100vh-4rem)] lg:self-start"
+    class="relative hidden p-4 lg:block lg:h-full"
   >
     <!-- The image is on an inner box so the padding sits *outside* it: `p-4`
          on the element carrying the background would inset the content and
          leave the photo running to the edge underneath, which is the opposite
          of what the rounding is for. -->
-    <div class="relative h-full overflow-hidden rounded-xl">
+    <div class="relative h-full overflow-hidden rounded-md">
       <!-- No fade at the right edge, deliberately.
            Two attempts were made and both removed: a page-coloured gradient
            painted over the photo, which tinted it milky, and a `mask-image`,
