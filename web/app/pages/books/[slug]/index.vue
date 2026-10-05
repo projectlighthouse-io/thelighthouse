@@ -165,6 +165,9 @@ useJsonLd('crumbs', () => ({
     { '@type': 'ListItem', 'position': 2, 'name': book.value?.title },
   ],
 }))
+
+// Straight to checkout for the plan on sale; sign-in first when signed out.
+const { getPro, busy: proBusy, reason: proReason } = useGetPro()
 </script>
 
 <template>
@@ -190,9 +193,10 @@ useJsonLd('crumbs', () => ({
         </UiButton>
         <!-- `owns` is false until the browser asks, so the server and the
              first client render agree and the button only ever disappears. -->
-        <UiButton v-if="showPro" variant="ghost" size="lg" cta="free" flame to="/pricing">
+        <UiButton v-if="showPro" variant="ghost" size="lg" cta="free" flame :disabled="proBusy" @click="getPro">
           Get Pro
         </UiButton>
+        <p v-if="proReason" class="lh-error" role="alert">{{ proReason }}</p>
       </template>
     </DetailHead>
 

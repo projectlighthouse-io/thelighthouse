@@ -87,6 +87,9 @@ useJsonLd('project', () => ({
     'courseWorkload': `PT${(project.value?.tasksCount ?? 0) * 2}H`,
   },
 }))
+
+// Straight to checkout for the plan on sale; sign-in first when signed out.
+const { getPro, busy: proBusy, reason: proReason } = useGetPro()
 </script>
 
 <template>
@@ -106,9 +109,10 @@ useJsonLd('project', () => ({
         >
           {{ progress && progress.completed > 0 ? 'Continue →' : `Start the ${label} →` }}
         </UiButton>
-        <UiButton v-if="hasPro" variant="ghost" size="lg" cta="free" flame to="/pricing">
+        <UiButton v-if="hasPro" variant="ghost" size="lg" cta="free" flame :disabled="proBusy" @click="getPro">
           Get Pro
         </UiButton>
+        <p v-if="proReason" class="lh-error" role="alert">{{ proReason }}</p>
       </template>
     </DetailHead>
 

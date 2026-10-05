@@ -7,6 +7,8 @@
 defineProps<{
   stats: { value: number, label: string }[]
 }>()
+
+const { getPro, busy, reason } = useGetPro()
 </script>
 
 <template>
@@ -18,9 +20,10 @@ defineProps<{
       </p>
 
       <div class="ctas">
-        <UiButton variant="inverse" size="lg" cta="pro" flame to="/#pricing">Get Pro</UiButton>
+        <UiButton variant="inverse" size="lg" cta="pro" flame :disabled="busy" @click="getPro">Get Pro</UiButton>
         <UiButton variant="ghost" size="lg" cta="free" to="/#shelf">Start Free</UiButton>
       </div>
+      <p v-if="reason" class="lh-error" role="alert">{{ reason }}</p>
 
       <dl class="stats">
         <div v-for="stat in stats" :key="stat.label">
