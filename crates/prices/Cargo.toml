@@ -2,6 +2,8 @@
 name = "lighthouse-prices"
 version = "0.1.0"
 edition = "2024"
+license = "PolyForm-Strict-1.0.0"
+publish = false
 description = "Reconciles what the catalogue costs against what stripe holds. Run deliberately, never by the server."
 
 [lints]

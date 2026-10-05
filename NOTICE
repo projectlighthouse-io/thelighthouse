@@ -1,0 +1,20 @@
+ProjectLighthouse
+Copyright © 2026 Aryan Ahmed Anik
+
+The source code in this repository is available under the PolyForm Strict
+License 1.0.0. See LICENSE.
+
+The following are not covered by that licence. All rights are reserved:
+
+- The ProjectLighthouse name, logos and other branding.
+- The visual design and styling of the site, including web/app/assets and
+  component styles.
+- Images and other media, including everything under web/public.
+- All written content, including books, lessons, projects, blog posts and
+  site copy, and everything under web/content.
+
+Third-party components, including dependencies and Google Fonts, remain under
+their own licences.
+
+For permission to use anything beyond what the licence allows, contact
+hello@projectlighthouse.io.

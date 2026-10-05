@@ -2,6 +2,8 @@
 name = "billing"
 version = "0.1.0"
 edition = "2024"
+license = "PolyForm-Strict-1.0.0"
+publish = false
 description = "A generic billing module for subscription payments, with pluggable providers."
 
 [lints]

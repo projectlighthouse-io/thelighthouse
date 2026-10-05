@@ -2,6 +2,8 @@
 name = "loginwith"
 version = "0.1.0"
 edition = "2024"
+license = "PolyForm-Strict-1.0.0"
+publish = false
 description = "OAuth2 authorization-code login for GitHub and Google. Socialite's two providers, nothing else."
 readme = "README.md"
 

@@ -97,22 +97,16 @@ deployed from CI — `make push` is run by hand.
 
 ## Licence
 
-**GNU AGPL v3.0** — see [LICENSE](LICENSE).
+**PolyForm Strict 1.0.0** — see [LICENSE](../LICENSE).
 
-In short: fork it, change it, run it, sell access to it. But if you run a
-modified version as a website, **you have to publish your changes under the
-same licence**, and tell your users where to get them.
+The source is available to read, study and run for noncommercial purposes. It
+is not open source: the licence grants no right to modify or distribute it.
 
-That last part is why this is AGPL and not GPL. GPL's copyleft triggers on
-*distributing* software, and running a website does not distribute anything —
-so a GPL fork could be deployed as a closed-source competitor perfectly
-legally. AGPL section 13 closes that gap by treating "users interact with it
-over a network" as the trigger.
-
-The licence covers the code in this repository. The books, lessons and project
-briefs live in a separate private repository and are **not** covered by it —
-they are not open source, and forking this repo gives you the platform, not the
-content.
+The licence covers the code in this repository. The name, branding, visual
+design, images and written content are **not** covered by it — all rights are
+reserved; see [NOTICE](../NOTICE). The books, lessons and project briefs live
+in a separate private repository, and forking this repo gives you the platform,
+not the content.
 
 ## Architecture
 
