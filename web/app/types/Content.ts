@@ -192,6 +192,13 @@ export interface TocItem {
  */
 export interface LessonTocItem extends TocItem {
   locked: boolean
+  /** `04.3`: the chapter's number, then the section's place in the lesson. */
+  n: string
+  /** Reading time for this section alone. */
+  minutes: number
+  /** A locked section's opening, plain text cut short by the api. Absent on
+   *  an open section — and the rest of a locked one never crosses at all. */
+  peek?: string
 }
 
 export interface SyntaxResponse {
@@ -226,6 +233,13 @@ export interface LessonResponse {
   toc: LessonTocItem[]
   readMinutes: number
   remainingSections: number
+  /** Which chapter of the book this lesson is in, counting from 1. */
+  chapterNumber: number
+  /** Published lessons after this one, in reading order. */
+  moreLessons: number
+  /** Chapters those lessons fall in, this lesson's own included while it has
+   *  lessons left. */
+  moreLessonChapters: number
   position: number
   total: number
   percent: number

@@ -113,7 +113,7 @@ export interface ApiLesson {
   html: string
   /** `locked` is per entry: the contents list describes the whole lesson to
    *  everybody, and marks which entries this reader cannot reach. */
-  toc: { id: string, text: string, locked: boolean }[]
+  toc: { id: string, text: string, locked: boolean, n: string, minutes: number, peek?: string }[]
   read_minutes: number
   has_paid_part: boolean
   /** Whether this reader may read the paid half. A fact about the reader, not
@@ -121,6 +121,9 @@ export interface ApiLesson {
    *  `has_paid_part` is the fact about the lesson beside it. */
   unlocked: boolean
   remaining_sections: number
+  chapter_number: number
+  more_lessons: number
+  more_lesson_chapters: number
   position: number
   total: number
   percent: number
