@@ -56,7 +56,7 @@ defineExpose({ open })
 <template>
   <dialog ref="dialog" class="join" aria-labelledby="join-title" @click="onClick">
     <div class="art" aria-hidden="true">
-      <img src="/pricing-lighthouse.jpg" alt="">
+      <img src="/pricing-lighthouse.jpg" alt="" loading="lazy">
     </div>
 
     <div class="body">
