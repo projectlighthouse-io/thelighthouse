@@ -28,8 +28,8 @@ use loginwith::{Callback, GithubProvider, GoogleProvider, random_state};
 // main(), after config and before the router. Credentials are read once, here,
 // and a bad one fails the boot instead of the first login attempt.
 let socials = loginwith::providers([
-    GithubProvider::with(&c.github_id, &c.github_secret, &c.github_redirect),
-    GoogleProvider::with(&c.google_id, &c.google_secret, &c.google_redirect),
+    GithubProvider::with(c.github_id.clone(), c.github_secret.clone(), github_redirect),
+    GoogleProvider::with(c.google_id.clone(), c.google_secret.clone(), google_redirect),
 ])?;
 ```
 
@@ -122,6 +122,7 @@ breaking change.
 | `github.rs`, `google.rs` | one per provider: wire format and mapping |
 | `state.rs` | minting the state and comparing it |
 | `user.rs`, `error.rs` | the two types that cross the crate boundary |
+| `testing.rs` | scaffolding shared by the flow tests |
 
 ## Tests
 
