@@ -39,6 +39,14 @@ export const testimonials: Testimonial[] = [
     quote: 'Project Lighthouse resource is amazing.',
   },
   {
+    subject: 'goroutines, from zero',
+    quote: 'Having no prior knowledge of Go whatsoever, I wanted to get a general understanding of what goroutines are. Looking for a proper resource to learn this, I stumbled upon your “The Go Concurrency Model” article.',
+  },
+  {
+    subject: 'finally understood subnets',
+    quote: 'I tried the Project Lighthouse networking part. I finally understood subnet. So thanks again.',
+  },
+  {
     subject: 'a lot more than fundamentals',
     quote: 'The website (projectlighthouse.io) claims it will teach you fundamentals, but it gives you a lot more.',
   },

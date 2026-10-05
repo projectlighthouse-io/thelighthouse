@@ -43,7 +43,7 @@ onBeforeUnmount(() => clearInterval(timer))
 <template>
   <div class="mail-section">
     <div class="lh-text lh-gap">
-      <h2 class="lh-h2">A few words from folks on the voyage</h2>
+      <h2 class="lh-h2">A few words from folks</h2>
     </div>
 
     <div class="lh-wide frame-wrap">
