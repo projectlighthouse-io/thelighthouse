@@ -32,7 +32,13 @@ if (!profile.value) {
 
 useSeo({
   title: `${profile.value.name} — projectlighthouse`,
-  description: profile.value.tagline ?? `${profile.value.name} on projectlighthouse.`,
+  // Their own words first; the site line makes sure even an empty profile has
+  // a description worth showing in a result.
+  description: [
+    profile.value.tagline,
+    profile.value.bio,
+    `${profile.value.name}'s public profile on projectlighthouse, where developers learn systems programming by building real software.`,
+  ].filter(Boolean).join(' '),
 })
 
 const initials = computed(() =>

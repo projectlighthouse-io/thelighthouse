@@ -21,7 +21,7 @@ if (!lang.value) {
 
 useSeo(() => ({
   title: `${lang.value?.name} Syntax Reference — projectlighthouse`,
-  description: lang.value?.description ?? '',
+  description: `${lang.value?.name} syntax at a glance: ${lang.value?.description ?? ''} A quick reference for the constructs you reach for every day.`,
   type: 'article',
 }))
 

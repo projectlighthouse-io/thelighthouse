@@ -28,8 +28,7 @@ const mine = computed(() => forTask(taskSlug.value))
 
 useSeo(() => ({
   title: `${task.value?.title} — ${task.value?.project.name}`,
-  description: task.value?.project.name ?? '',
-  noindex: true,
+  description: `${task.value?.title}: one task in ${task.value?.project.name}, a hands-on project you build and check on your own machine with luxctl.`,
 }))
 </script>
 
