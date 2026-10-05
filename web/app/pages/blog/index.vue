@@ -15,6 +15,16 @@ const author = computed<string | null>(() => {
 /** Reading your own listing: each row gets an edit link. */
 const mine = computed<boolean>(() => !!author.value && author.value === reader.value?.username)
 
+/**
+ * Your own articles, archived and taken down ones included — the public
+ * listing leaves both out, so it cannot be your shelf. Read from the api with
+ * your session, in the browser; nothing about it is cached or shared.
+ */
+const own = useArticles()
+watch(mine, (isMine) => {
+  if (isMine) void own.load()
+}, { immediate: true })
+
 // the listing needs titles and dates, not bodies
 const { data: sorted } = await useAsyncData(
   () => `posts:${author.value ?? ''}`,
@@ -64,7 +74,26 @@ useJsonLd('blog', {
       </ClientOnly>
     </div>
 
-    <ol class="list">
+    <ol v-if="mine" class="list">
+      <li v-for="post in own.articles.value" :key="post.slug">
+        <!-- Archived and taken down articles have no public page, for their
+             author either, so those rows open the editor instead. -->
+        <PostRow
+          :to="post.archivedAt || post.takenDownAt ? `/blog/edit/${post.slug}` : `/blog/${post.slug}`"
+          :eyebrow="[
+            (post.createdAt ?? '').slice(0, 10),
+            post.archivedAt ? 'archived' : '',
+            post.takenDownAt ? 'taken down' : '',
+          ].filter(Boolean).join(' · ')"
+          :title="post.title"
+          :caption="post.subtitle"
+        />
+        <NuxtLink :to="`/blog/edit/${post.slug}`" class="lh-link edit">edit</NuxtLink>
+      </li>
+      <li v-if="own.loaded.value && !own.articles.value.length" class="lh-muted">Nothing written yet.</li>
+    </ol>
+
+    <ol v-else class="list">
       <li v-for="post in sorted" :key="post.slug">
         <PostRow
           :to="`/blog/${post.slug}`"
@@ -73,7 +102,6 @@ useJsonLd('blog', {
           :title="post.title"
           :caption="post.description"
         />
-        <NuxtLink v-if="mine" :to="`/blog/edit/${post.slug}`" class="lh-link edit">edit</NuxtLink>
       </li>
     </ol>
   </div>
