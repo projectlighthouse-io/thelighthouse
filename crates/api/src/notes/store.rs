@@ -9,7 +9,7 @@
 use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
-use super::{note::Note, payload::ValidNote};
+use super::{note::Note, payload::ValidNote, thread::CommentRow};
 use crate::request::Paging;
 
 /// From `20260822000000_baseline.sql`. They live beside the statement that can
@@ -157,6 +157,113 @@ pub(crate) async fn count(
         .await?;
 
     Ok(total)
+}
+
+/// Aliased to [`CommentRow`]'s field names, which `FromRow` maps by.
+///
+/// **The user columns are named one by one, never `u.*`.** This is read by
+/// anybody, and a column added to `users` — an email, a provider id — must not
+/// reach a public thread because a select happened to include it.
+const COMMENT_COLUMNS: &str = "
+    n.id,
+    n.parent_id,
+    n.selected_text,
+    n.note_content,
+    n.start_offset,
+    n.end_offset,
+    n.created_at,
+    n.user_id AS author_id,
+    u.name AS author_name,
+    u.username AS author_username,
+    u.avatar_url AS author_avatar_url
+";
+
+/// Shared so [`public_roots`] and [`count_public_roots`] cannot answer about
+/// different sets, as with [`OWNED_AND_MATCHING`].
+const PUBLIC_ROOTS: &str = "
+    WHERE n.lesson_id = $1
+      AND n.is_public
+      AND n.parent_id IS NULL
+";
+
+/// One page of a lesson's public, top-level notes, newest first.
+///
+/// `LEFT JOIN` to the author: a note whose user row is missing still shows,
+/// with an author who has only an id, rather than silently leaving the page
+/// one short of what [`count_public_roots`] says it holds.
+pub(crate) async fn public_roots(
+    db: &PgPool,
+    lesson_id: Uuid,
+    paging: Paging,
+) -> Result<Vec<CommentRow>, StoreError> {
+    let sql = format!(
+        "
+        SELECT {COMMENT_COLUMNS}
+        FROM notes n
+        LEFT JOIN users u ON u.id = n.user_id
+        {PUBLIC_ROOTS}
+        -- `id` breaks ties, as in `page`.
+        ORDER BY n.created_at DESC, n.id DESC
+        LIMIT $2
+        OFFSET $3
+        "
+    );
+
+    Ok(sqlx::query_as::<_, CommentRow>(&sql)
+        .bind(lesson_id)
+        .bind(paging.per_page)
+        .bind(paging.offset)
+        .fetch_all(db)
+        .await?)
+}
+
+/// How many public, top-level notes a lesson has, across every page.
+///
+/// Replies are not counted: `total` is what a client pages through, and it
+/// pages through roots.
+pub(crate) async fn count_public_roots(
+    db: &PgPool,
+    lesson_id: Uuid,
+) -> Result<i64, StoreError> {
+    let sql = format!("SELECT count(n.id) FROM notes n {PUBLIC_ROOTS}");
+
+    let (total,) = sqlx::query_as::<_, (i64,)>(&sql)
+        .bind(lesson_id)
+        .fetch_one(db)
+        .await?;
+
+    Ok(total)
+}
+
+/// Every public reply to the given roots, oldest first — a conversation reads
+/// down the page.
+///
+/// One query for the whole page rather than one per root. `lesson_id` is
+/// redundant with a write path that only lets a reply join its parent's
+/// lesson, and is here so an imported row that broke that rule cannot carry
+/// another lesson's reply into this thread.
+pub(crate) async fn public_replies(
+    db: &PgPool,
+    lesson_id: Uuid,
+    roots: &[i64],
+) -> Result<Vec<CommentRow>, StoreError> {
+    let sql = format!(
+        "
+        SELECT {COMMENT_COLUMNS}
+        FROM notes n
+        LEFT JOIN users u ON u.id = n.user_id
+        WHERE n.parent_id = ANY($1)
+          AND n.is_public
+          AND n.lesson_id = $2
+        ORDER BY n.created_at ASC, n.id ASC
+        "
+    );
+
+    Ok(sqlx::query_as::<_, CommentRow>(&sql)
+        .bind(roots)
+        .bind(lesson_id)
+        .fetch_all(db)
+        .await?)
 }
 
 /// Writes a note and reads it back in one statement — a client needs the

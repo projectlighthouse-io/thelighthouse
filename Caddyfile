@@ -194,6 +194,16 @@
 		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
 	}
 
+	# A lesson's public comments. Open to anybody and the same bytes for
+	# everybody, so it is held at the edge briefly — see `notes::handler::thread`.
+	#
+	# Its own rule because the one above does not reach it: a `*` in the middle
+	# of a path pattern is a glob, and a glob's `*` stops at a `/`. That rule
+	# matches exactly one segment after `lessons/`, and this path has two.
+	handle /api/books/*/lessons/*/comments {
+		reverse_proxy {$API_UPSTREAM:127.0.0.1:9000}
+	}
+
 	# What is for sale, and what a reader is paying for.
 	#
 	# Two very different things behind one prefix, both the api's to gate:

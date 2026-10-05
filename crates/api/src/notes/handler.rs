@@ -1,4 +1,4 @@
-//! The four handlers, and nothing else.
+//! The five handlers, and nothing else.
 //!
 //! They hand the pool to `store` and nothing else — no statement, no column
 //! name, no constraint name. A handler that knew one would have to change when
@@ -19,6 +19,7 @@ use super::{
     refusal::{Refusal, refuse, refuse_all},
     store::{self, StoreError},
     target::{self, NoteTarget},
+    thread::{self, Comment},
 };
 use crate::{
     api::AppState,
@@ -85,6 +86,91 @@ pub(crate) async fn list(
         StatusCode::OK,
         PaginatedResponse::new(notes, paging, total),
         CachePolicy::NoStore,
+    )
+}
+
+/// A lesson's public thread: one page of top-level comments, newest first,
+/// each carrying its replies.
+///
+/// **No reader, and nothing that depends on one.** The answer is the same
+/// bytes for a signed-in reader, a stranger and a crawler — there is no `mine`
+/// flag; a client compares `author.id` with its own — so the edge may hold it.
+/// `reader_content`'s minute is the price: a new comment reaches other readers
+/// within about a minute, a deleted one leaves within the same. The writer
+/// sees their own at once, because the page that wrote it already has it.
+///
+/// The catalogue is asked first, as `books::handler::lesson` does, so a lesson
+/// that does not exist is a 404 without a query. The database is still asked
+/// for the id: that is the one `notes.lesson_id` was written with.
+pub(crate) async fn thread(
+    State(state): State<AppState>,
+    Path((book, lesson)): Path<(String, String)>,
+    Query(query): Query<ListQuery>,
+) -> Response {
+    let paging = query.paging(PageSize::DEFAULT);
+
+    if state.catalog.current().lesson(&book, &lesson).is_none() {
+        return response::not_found();
+    }
+
+    let lesson_id = match store::lesson_id(&state.db, &book, &lesson).await {
+        Ok(Some(id)) => id,
+        // In the catalogue, not yet synced to postgres. Nothing can have been
+        // written against it, and saying so is more useful than a 404 for a
+        // lesson the page beside it is rendering.
+        Ok(None) => {
+            return json(
+                StatusCode::OK,
+                PaginatedResponse::<Comment>::new(Vec::new(), paging, 0),
+                CachePolicy::reader_content(),
+            );
+        }
+        Err(error) => {
+            tracing::error!(
+                ?error,
+                book,
+                lesson,
+                "failed to resolve the lesson"
+            );
+            return response::server_error();
+        }
+    };
+
+    let roots = match store::public_roots(&state.db, lesson_id, paging).await {
+        Ok(roots) => roots,
+        Err(error) => {
+            tracing::error!(?error, %lesson_id, "failed to read the thread");
+            return response::server_error();
+        }
+    };
+
+    let total = match store::count_public_roots(&state.db, lesson_id).await {
+        Ok(total) => total,
+        Err(error) => {
+            tracing::error!(?error, %lesson_id, "failed to count the thread");
+            return response::server_error();
+        }
+    };
+
+    // A page past the end has no roots to ask about.
+    let replies = if roots.is_empty() {
+        Vec::new()
+    } else {
+        let ids: Vec<i64> = roots.iter().map(|root| root.id).collect();
+
+        match store::public_replies(&state.db, lesson_id, &ids).await {
+            Ok(replies) => replies,
+            Err(error) => {
+                tracing::error!(?error, %lesson_id, "failed to read replies");
+                return response::server_error();
+            }
+        }
+    };
+
+    json(
+        StatusCode::OK,
+        PaginatedResponse::new(thread::thread(roots, replies), paging, total),
+        CachePolicy::reader_content(),
     )
 }
 
