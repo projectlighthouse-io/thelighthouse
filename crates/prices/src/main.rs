@@ -298,10 +298,35 @@ async fn run() -> Result<(), String> {
 
             Ok(())
         }
+        "resolve" => {
+            // Read-only: what this key's stripe account already holds, written
+            // out as the api's config. Runs at container start, so the ids
+            // always belong to the account the running key is for — test
+            // locally, live in production — and a pricing change nobody has
+            // applied there stops the boot instead of selling a stale price.
+            let resolved = resolved_from(&verdicts)?;
+            let promotions = held_promotions(
+                &client,
+                &key,
+                &declaration.plans,
+                &declaration.currency,
+                &resolved,
+            )
+            .await?;
+
+            let output = std::env::var("BILLING_PLANS")
+                .unwrap_or_else(|_| DEFAULT_OUTPUT.to_owned());
+
+            write(&output, &declaration, &resolved, &promotions)?;
+            println!("resolved {} plans into {output}", resolved.len());
+
+            Ok(())
+        }
         other => Err(format!(
             "unknown command {other:?}\n\n  \
              lighthouse-prices status     what stripe has, and where it differs\n  \
              lighthouse-prices apply      make stripe match, then write the config\n  \
+             lighthouse-prices resolve    write the config from what stripe holds; creates nothing\n  \
              lighthouse-prices catalogue  write the frontend's build-time catalogue"
         )),
     }
@@ -535,6 +560,108 @@ async fn fetch(
         .into_iter()
         .filter_map(|price| price.lookup_key.clone().map(|key| (key, price)))
         .collect())
+}
+
+/// The ids of every declared plan, from prices stripe already holds as
+/// declared — or the plans that are not, and the command that fixes them.
+///
+/// What `resolve` boots from. It never creates or changes a price, so a plan
+/// that is missing or held at another amount means `apply` has not run against
+/// this account since `pricing.yaml` changed.
+fn resolved_from(
+    verdicts: &[(String, Verdict)],
+) -> Result<BTreeMap<String, Resolved>, String> {
+    let mut resolved = BTreeMap::new();
+    let mut unapplied = Vec::new();
+
+    for (plan, verdict) in verdicts {
+        match verdict {
+            Verdict::Agrees { id, product } => {
+                resolved.insert(
+                    plan.clone(),
+                    Resolved {
+                        price: id.clone(),
+                        product: product.clone(),
+                    },
+                );
+            }
+            Verdict::Missing | Verdict::Differs { .. } => {
+                unapplied.push(plan.clone());
+            }
+        }
+    }
+
+    if unapplied.is_empty() {
+        Ok(resolved)
+    } else {
+        Err(format!(
+            "stripe does not hold {} as pricing.yaml declares — run \
+             `lighthouse-prices apply` against this account first",
+            unapplied.join(", ")
+        ))
+    }
+}
+
+/// The promotion code id for every declared tier, read from stripe without
+/// creating anything — the read half of `apply_ppp`.
+///
+/// Each coupon has to be held exactly as declared, restricted to its plan, and
+/// have its promotion code; anything else is a tier `apply` has not made here.
+async fn held_promotions(
+    client: &reqwest::Client,
+    key: &SecretString,
+    plans: &[Declared],
+    currency: &str,
+    resolved: &BTreeMap<String, Resolved>,
+) -> Result<BTreeMap<String, String>, String> {
+    let mut promotions = BTreeMap::new();
+
+    for plan in plans {
+        let product =
+            resolved
+                .get(&plan.id)
+                .map(|held| held.product.clone())
+                .ok_or_else(|| format!("{} was never resolved", plan.id))?;
+        let wanted = vec![product];
+
+        for tier in &plan.ppp {
+            let unapplied = || {
+                format!(
+                    "{} on {} is not held at stripe as pricing.yaml declares — \
+                     run `lighthouse-prices apply` against this account first",
+                    tier.code, plan.id
+                )
+            };
+
+            let coupon: Option<HeldCoupon> = maybe_get(
+                client,
+                key,
+                &format!("/v1/coupons/{}?expand[]=applies_to", tier.code),
+            )
+            .await?;
+
+            if !coupon.is_some_and(|coupon| {
+                coupon.discounts_like(tier, currency)
+                    && coupon.products() == wanted
+            }) {
+                return Err(unapplied());
+            }
+
+            let codes: Listed<HeldPromotion> = get(
+                client,
+                key,
+                &format!("/v1/promotion_codes?code={}&limit=1", tier.code),
+            )
+            .await?;
+
+            let promotion =
+                codes.data.into_iter().next().ok_or_else(unapplied)?;
+
+            promotions.insert(tier.code.clone(), promotion.id);
+        }
+    }
+
+    Ok(promotions)
 }
 
 fn compare(
@@ -1602,6 +1729,45 @@ mod tests {
         assert!(
             !percent.discounts_like(&amount_tier("A", 2000, &["IN"]), "usd")
         );
+    }
+
+    #[test]
+    fn resolving_takes_the_ids_of_prices_that_agree() {
+        let verdicts = vec![(
+            "rust_yearly".to_owned(),
+            Verdict::Agrees {
+                id: "price_1".to_owned(),
+                product: "prod_1".to_owned(),
+            },
+        )];
+
+        let resolved = resolved_from(&verdicts).unwrap();
+        let held = resolved.get("rust_yearly").unwrap();
+
+        assert_eq!(held.price, "price_1");
+        assert_eq!(held.product, "prod_1");
+    }
+
+    #[test]
+    fn resolving_refuses_a_plan_stripe_does_not_hold_as_declared() {
+        // `resolve` never creates or changes anything: a plan that is missing
+        // or at another amount is a deploy that ran before `apply`, and booting
+        // on it would sell the wrong price.
+        for verdict in [
+            Verdict::Missing,
+            Verdict::Differs {
+                held: 9900,
+                currency: "usd".to_owned(),
+                id: "price_old".to_owned(),
+                product: "prod_1".to_owned(),
+            },
+        ] {
+            let refused = resolved_from(&[("rust_yearly".to_owned(), verdict)])
+                .unwrap_err();
+
+            assert!(refused.contains("rust_yearly"), "{refused}");
+            assert!(refused.contains("apply"), "{refused}");
+        }
     }
 
     #[test]
