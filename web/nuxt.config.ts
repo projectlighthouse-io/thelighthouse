@@ -116,9 +116,12 @@ export default defineNuxtConfig({
     // s-maxage lets a shared cache serve it outright. stale-while-revalidate
     // means a deploy does not cause a latency spike: the CDN keeps serving the
     // old copy while it fetches the new one.
+    // stale-while-revalidate is a minute, not a day: the image ships only the
+    // current build's /_nuxt, so a day-old document at the edge points at
+    // chunks that no longer exist and client navigation dies with it.
     '/**': {
       headers: {
-        'cache-control': 'public, max-age=0, s-maxage=600, stale-while-revalidate=86400',
+        'cache-control': 'public, max-age=0, s-maxage=600, stale-while-revalidate=60',
       },
     },
 
@@ -135,7 +138,7 @@ export default defineNuxtConfig({
       prerender: false,
       headers: {
         'cache-control':
-          'public, max-age=0, s-maxage=300, stale-while-revalidate=86400',
+          'public, max-age=0, s-maxage=300, stale-while-revalidate=60',
       },
     },
 
@@ -156,7 +159,7 @@ export default defineNuxtConfig({
       prerender: false,
       headers: {
         'cache-control':
-          'public, max-age=0, s-maxage=300, stale-while-revalidate=86400',
+          'public, max-age=0, s-maxage=300, stale-while-revalidate=60',
       },
     },
 
@@ -169,7 +172,7 @@ export default defineNuxtConfig({
       prerender: false,
       headers: {
         'cache-control':
-          'public, max-age=0, s-maxage=300, stale-while-revalidate=86400',
+          'public, max-age=0, s-maxage=300, stale-while-revalidate=60',
       },
     },
 
