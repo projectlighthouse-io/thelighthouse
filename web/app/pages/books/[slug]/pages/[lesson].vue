@@ -432,12 +432,15 @@ const {
 
 const noteDialogOpen = ref<boolean>(false)
 const savingNote = ref<boolean>(false)
-const noteError = ref<string | null>(null)
+const noteErrors = useFieldErrors(['note_content'])
 
 /** The note whose popover is open, and where to put it. */
 const openNote = ref<Note | null>(null)
 const openNoteAt = ref<{ x: number, y: number }>({ x: 0, y: 0 })
 const removingNote = ref<boolean>(false)
+const popoverError = ref<string | null>(null)
+// A refusal belongs to the note it was about, not the next one opened.
+watch(openNote, () => { popoverError.value = null })
 
 /**
  * Every mark currently on the page, by the note it belongs to.
@@ -512,11 +515,15 @@ const repaint = (): void => {
 const saveNote = async (content: string, isPublic: boolean): Promise<void> => {
   if (!selected.value) return
 
+  noteErrors.clear()
   savingNote.value = true
-  noteError.value = await createNote(content, selected.value, isPublic)
+  const refused = await createNote(content, selected.value, isPublic)
   savingNote.value = false
 
-  if (noteError.value) return
+  if (refused) {
+    noteErrors.show(refused)
+    return
+  }
 
   noteDialogOpen.value = false
   clearSelection()
@@ -526,11 +533,15 @@ const saveNote = async (content: string, isPublic: boolean): Promise<void> => {
 const deleteOpenNote = async (): Promise<void> => {
   if (!openNote.value) return
 
+  popoverError.value = null
   removingNote.value = true
-  const failed = await removeNote(openNote.value.id)
+  const refused = await removeNote(openNote.value.id)
   removingNote.value = false
 
-  if (failed) return
+  if (refused) {
+    popoverError.value = refused.message || 'That note could not be deleted.'
+    return
+  }
 
   openNote.value = null
   repaint()
@@ -563,7 +574,11 @@ const goToBookmark = (): void => {
 const editingNoteId = ref<number | null>(null)
 const savingNoteId = ref<number | null>(null)
 const postingComment = ref<boolean>(false)
-const commentError = ref<string | null>(null)
+const commentErrors = useFieldErrors(['note_content'])
+/** Why the note being edited in the thread was not saved. */
+const editErrors = useFieldErrors(['note_content'])
+/** A refused delete in the thread, against the note it was for. */
+const removeError = ref<{ id: number, message: string } | null>(null)
 
 /**
  * A note with nothing selected — the comment box rather than the margin.
@@ -574,8 +589,10 @@ const commentError = ref<string | null>(null)
  * passage to draw it on.
  */
 const postComment = async (content: string): Promise<void> => {
+  commentErrors.clear()
   postingComment.value = true
-  commentError.value = await createNote(content)
+  const refused = await createNote(content)
+  if (refused) commentErrors.show(refused)
   postingComment.value = false
 }
 
@@ -593,23 +610,31 @@ const jumpToNote = (note: Note): void => {
 }
 
 const saveNoteEdit = async (note: Note, content: string): Promise<void> => {
+  editErrors.clear()
   savingNoteId.value = note.id
-  const failed = await editNote(note.id, content)
+  const refused = await editNote(note.id, content)
   savingNoteId.value = null
 
   // Left open on failure, with what was typed still in the field. Closing it
   // would look like the edit saved.
-  if (failed) return
+  if (refused) {
+    editErrors.show(refused)
+    return
+  }
 
   editingNoteId.value = null
 }
 
 const removeListedNote = async (note: Note): Promise<void> => {
+  removeError.value = null
   savingNoteId.value = note.id
-  const failed = await removeNote(note.id)
+  const refused = await removeNote(note.id)
   savingNoteId.value = null
 
-  if (failed) return
+  if (refused) {
+    removeError.value = { id: note.id, message: refused.message || 'That note could not be deleted.' }
+    return
+  }
 
   // The highlight in the prose goes with it.
   repaint()
@@ -809,14 +834,17 @@ useJsonLd('crumbs', () => ({
           :loading="!notesLoaded && reading"
           :signed-in="reading"
           :submitting="postingComment"
-          :submit-error="commentError"
+          :submit-field-error="commentErrors.fields.value.note_content ?? null"
+          :submit-error="commentErrors.message.value || null"
           :editing-id="editingNoteId"
           :saving-id="savingNoteId"
+          :edit-error="editErrors.fields.value.note_content ?? (editErrors.message.value || null)"
+          :remove-error="removeError"
           @submit="postComment"
           @jump="jumpToNote"
-          @edit="editingNoteId = $event.id"
+          @edit="editingNoteId = $event.id; editErrors.clear()"
           @save="saveNoteEdit"
-          @cancel-edit="editingNoteId = null"
+          @cancel-edit="editingNoteId = null; editErrors.clear()"
           @remove="removeListedNote"
           @sign-in="signIn"
         />
@@ -840,9 +868,10 @@ useJsonLd('crumbs', () => ({
       v-if="noteDialogOpen && selected"
       :passage="selected.text"
       :saving="savingNote"
-      :error="noteError"
+      :field-error="noteErrors.fields.value.note_content ?? null"
+      :error="noteErrors.message.value || null"
       @save="saveNote"
-      @cancel="noteDialogOpen = false; noteError = null; clearSelection()"
+      @cancel="noteDialogOpen = false; noteErrors.clear(); clearSelection()"
     />
 
     <ReaderNotePopover
@@ -851,8 +880,9 @@ useJsonLd('crumbs', () => ({
       :x="openNoteAt.x"
       :y="openNoteAt.y"
       :removing="removingNote"
+      :error="popoverError"
       @remove="deleteOpenNote"
-      @close="openNote = null"
+      @close="openNote = null; popoverError = null"
     />
   </div>
 </template>

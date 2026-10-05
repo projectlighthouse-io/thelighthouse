@@ -9,8 +9,11 @@ onMounted(load)
 /** The note being edited, and the draft of its body. One at a time. */
 const editing = ref<number | null>(null)
 const draft = ref<string>('')
-/** The api's refusal, shown against the note it belongs to. */
-const refused = ref<string | null>(null)
+/** The api's refusal of an edit, shown under the note being edited. */
+const errors = useFieldErrors(['note_content'])
+/** A refused delete, shown on the note it was for — which need not be the one
+ *  being edited. */
+const deleteFailed = ref<{ id: number, message: string } | null>(null)
 const saving = ref<boolean>(false)
 
 const MAX_NOTE = 500
@@ -18,23 +21,27 @@ const MAX_NOTE = 500
 function startEditing(id: number, content: string | null): void {
   editing.value = id
   draft.value = content ?? ''
-  refused.value = null
+  errors.clear()
 }
 
 function stopEditing(): void {
   editing.value = null
   draft.value = ''
-  refused.value = null
+  errors.clear()
 }
 
 async function save(id: number): Promise<void> {
+  if (saving.value) return
+
+  errors.clear()
   saving.value = true
-  refused.value = await edit(id, draft.value)
+  const refused = await edit(id, draft.value)
   saving.value = false
 
   // Only leave the editor when the api took it. Closing on a refusal would
   // throw away what the reader typed along with the reason it was refused.
-  if (!refused.value) stopEditing()
+  if (refused) errors.show(refused)
+  else stopEditing()
 }
 
 async function discard(id: number): Promise<void> {
@@ -43,7 +50,9 @@ async function discard(id: number): Promise<void> {
   // the page.
   if (!globalThis.confirm('Delete this note? This cannot be undone.')) return
 
-  refused.value = await remove(id)
+  deleteFailed.value = null
+  const refused = await remove(id)
+  if (refused) deleteFailed.value = { id, message: refused.message || 'That note could not be deleted.' }
 }
 
 /** The day, in the reader's own locale. The time of day is not worth the row. */
@@ -107,7 +116,17 @@ useSeo({
           <blockquote v-if="note.selectedText" class="passage">{{ note.selectedText }}</blockquote>
 
           <div v-if="editing === note.id" class="edit">
-            <textarea v-model="draft" rows="3" :maxlength="MAX_NOTE" class="lh-input" aria-label="your note" />
+            <textarea
+              v-model="draft"
+              rows="3"
+              :maxlength="MAX_NOTE"
+              class="lh-input"
+              aria-label="your note"
+              :aria-invalid="!!errors.fields.value.note_content"
+            />
+            <p v-if="errors.fields.value.note_content" class="lh-error" role="alert">
+              {{ errors.fields.value.note_content }}
+            </p>
 
             <div class="edit-row">
               <UiButton variant="inverse" size="sm" :disabled="saving" @click="save(note.id)">Save</UiButton>
@@ -118,7 +137,10 @@ useSeo({
 
           <p v-else-if="note.noteContent" class="lh-sub body">{{ note.noteContent }}</p>
 
-          <p v-if="refused && editing === note.id" class="lh-error" role="alert">{{ refused }}</p>
+          <p v-if="errors.message.value && editing === note.id" class="lh-error" role="alert">
+            {{ errors.message.value }}
+          </p>
+          <p v-if="deleteFailed?.id === note.id" class="lh-error" role="alert">{{ deleteFailed.message }}</p>
 
           <div class="foot">
             <span class="lh-mono lh-faint">{{ on(note.createdAt) }}</span>

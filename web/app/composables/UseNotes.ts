@@ -79,20 +79,6 @@ const PER_LESSON = 50
 /** Shown when the api refused but said nothing a reader can act on. */
 const GENERIC_FAILURE = 'That could not be saved. Please try again.'
 
-/**
- * The api's own message for a refused write, or something generic.
- *
- * Rust answers a validation failure with `{ error }` — those messages are
- * written for the person who typed the note, so showing them beats replacing
- * them with a guess. Anything else (a 403, a 429, the network) has no message
- * worth surfacing verbatim.
- */
-function problem(error: unknown): string {
-  const data = (error as { data?: { error?: unknown } } | undefined)?.data
-
-  return typeof data?.error === 'string' ? data.error : GENERIC_FAILURE
-}
-
 function toNote(note: NoteResponse): Note {
   return {
     id: note.id,
@@ -227,9 +213,9 @@ export function useNotes(scope?: MaybeRefOrGetter<NotesScope | undefined>) {
     content: string,
     anchor?: { text: string, start: number, end: number },
     isPublic = true,
-  ): Promise<string | null> {
+  ): Promise<Refused | null> {
     const here = toValue(scope)
-    if (!here) return GENERIC_FAILURE
+    if (!here) return { message: GENERIC_FAILURE, fields: {} }
 
     try {
       const saved = await $fetch<NoteResponse>('/api/notes', {
@@ -252,7 +238,7 @@ export function useNotes(scope?: MaybeRefOrGetter<NotesScope | undefined>) {
       return null
     }
     catch (error) {
-      return problem(error)
+      return refusedBy(error, GENERIC_FAILURE)
     }
   }
 
@@ -263,7 +249,7 @@ export function useNotes(scope?: MaybeRefOrGetter<NotesScope | undefined>) {
    * the database holds rather than what was typed — a note the api trimmed or
    * refused does not sit on screen looking saved.
    */
-  async function edit(id: number, content: string): Promise<string | null> {
+  async function edit(id: number, content: string): Promise<Refused | null> {
     try {
       const updated = await $fetch<NoteResponse>(`/api/notes/${id}`, {
         method: 'PATCH',
@@ -277,12 +263,12 @@ export function useNotes(scope?: MaybeRefOrGetter<NotesScope | undefined>) {
       return null
     }
     catch (error) {
-      return problem(error)
+      return refusedBy(error, GENERIC_FAILURE)
     }
   }
 
   /** Deletes one note, and drops it from the list the page is drawing. */
-  async function remove(id: number): Promise<string | null> {
+  async function remove(id: number): Promise<Refused | null> {
     try {
       await $fetch(`/api/notes/${id}`, {
         method: 'DELETE',
@@ -295,7 +281,7 @@ export function useNotes(scope?: MaybeRefOrGetter<NotesScope | undefined>) {
       return null
     }
     catch (error) {
-      return problem(error)
+      return refusedBy(error, GENERIC_FAILURE)
     }
   }
 

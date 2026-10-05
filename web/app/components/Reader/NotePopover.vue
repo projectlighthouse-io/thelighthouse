@@ -14,6 +14,8 @@ defineProps<{
   x: number
   y: number
   removing: boolean
+  /** Why the last delete failed, if it did. */
+  error: string | null
 }>()
 
 const emit = defineEmits<{
@@ -59,5 +61,7 @@ const emit = defineEmits<{
         </button>
       </div>
     </div>
+
+    <p v-if="error" class="reader-notepop__error" role="alert">{{ error }}</p>
   </div>
 </template>

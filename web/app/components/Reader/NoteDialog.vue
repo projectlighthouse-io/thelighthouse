@@ -20,7 +20,9 @@ const PREVIEW = 120
 const props = defineProps<{
   passage: string
   saving: boolean
-  /** The api's own words for a refused write, shown as it sent them. */
+  /** The api's refusal of the note itself, shown under the field. */
+  fieldError: string | null
+  /** Anything else it refused — the passage, the anchor — for the form. */
   error: string | null
 }>()
 
@@ -93,7 +95,12 @@ const onKeydown = (event: KeyboardEvent): void => {
         rows="5"
         :maxlength="MAX_NOTE"
         placeholder="what you want to remember about this…"
+        :aria-invalid="!!fieldError"
       />
+
+      <p v-if="fieldError" class="reader-notedialog__error" role="alert">
+        {{ fieldError }}
+      </p>
 
       <div class="reader-notedialog__row">
         <label class="reader-notedialog__private">
@@ -106,7 +113,7 @@ const onKeydown = (event: KeyboardEvent): void => {
         </span>
       </div>
 
-      <p v-if="error" class="reader-notedialog__error">
+      <p v-if="error" class="reader-notedialog__error" role="alert">
         {{ error }}
       </p>
 

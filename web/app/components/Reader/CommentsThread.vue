@@ -25,9 +25,15 @@ const props = defineProps<{
   loading: boolean
   signedIn: boolean
   submitting: boolean
+  /** The api's refusal of the compose box's text, shown under it. */
+  submitFieldError: string | null
   submitError: string | null
   editingId: number | null
   savingId: number | null
+  /** Why the note being edited was not saved. */
+  editError: string | null
+  /** Why a delete failed, and which note it was for. */
+  removeError: { id: number, message: string } | null
 }>()
 
 const emit = defineEmits<{
@@ -50,8 +56,13 @@ const post = (): void => {
   if (!content || props.submitting) return
 
   emit('submit', content)
-  draft.value = ''
 }
+
+// The draft goes only once the api has taken it. Clearing on submit threw away
+// what the reader typed whenever the post was refused.
+watch(() => props.submitting, (now, was) => {
+  if (was && !now && !props.submitError && !props.submitFieldError) draft.value = ''
+})
 
 const startEdit = (note: Note): void => {
   edited.value = note.noteContent ?? ''
@@ -105,9 +116,11 @@ const since = (iso: string | null): string => {
         class="reader-comments__textarea"
         placeholder="Have a thought? Mark-it-down"
         :disabled="submitting"
+        :aria-invalid="!!submitFieldError"
         @keydown.meta.enter="post"
         @keydown.ctrl.enter="post"
       />
+      <p v-if="submitFieldError" class="reader-comments__error" role="alert">{{ submitFieldError }}</p>
       <div class="reader-comments__compose-row">
         <span class="reader-comments__counter">
           {{ draft.length }}/{{ MAX_NOTE }}
@@ -121,7 +134,7 @@ const since = (iso: string | null): string => {
           {{ submitting ? 'Posting…' : 'Post' }}
         </button>
       </div>
-      <p v-if="submitError" class="reader-comments__error">{{ submitError }}</p>
+      <p v-if="submitError" class="reader-comments__error" role="alert">{{ submitError }}</p>
     </div>
 
     <div v-if="loading" class="reader-comments__loading">Loading notes…</div>
@@ -170,6 +183,10 @@ const since = (iso: string | null): string => {
             </div>
           </header>
 
+          <p v-if="removeError?.id === note.id" class="reader-comments__error" role="alert">
+            {{ removeError.message }}
+          </p>
+
           <div v-if="editingId === note.id" class="note-comment__edit">
             <textarea
               v-model="edited"
@@ -177,7 +194,9 @@ const since = (iso: string | null): string => {
               :maxlength="MAX_NOTE"
               class="note-comment__field"
               :disabled="savingId === note.id"
+              :aria-invalid="!!editError"
             />
+            <p v-if="editError" class="reader-comments__error" role="alert">{{ editError }}</p>
             <div class="note-comment__editrow">
               <span class="reader-comments__counter">
                 {{ edited.length }}/{{ MAX_NOTE }}

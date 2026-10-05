@@ -242,7 +242,8 @@ a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink);
 }
 
 .reader-notedialog__error,
-.reader-comments__error {
+.reader-comments__error,
+.reader-notepop__error {
   margin: 0;
   font: var(--text-caption);
   color: var(--ink);
