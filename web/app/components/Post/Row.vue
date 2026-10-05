@@ -11,10 +11,14 @@ defineProps<{
   to?: string
   datetime?: string
 }>()
+
+// Resolved here, not named as a string in `:is`: Nuxt registers NuxtLink by
+// import, so the string renders an inert <nuxtlink> element.
+const NuxtLink = resolveComponent('NuxtLink')
 </script>
 
 <template>
-  <component :is="to ? 'NuxtLink' : 'div'" :to="to" class="row" :class="{ 'is-link': to }">
+  <component :is="to ? NuxtLink : 'div'" :to="to" class="row" :class="{ 'is-link': to }">
     <span class="lh-eyebrow">
       <time v-if="datetime" :datetime="datetime">{{ eyebrow }}</time>
       <template v-else>{{ eyebrow }}</template>
