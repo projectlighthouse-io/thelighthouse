@@ -32,7 +32,7 @@
       </p>
       <p class="welcome">Welcome to <strong>projectlighthouse.io</strong></p>
 
-      <p class="sign">— Aryan</p>
+      <p class="sign">Aryan</p>
       <p class="email">thearyanahmed@projectlighthouse.io</p>
     </div>
   </section>
@@ -101,7 +101,7 @@ strong { font-weight: var(--weight-medium); }
 
 .sheet p.sign {
   margin: 40px 0 0;
-  font: italic 400 26px/32px var(--font-serif);
+  font: 400 26px/32px var(--font-serif);
 }
 
 .sheet p.email {
