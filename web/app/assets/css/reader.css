@@ -104,6 +104,83 @@ a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink);
   .reader-toc { display: none; }
 }
 
+/* ---------- lesson type, carried over from the old reader ---------- */
+
+/* The old app's lesson page set its prose in Newsreader 19/1.72, its title and
+ * dek in Lora, and its code in JetBrains Mono. Sizes, weights and tracking are
+ * its own (resources/css/reader.css there). Type only: colours, spacing and
+ * boxes stay the system's.
+ *
+ * Scoped by `[data-lesson-content]`, which only the lesson page puts on its
+ * body — the task, syntax and legal pages share `.reader-shell` and
+ * `.lesson-content` and keep the system's type. The attribute also lifts these
+ * rules over prose.css's `.lesson-content …` without `!important`. */
+
+/* Half the old reader's 54px: at that size the title crowded the page. The
+   tighter 1.08 leading was for display size; 1.2 suits it here. */
+.reader-article:has([data-lesson-content]) .reader-head .lh-h1 {
+  font: 600 27px/1.2 var(--font-reading-title);
+  letter-spacing: -0.01em;
+}
+
+.reader-article:has([data-lesson-content]) .reader-head .lh-lede {
+  font: 400 21px/1.5 var(--font-reading-title);
+  max-width: 32em;
+}
+
+.lesson-content[data-lesson-content] {
+  font: 400 19px/1.72 var(--font-reading);
+}
+
+.lesson-content[data-lesson-content] h2 {
+  font: 600 27px/1.2 var(--font-reading);
+  letter-spacing: -0.005em;
+}
+
+.lesson-content[data-lesson-content] h3 {
+  font: 600 22px/1.3 var(--font-reading);
+  letter-spacing: 0;
+}
+
+/* the old app had no h4 rule of its own: Lora 500 from its base heading
+   style, at the body's size */
+.lesson-content[data-lesson-content] h4 {
+  font: 500 1em/1.72 var(--font-reading-title);
+  letter-spacing: -0.01em;
+}
+
+.lesson-content[data-lesson-content] :is(strong, b) { font-weight: 600; }
+
+/* the old reader kept italic emphasis; prose.css flattens it */
+.lesson-content[data-lesson-content] :is(em, i) { font-style: italic; }
+
+/* Newsreader has no Bengali, so italic there is a faux slant on the fallback.
+   Weight carries the emphasis instead, as it did in the old reader. */
+.lesson-content[data-lesson-content]:lang(bn) :is(em, i),
+:lang(bn) .lesson-content[data-lesson-content] :is(em, i) {
+  font-style: normal;
+  font-weight: 500;
+}
+
+.lesson-content[data-lesson-content] blockquote {
+  font: italic 500 25px/1.4 var(--font-reading);
+}
+
+.lesson-content[data-lesson-content] :not(pre) > code {
+  font-family: var(--font-reading-code);
+  font-size: 0.82em;
+}
+
+.lesson-content[data-lesson-content] pre {
+  font-family: var(--font-reading-code);
+}
+
+@media (max-width: 880px) {
+  .reader-article:has([data-lesson-content]) .reader-head .lh-h1 { font-size: 20px; }
+  .reader-article:has([data-lesson-content]) .reader-head .lh-lede { font-size: 18px; }
+  .lesson-content[data-lesson-content] { font-size: 17px; }
+}
+
 /* the locked half: dashed rule, mono label, one button */
 .reader-pager {
   display: flex;

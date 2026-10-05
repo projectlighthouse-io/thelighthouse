@@ -73,7 +73,9 @@ export default defineNuxtConfig({
           // Inter, Libre Baskerville and Geist Mono at the two weights the system
           // uses; Fredericka the Great is the hero h1 and nothing else. The
           // serif italic is for the author's sign-off and the desk's "now.".
-          href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Libre+Baskerville:ital,wght@0,400;1,400&family=Geist+Mono:wght@400;500&family=Fredericka+the+Great&display=swap',
+          // Newsreader, Lora and JetBrains Mono are the lesson reader's type,
+          // carried over from the old app — see `--font-reading*`.
+          href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Libre+Baskerville:ital,wght@0,400;1,400&family=Geist+Mono:wght@400;500&family=Fredericka+the+Great&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Lora:wght@400;600&family=JetBrains+Mono:wght@400;700&display=swap',
         },
       ],
     },
