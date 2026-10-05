@@ -79,6 +79,8 @@ const stats = computed(() => [
 
     <MarketingOnTheDesk :manuscripts="manuscripts" />
 
+    <MarketingOnTheHorizon />
+
     <MarketingMailbox :letters="testimonials" />
 
     <MarketingFaqSection />
