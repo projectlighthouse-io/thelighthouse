@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CataloguePlan } from '@/data/Catalogue'
+import type { CatalogueBook, CataloguePlan } from '@/data/Catalogue'
 import { plans, shelf } from '@/data/Catalogue'
 import { tracks } from '@/data/Tracks'
 
@@ -33,21 +33,67 @@ interface Panel {
   lead: CataloguePlan | undefined
   /** The outright plan, offered beside a yearly one. */
   outright: CataloguePlan | undefined
+  /** How many books the plan opens today. */
+  count: number
+  /** The books, grouped by family, for a plan that is a set of books. */
+  groups: Group[]
+  /** What the plan adds, for the one that is everything — listing the same
+   *  books again under it would hide the difference rather than show it. */
+  includes: string[]
+}
+
+interface Group {
+  name: string
   titles: string[]
 }
+
+/**
+ * Which family each book belongs to, so related books sit together — Go
+ * Fundamentals directly above Go Intermediate rather than across the panel.
+ * In reading order within a group; a book not listed here lands in "more"
+ * until it is, rather than disappearing.
+ *
+ * ponytail: a hand-kept list, not a field in ohara. Ten books in four
+ * families; move it into book.yaml if the shelf outgrows a glance.
+ */
+const FAMILIES: { name: string, slugs: string[] }[] = [
+  { name: 'fundamentals', slugs: ['c-programming', 'dsa-fundamentals', 'os-fundamentals', 'networking-fundamentals'] },
+  { name: 'go', slugs: ['go-fundamentals', 'go-intermediate', 'shipping-go-web-services'] },
+  { name: 'rust', slugs: ['rust-from-zero', 'rust-101s'] },
+  { name: 'interview', slugs: ['crack-the-interview'] },
+]
 
 /**
  * The books on a track, in that track's reading order. `all` is every book on
  * the shelf, including the ones on no track.
  */
-function titlesOn(key: string): string[] {
-  if (key === 'all') return shelf.map(book => book.title)
+function booksOn(key: string): CatalogueBook[] {
+  if (key === 'all') return shelf
 
   return shelf
     .filter(book => book.tracks[key] !== undefined)
     .sort((a, b) => (a.tracks[key] ?? 0) - (b.tracks[key] ?? 0))
-    .map(book => book.title)
 }
+
+/** A track's books, in their families, each family in its own reading order. */
+function grouped(books: CatalogueBook[]): Group[] {
+  const groups = FAMILIES
+    .map(family => ({
+      name: family.name,
+      titles: family.slugs
+        .map(slug => books.find(book => book.slug === slug)?.title)
+        .filter((title): title is string => !!title),
+    }))
+    .filter(group => group.titles.length)
+
+  const known = FAMILIES.flatMap(family => family.slugs)
+  const rest = books.filter(book => !known.includes(book.slug)).map(book => book.title)
+
+  return rest.length ? [...groups, { name: 'more', titles: rest }] : groups
+}
+
+/** The books every other plan sells, which the everything plan contains. */
+const foundationCount = booksOn('foundation').length
 
 // The catalogue's tracks, in the order Tracks.ts reads them; anything it does
 // not know about still gets a panel, after the rest.
@@ -67,7 +113,16 @@ const panels: Panel[] = keys.map((key) => {
     featured: known?.featured ?? false,
     lead: yearly ?? outright,
     outright: yearly ? outright : undefined,
-    titles: titlesOn(key),
+    count: booksOn(key).length,
+    groups: key === 'all' ? [] : grouped(booksOn(key)),
+    includes: key === 'all'
+      ? [
+          `Everything in Foundations: all ${foundationCount} books`,
+          'Every book published from now on',
+          'Every project, new ones included',
+          'Pay once, keep it for good',
+        ]
+      : [],
   }
 })
 
@@ -95,8 +150,6 @@ function reduced(offer: CataloguePlan | undefined): string | null {
 function priced(offer: CataloguePlan | undefined): string {
   return offer?.amount ? money(offer.amount) : '—'
 }
-
-const pad = (n: number): string => String(n).padStart(2, '0')
 
 const { checkout, busy, reason } = useBilling()
 const { isSignedIn } = useReader()
@@ -153,7 +206,7 @@ const IMAGE = '/pricing-lighthouse.jpg'
               <span v-if="reduced(panel.lead)" class="was lh-num">{{ priced(panel.lead) }}</span>
               <span class="amount lh-num">{{ reduced(panel.lead) ?? priced(panel.lead) }}</span>
               <span class="per">
-                {{ panel.lead?.recurring === false ? 'once' : 'per year' }} · {{ panel.titles.length }} books
+                {{ panel.lead?.recurring === false ? 'once · forever' : `per year · ${panel.count} books` }}
               </span>
               <!-- Advertised, not applied: the reader types the code at
                    stripe. Beside the plan it comes off, since a coupon is
@@ -165,11 +218,22 @@ const IMAGE = '/pricing-lighthouse.jpg'
             </div>
           </div>
 
-          <ol v-if="panel.titles.length" class="titles">
-            <li v-for="(title, i) in panel.titles" :key="title">
-              <span class="n lh-num">{{ pad(i + 1) }}</span>{{ title }}
-            </li>
-          </ol>
+          <div v-if="panel.groups.length" class="groups">
+            <div v-for="group in panel.groups" :key="group.name" class="group">
+              <span class="group-name">{{ group.name }}</span>
+              <ul class="titles">
+                <li v-for="title in group.titles" :key="title">{{ title }}</li>
+              </ul>
+            </div>
+            <!-- Foundations opens the projects too — every membership does — so
+                 it says so, and the everything panel's list is not read as
+                 claiming them for itself alone. -->
+            <p class="also">Plus every project, while you are subscribed.</p>
+          </div>
+
+          <ul v-if="panel.includes.length" class="includes">
+            <li v-for="line in panel.includes" :key="line">{{ line }}</li>
+          </ul>
 
           <div class="plan-foot">
             <button
@@ -339,27 +403,57 @@ const IMAGE = '/pricing-lighthouse.jpg'
   color: var(--ink-inverse-secondary);
 }
 
-.titles {
+.groups {
   margin: 0;
   padding: var(--space-5) 0 0;
-  list-style: none;
   border-top: 1px dashed var(--ink-inverse-faint);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2) var(--space-6);
+  gap: var(--space-5) var(--space-6);
 }
 
-.titles li {
+.group {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
   gap: var(--space-2);
+  align-content: start;
+}
+
+.group-name {
+  font: var(--text-label-mono);
+  color: var(--ink-inverse-muted);
+}
+
+.titles,
+.includes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.titles li,
+.includes li {
   font: var(--text-body-sm);
   color: var(--ink-inverse);
 }
 
-.n {
-  padding-top: 3px;
-  font: var(--text-label-mono);
+.also {
+  grid-column: 1 / -1;
+  margin: 0;
+  font: var(--text-body-sm);
+  color: var(--ink-inverse-muted);
+}
+
+.includes {
+  padding: var(--space-5) 0 0;
+  border-top: 1px dashed var(--ink-inverse-faint);
+}
+
+/* A tick before each, so the list reads as what you get rather than as books. */
+.includes li::before {
+  content: '✓';
+  margin-right: var(--space-3);
   color: var(--ink-inverse-muted);
 }
 
@@ -393,7 +487,7 @@ const IMAGE = '/pricing-lighthouse.jpg'
   .plan { padding: var(--space-6); }
   .plan-head { grid-template-columns: minmax(0, 1fr); }
   .price { justify-items: start; text-align: left; }
-  .titles { grid-template-columns: minmax(0, 1fr); }
+  .groups { grid-template-columns: minmax(0, 1fr); }
   .plan-foot { justify-content: flex-start; }
 }
 </style>
