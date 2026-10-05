@@ -802,6 +802,8 @@ useJsonLd('crumbs', () => ({
           </UiButton>
         </nav>
 
+        <MarketingNewsletterSignup class="reader-signup" />
+
         <ReaderCommentsThread
           :notes="inReadingOrder"
           :loading="!notesLoaded && reading"

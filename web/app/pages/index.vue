@@ -84,6 +84,10 @@ const stats = computed(() => [
     <MarketingFaqSection />
 
     <MarketingAuthorLetter />
+
+    <div class="lh-text lh-gap">
+      <MarketingNewsletterSignup />
+    </div>
   </div>
 </template>
 

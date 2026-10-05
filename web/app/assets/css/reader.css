@@ -115,6 +115,8 @@ a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink);
 
 .reader-pager > :only-child { margin-left: auto; }
 
+.reader-signup { margin-top: var(--space-12); }
+
 @media (max-width: 600px) {
   .reader-pager { flex-direction: column; align-items: stretch; }
   .reader-pager > * { white-space: normal; height: auto; min-height: 44px; padding-block: var(--space-2); }
