@@ -114,6 +114,8 @@ async fn every_write_needs_a_session() {
         ("POST", "/api/articles"),
         ("PATCH", "/api/articles/a-post-a3f19c"),
         ("DELETE", "/api/articles/a-post-a3f19c"),
+        ("POST", "/api/articles/a-post-a3f19c/archive"),
+        ("DELETE", "/api/articles/a-post-a3f19c/archive"),
     ] {
         assert_eq!(
             anonymous(method, uri).await.status(),
