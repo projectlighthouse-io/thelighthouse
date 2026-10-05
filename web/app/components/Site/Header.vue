@@ -38,6 +38,8 @@ const handle = computed<string>(() => {
   return reader.value?.name || reader.value?.email || 'account'
 })
 
+const join = useTemplateRef<{ open: (event?: MouseEvent) => void }>('join')
+
 const open = ref(false)
 const root = useTemplateRef<HTMLElement>('root')
 const toggle = useTemplateRef<HTMLButtonElement>('toggle')
@@ -114,12 +116,16 @@ async function onSignOut(): Promise<void> {
           </div>
         </div>
 
-        <UiButton v-else variant="inverse" size="sm" to="/pricing">join</UiButton>
+        <UiButton v-else variant="inverse" size="sm" @click="join?.open($event)">join</UiButton>
 
+        <!-- Before hydration there is no dialog to open; /login is the same
+             sign-in on its own page. -->
         <template #fallback>
-          <UiButton variant="inverse" size="sm" to="/pricing">join</UiButton>
+          <UiButton variant="inverse" size="sm" to="/login">join</UiButton>
         </template>
       </ClientOnly>
+
+      <SiteJoinDialog ref="join" />
     </div>
   </header>
 </template>
