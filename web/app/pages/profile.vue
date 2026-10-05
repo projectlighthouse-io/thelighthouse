@@ -11,7 +11,7 @@ useSeo({
 
 // The route guard already resolved the session to let this page render, so
 // this reads the state rather than asking again.
-const { reader, signOut } = useReader()
+const { reader } = useReader()
 
 interface Row {
   project: Project
@@ -73,10 +73,6 @@ const ticks = (progress: ProjectProgress): boolean[] =>
       detail="Start a project or a challenge and its progress shows up here."
       :action="{ label: 'See the projects', to: '/projects' }"
     />
-
-    <div class="out">
-      <UiButton variant="ghost" size="md" @click="signOut">Sign out</UiButton>
-    </div>
   </AccountShell>
 </template>
 
@@ -110,5 +106,4 @@ const ticks = (progress: ProjectProgress): boolean[] =>
   gap: var(--space-4);
 }
 
-.out { margin-top: var(--space-12); }
 </style>
