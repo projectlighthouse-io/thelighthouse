@@ -912,8 +912,6 @@ useJsonLd('crumbs', () => ({
           <p v-if="lesson.description" class="lh-lede">{{ lesson.description }}</p>
 
           <div class="reader-meta">
-            <span class="lh-num">{{ data.readMinutes }} min read</span>
-            <span class="lh-num">{{ data.position }} of {{ data.total }}</span>
             <span v-if="data.locales.length > 1" class="reader-langs">
               <NuxtLink
                 v-for="code in data.locales"
