@@ -21,3 +21,8 @@ CLAUDE.local.md
 /content/
 billing.yaml
 pricing.yaml
+
+# Scratch space; may hold copies of production data.
+.tinker/
+# Local agent state.
+.claude/
