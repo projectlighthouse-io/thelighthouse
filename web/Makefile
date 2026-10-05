@@ -2,7 +2,7 @@ PORT ?= 3000
 
 REGISTRY := registry.digitalocean.com/lighthouse-registry
 IMAGE    := lighthouse-web
-VERSION  := $(shell cat VERSION)
+VERSION  := $(shell cat ../VERSION)
 TAG      := $(REGISTRY)/$(IMAGE):$(VERSION)
 
 .DEFAULT_GOAL := help

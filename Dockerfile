@@ -28,6 +28,13 @@ COPY web/ .
 ENV NODE_ENV=production
 ENV NUXT_TELEMETRY_DISABLED=1
 
+# What the footer prints — see web/nuxt.config.ts. Passed by `make image`; a
+# build without them shows "dev" and no commit rather than failing.
+ARG APP_VERSION=dev
+ARG GIT_COMMIT=
+ENV APP_VERSION=${APP_VERSION}
+ENV GIT_COMMIT=${GIT_COMMIT}
+
 RUN npx nuxt prepare && npx nuxt build
 
 # api build

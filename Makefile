@@ -155,8 +155,11 @@ check: fmt-check lint test ## format check, clippy, tests
 
 # --platform: App Platform is amd64 and this is likely built on an arm mac.
 # Without it the image pushes fine and then refuses to start there.
+# The build args are what the footer prints: the release and the commit built.
 image: ## build the combined caddy + nuxt + api image
-	docker build --platform linux/amd64 --build-context ohara=$(CONTENT_PATH) -t $(TAG) -t $(IMAGE):local .
+	docker build --platform linux/amd64 --build-context ohara=$(CONTENT_PATH) \
+		--build-arg APP_VERSION=$(VERSION) --build-arg GIT_COMMIT=$$(git rev-parse HEAD) \
+		-t $(TAG) -t $(IMAGE):local .
 	@echo "\nbuilt $(TAG)"
 
 # --env-file, not a list of -e flags: the api requires every key in

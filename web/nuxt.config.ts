@@ -7,10 +7,22 @@ import tailwindcss from '@tailwindcss/vite'
 const appDir = fileURLToPath(new URL('./app', import.meta.url))
 const serverDir = fileURLToPath(new URL('./server', import.meta.url))
 
-// What the footer prints. VERSION is the release; the commit comes from the
-// build environment (the image has no .git), else from git in a checkout, else
-// nothing — the footer then shows the version alone.
-const version = readFileSync(new URL('./VERSION', import.meta.url), 'utf8').trim()
+// What the footer prints. Both come from the build environment first — `make
+// image` passes APP_VERSION (the repo's VERSION) and GIT_COMMIT (HEAD) as build
+// args, because the image has neither the file nor a .git. Outside docker they
+// fall back to the root VERSION file and to git, else to nothing.
+function versionOf(): string {
+  if (process.env.APP_VERSION) return process.env.APP_VERSION.trim()
+
+  try {
+    return readFileSync(new URL('../VERSION', import.meta.url), 'utf8').trim()
+  }
+  catch {
+    return 'dev'
+  }
+}
+
+const version = versionOf()
 
 function commitOf(): string {
   if (process.env.GIT_COMMIT) return process.env.GIT_COMMIT.slice(0, 8)
