@@ -139,7 +139,7 @@ const when = (at: string | null): string =>
         >
         <UiButton variant="inverse" size="md" @click="copy">{{ copied ? 'Copied' : 'Copy' }}</UiButton>
       </div>
-      <p class="lh-hint">Then run <code>lux auth --token &lt;token&gt;</code>.</p>
+      <p class="lh-hint">Then run <code>luxctl auth --token &lt;token&gt;</code>.</p>
     </div>
 
     <form class="row create" @submit.prevent="create">
