@@ -227,6 +227,8 @@ mod tests {
         Subscription {
             reference: "sub_stub".to_owned(),
             account: None,
+            customer: None,
+            price_key: None,
             plan: None,
             status: crate::subscription::Status::Canceled,
             period_ends_at: None,

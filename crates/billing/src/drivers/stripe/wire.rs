@@ -74,6 +74,31 @@ pub(crate) struct Sub {
     pub(crate) items: Items,
     #[serde(default)]
     pub(crate) metadata: BTreeMap<String, String>,
+    /// Who pays for it. Kept so the application can find the owner of a
+    /// subscription that carries none of this crate's metadata.
+    #[serde(default)]
+    pub(crate) customer: Option<CustomerRef>,
+}
+
+/// A customer as a subscription names it.
+///
+/// An id unless somebody asked Stripe to expand it. Nothing here does, but an
+/// expanded object must not fail the whole subscription: it is read as an
+/// unknown customer rather than as an unreadable event.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub(crate) enum CustomerRef {
+    Id(String),
+    Expanded(serde::de::IgnoredAny),
+}
+
+impl CustomerRef {
+    fn id(self) -> Option<String> {
+        match self {
+            Self::Id(id) => Some(id),
+            Self::Expanded(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -86,6 +111,15 @@ pub(crate) struct Items {
 pub(crate) struct Item {
     pub(crate) id: String,
     pub(crate) current_period_end: Option<i64>,
+    #[serde(default)]
+    pub(crate) price: Option<ItemPrice>,
+}
+
+/// The price an item is on, for its lookup key and nothing else.
+#[derive(Debug, Deserialize)]
+pub(crate) struct ItemPrice {
+    #[serde(default)]
+    pub(crate) lookup_key: Option<String>,
 }
 
 impl Sub {
@@ -108,6 +142,13 @@ impl From<Sub> for Subscription {
                 .and_then(|item| item.current_period_end)
         }));
 
+        let price_key = sub
+            .items
+            .data
+            .first()
+            .and_then(|item| item.price.as_ref())
+            .and_then(|price| price.lookup_key.clone());
+
         Self {
             plan: sub
                 .metadata
@@ -117,6 +158,8 @@ impl From<Sub> for Subscription {
             period_ends_at,
             cancel_at: at(sub.cancel_at).or_else(|| at(sub.ended_at)),
             account: sub.metadata.get(REFERENCE_KEY).cloned(),
+            customer: sub.customer.and_then(CustomerRef::id),
+            price_key,
             reference: sub.id,
         }
     }
@@ -234,5 +277,30 @@ mod tests {
 
         assert_eq!(subscription.plan, None);
         assert_eq!(subscription.status, Status::Active);
+    }
+
+    #[test]
+    fn the_customer_and_the_price_lookup_key_are_kept() {
+        // What a subscription sold by the laravel app looks like: no metadata,
+        // so the customer and the price are all there is to recognise it by.
+        let subscription = parse(
+            r#"{
+                "id": "sub_laravel",
+                "status": "active",
+                "customer": "cus_123",
+                "items": { "data": [{
+                    "id": "si_1",
+                    "current_period_end": 1682288167,
+                    "price": { "id": "price_1", "lookup_key": "lighthouse_voyage_yearly" }
+                }] }
+            }"#,
+        );
+
+        assert_eq!(subscription.customer.as_deref(), Some("cus_123"));
+        assert_eq!(
+            subscription.price_key.as_deref(),
+            Some("lighthouse_voyage_yearly")
+        );
+        assert_eq!(subscription.plan, None);
     }
 }

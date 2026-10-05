@@ -27,6 +27,19 @@ pub struct Subscription {
     /// `None` for a subscription created outside this crate — in a dashboard,
     /// or by an older integration.
     pub account: Option<String>,
+    /// The provider's id for the customer paying for it.
+    ///
+    /// Used to find the owner of a subscription this application did not
+    /// create, which has no [`account`](Self::account) to go by.
+    pub customer: Option<String>,
+    /// The first item's price lookup key, as the provider reported it.
+    ///
+    /// **Not used to pick a plan for anything this application sold** — the
+    /// plan is read from metadata, because a price handle stops matching the
+    /// day its price is retired. It is kept only so the application can
+    /// recognise subscriptions sold by the laravel app, which wrote no
+    /// metadata at all.
+    pub price_key: Option<String>,
     /// Which plan it is on, when the provider said.
     ///
     /// `None` when the answer cannot be mapped back to a configured plan —
