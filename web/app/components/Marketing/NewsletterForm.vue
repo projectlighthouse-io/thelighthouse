@@ -74,9 +74,10 @@ async function seal(): Promise<void> {
   catch (error: unknown) {
     // The api's own wording when it sent one — written for a person, and more
     // use than anything this form could invent. A 429 carries none, so that
-    // case gets the fallback.
-    problem.value = (error as { data?: { error?: string } })?.data?.error
-      ?? 'Could not send it just now. Try again in a minute.'
+    // case gets the fallback. The address is the only field, so its refusal
+    // is the hint under it.
+    const refused = refusedBy(error, 'Could not send it just now. Try again in a minute.')
+    problem.value = refused.fields.email ?? refused.message
   }
   finally {
     busy.value = false
@@ -136,8 +137,10 @@ function readdress(): void {
                 :id="field"
                 v-model="email"
                 type="email"
+                maxlength="254"
                 autocomplete="email"
                 spellcheck="false"
+                :aria-invalid="!!problem"
                 :readonly="sent"
                 placeholder="you@example.com"
                 @keydown.enter.prevent="seal"
