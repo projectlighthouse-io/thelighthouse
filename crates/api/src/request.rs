@@ -12,7 +12,13 @@
 //! What comes back is `response`'s job — [`Paging`] is handed to
 //! `response::PaginatedResponse`, which is where the envelope lives.
 
+use axum::{
+    extract::{FromRequest, Request, rejection::JsonRejection},
+    response::Response,
+};
 use serde::Deserialize;
+
+use crate::response;
 
 /// Past this there is nothing to show, and it is what stops
 /// `(page - 1) * per_page` from overflowing on a hostile page number.
@@ -125,6 +131,38 @@ fn escape_like(term: &str) -> String {
     }
 
     out
+}
+
+/// A json body, refused in the api's own shape when it cannot be read.
+///
+/// `axum::Json` answers a body it cannot parse with plain text, which no form
+/// can show. This answers `{code, error}` like every other refusal. A missing
+/// key is not this refusal's business: a form's required fields default to
+/// empty, so the field is named by its own validation instead.
+pub(crate) struct JsonBody<T>(pub(crate) T);
+
+impl<S, T> FromRequest<S> for JsonBody<T>
+where
+    axum::Json<T>: FromRequest<S, Rejection = JsonRejection>,
+    S: Send + Sync,
+{
+    type Rejection = Response;
+
+    async fn from_request(
+        request: Request,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        match axum::Json::<T>::from_request(request, state).await {
+            Ok(axum::Json(value)) => Ok(Self(value)),
+            Err(rejection) => {
+                tracing::info!(%rejection, "unreadable request body");
+                Err(response::bad_request(
+                    "body_unreadable",
+                    "That request could not be read. Reload the page and try again.",
+                ))
+            }
+        }
+    }
 }
 
 #[cfg(test)]

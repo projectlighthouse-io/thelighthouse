@@ -14,6 +14,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use std::collections::BTreeMap;
+
 use chrono::{NaiveDateTime, SecondsFormat};
 use serde::{Serialize, Serializer};
 
@@ -168,6 +170,46 @@ pub(crate) fn bad_request(code: &str, message: &str) -> Response {
     )
 }
 
+/// One field's refusal: the input it belongs to, as the form names it, and
+/// what to tell the person at it.
+pub(crate) type FieldError = (&'static str, &'static str);
+
+/// A form refused field by field.
+///
+/// `error` is there for a client that only reads `error`, so every refusal
+/// keeps the one shape [`ErrorResponse`] promises; `fields` is what a form
+/// draws beside each input.
+#[derive(Debug, Serialize)]
+struct InvalidResponse {
+    code: &'static str,
+    error: &'static str,
+    fields: BTreeMap<&'static str, &'static str>,
+}
+
+/// 422, naming every field that is wrong rather than the first.
+///
+/// One message per field, the first given: a field that is both empty and
+/// malformed is told it is empty, which is the one worth fixing first. Never
+/// cached, as no refusal is.
+pub(crate) fn invalid(
+    errors: impl IntoIterator<Item = FieldError>,
+) -> Response {
+    let mut fields = BTreeMap::new();
+    for (field, message) in errors {
+        fields.entry(field).or_insert(message);
+    }
+
+    json(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        InvalidResponse {
+            code: "invalid",
+            error: "Some fields need another look.",
+            fields,
+        },
+        CachePolicy::NoStore,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use axum::http::header::CACHE_CONTROL;
@@ -181,6 +223,35 @@ mod tests {
             .and_then(|value| value.to_str().ok())
             .unwrap_or_default()
             .to_owned()
+    }
+
+    #[tokio::test]
+    async fn a_form_refusal_names_each_field_once() {
+        let response = invalid([
+            ("title", "Please give your article a title."),
+            ("title", "A title must not exceed 200 characters."),
+            ("body", "Please write something."),
+        ]);
+
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(cache_control(&response).contains("no-store"));
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(body.pointer("/code").unwrap(), "invalid");
+        assert!(body.pointer("/error").unwrap().is_string());
+        // The first message for a field is the one kept.
+        assert_eq!(
+            body.pointer("/fields/title").unwrap(),
+            "Please give your article a title."
+        );
+        assert_eq!(
+            body.pointer("/fields/body").unwrap(),
+            "Please write something."
+        );
     }
 
     #[test]
