@@ -54,9 +54,8 @@ function dismiss(): void {
   <div v-if="offer && !dismissed" class="ppp lh-figure">
     <div class="bar" role="region" aria-label="regional pricing">
       <p>
-        It looks like you are in <strong>{{ countryName }}</strong>. Use the code
-        <code>{{ offer.code }}</code> for <strong>{{ offer.percent }}%</strong> off at
-        checkout — purchasing-power parity, no questions asked.
+        Prices are adjusted for <strong>{{ countryName }}</strong>. The lower price is applied
+        automatically at checkout — see <NuxtLink to="/pricing" class="lh-inline">pricing</NuxtLink>.
       </p>
       <button type="button" class="dismiss" aria-label="dismiss" @click="dismiss">
         ✕

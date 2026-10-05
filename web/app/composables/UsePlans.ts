@@ -1,3 +1,17 @@
+import type { Off } from '@/utils/Money'
+
+/**
+ * A plan's discount for the asker's country: the code, how much it takes off
+ * (`percent` or `amount_off` in minor units), and whether it is the plan's
+ * rest tier — the price for everywhere no other tier names. Applied for the
+ * reader at checkout; the page shows it so the price they see is the one they
+ * pay.
+ */
+export interface Coupon extends Off {
+  code: string
+  rest: boolean
+}
+
 /** One purchasable plan, as `/_api/billing/plans` reports it. */
 export interface Offer {
   plan: string
@@ -7,8 +21,8 @@ export interface Offer {
   recurring: boolean
   amount: number | null
   currency: string | null
-  /** The purchasing-power code that comes off this plan, for the asker's country. */
-  coupon: { code: string, percent: number } | null
+  /** The discount that comes off this plan, for the asker's country. */
+  coupon: Coupon | null
 }
 
 /**

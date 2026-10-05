@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CatalogueBook, CataloguePlan } from '@/data/Catalogue'
+import type { Coupon } from '@/composables/UsePlans'
 import { plans, shelf } from '@/data/Catalogue'
 import { tracks } from '@/data/Tracks'
 
@@ -131,7 +132,7 @@ const panels: Panel[] = keys.map((key) => {
  * per reader: a stripe coupon is restricted to one plan's product, so two
  * panels can carry different codes in the same country.
  */
-function couponFor(offer: CataloguePlan | undefined): { code: string, percent: number } | null {
+function couponFor(offer: CataloguePlan | undefined): Coupon | null {
   if (!offer) return null
 
   return (offers.value ?? []).find(o => o.plan === offer.plan)?.coupon ?? null
@@ -139,11 +140,11 @@ function couponFor(offer: CataloguePlan | undefined): { code: string, percent: n
 
 /** What a plan costs once its coupon is applied, or null when the list price is the price. */
 function reduced(offer: CataloguePlan | undefined): string | null {
-  const percent = couponFor(offer)?.percent
+  const coupon = couponFor(offer)
 
-  if (!offer?.amount || !percent) return null
+  if (!offer?.amount || !coupon) return null
 
-  return money(afterDiscount(offer.amount, percent))
+  return money(afterOff(offer.amount, coupon))
 }
 
 /** `4900` reads as `$49`; a price nobody knows reads as a dash. */
@@ -199,12 +200,11 @@ const IMAGE = '/pricing-lighthouse.jpg'
               <span class="per">
                 {{ panel.lead?.recurring === false ? 'once · forever' : `per year · ${panel.count} books` }}
               </span>
-              <!-- Advertised, not applied: the reader types the code at
-                   stripe. Beside the plan it comes off, since a coupon is
-                   restricted to one plan and two panels can differ. -->
+              <!-- Applied for the reader at checkout — the same tier this
+                   panel shows — so there is no code to type. Beside the plan
+                   it comes off, since a coupon is restricted to one plan. -->
               <span v-if="couponFor(panel.lead)" class="coupon">
-                {{ couponFor(panel.lead)?.percent }}% off — enter
-                <code>{{ couponFor(panel.lead)?.code }}</code> at checkout
+                {{ offLabel(couponFor(panel.lead)!) }}, applied at checkout
               </span>
             </div>
           </div>
@@ -233,8 +233,7 @@ const IMAGE = '/pricing-lighthouse.jpg'
               class="outright"
               @click="buy(panel.outright?.plan)"
             >
-              or {{ reduced(panel.outright) ?? priced(panel.outright) }} once, yours to keep{{
-                couponFor(panel.outright) ? ` with ${couponFor(panel.outright)?.code}` : '' }} →
+              or {{ reduced(panel.outright) ?? priced(panel.outright) }} once, yours to keep →
             </button>
 
             <UiButton

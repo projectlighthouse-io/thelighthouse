@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { afterDiscount, money } from './Money'
+import { afterDiscount, afterOff, offLabel, money } from './Money'
 
 describe('money', () => {
   it('drops the cents from a whole amount and keeps them otherwise', () => {
@@ -34,5 +34,33 @@ describe('afterDiscount', () => {
   it('refuses to invent a negative price out of a nonsense percentage', () => {
     expect(afterDiscount(9900, 140)).toBe(0)
     expect(afterDiscount(9900, -20)).toBe(9900)
+  })
+})
+
+describe('afterOff', () => {
+  it('takes a fixed amount off the declared list prices exactly', () => {
+    // The tiers pricing.yaml declares: $119 and $599 lists.
+    expect(afterOff(11900, { amount_off: 2000 })).toBe(9900)
+    expect(afterOff(11900, { amount_off: 7000 })).toBe(4900)
+    expect(afterOff(59900, { amount_off: 25000 })).toBe(34900)
+  })
+
+  it('takes a percentage off as afterDiscount does', () => {
+    expect(afterOff(9900, { percent: 60 })).toBe(afterDiscount(9900, 60))
+  })
+
+  it('never shows a price below nothing', () => {
+    expect(afterOff(4900, { amount_off: 9000 })).toBe(0)
+  })
+
+  it('leaves the price alone for a tier that says neither', () => {
+    expect(afterOff(11900, {})).toBe(11900)
+  })
+})
+
+describe('offLabel', () => {
+  it('reads as money or as a percentage, whichever the tier is', () => {
+    expect(offLabel({ amount_off: 2000 })).toBe('$20 off')
+    expect(offLabel({ percent: 40 })).toBe('40% off')
   })
 })

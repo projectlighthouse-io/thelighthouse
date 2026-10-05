@@ -238,11 +238,11 @@ export interface LessonResponse {
 }
 
 /** The purchasing-power offer for the reader's country, as `/_api/billing/offer` sends it. */
+/** A country with prices of its own: the banner names it. Nothing to type —
+ *  checkout applies the reader's tier. */
 export interface PppOffer {
   /** ISO 3166 alpha-2. The page turns it into a name. */
   country: string
-  code: string
-  percent: number
 }
 
 /** One row of a contents list — a lesson, a stage. */

@@ -32,3 +32,29 @@ export function afterDiscount(minor: number, percent: number): number {
 
   return Math.round((minor * (100 - off)) / 100)
 }
+
+/** How much a tier takes off: a percentage, or minor units. */
+export interface Off {
+  percent?: number
+  amount_off?: number
+}
+
+/**
+ * What a tier leaves of a price, in minor units — a fixed amount or a
+ * percentage, whichever the tier declares. An advertisement, as
+ * `afterDiscount` is; stripe applies the same coupon at checkout. Never below
+ * zero: a misdeclared amount reads as free rather than as a negative price.
+ */
+export function afterOff(minor: number, off: Off): number {
+  if (off.amount_off !== undefined) return Math.max(minor - off.amount_off, 0)
+  if (off.percent !== undefined) return afterDiscount(minor, off.percent)
+
+  return minor
+}
+
+/** `$20 off` or `40% off`. */
+export function offLabel(off: Off): string {
+  if (off.amount_off !== undefined) return `${money(off.amount_off)} off`
+
+  return `${off.percent ?? 0}% off`
+}
