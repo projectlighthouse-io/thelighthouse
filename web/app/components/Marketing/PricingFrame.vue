@@ -118,10 +118,8 @@ async function buy(plan: string | undefined): Promise<void> {
   await checkout(plan)
 }
 
-// TODO(pricing-image): an owned placeholder — the lighthouse painting from the
-// book art. Swap for a dedicated pricing image once one is made; keep it on
-// the spaces CDN and object-position 50% 40%.
-const IMAGE = 'https://spaces.projectlighthouse.io/books/art/lighthouse.001.jpeg'
+// Served from public/, so it ships in the image rather than off the CDN.
+const IMAGE = '/pricing-lighthouse.jpg'
 </script>
 
 <template>
@@ -212,11 +210,8 @@ const IMAGE = 'https://spaces.projectlighthouse.io/books/art/lighthouse.001.jpeg
 }
 
 .pitch {
-  position: sticky;
-  top: var(--space-6);
-  align-self: start;
+  position: relative;
   min-height: 420px;
-  height: min(640px, calc(100vh - 48px));
   border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--surface-inverse);
