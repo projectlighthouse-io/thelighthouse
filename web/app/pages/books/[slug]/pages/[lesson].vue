@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Note } from '@/composables/UseNotes'
+import type { LessonComment } from '@/types/Comments'
 import type { Chapter, LessonResponse, LessonSummary } from '@/types/Content'
 import type { PaywallBook, PaywallSection } from '@/types/Paywall'
 // only this route needs the reader system
@@ -405,7 +406,7 @@ watch(() => data.value?.toc, async () => {
  * prose arrives as a string of markup and the highlights are put on top of it
  * by `utils/Anchor`. Everything below is the bookkeeping that makes that
  * repeatable — what is painted, and what to take off before painting again. */
-const { isSignedIn, resolve: resolveReader } = useReader()
+const { reader, isSignedIn, resolve: resolveReader } = useReader()
 
 /**
  * Whether the browser has taken over.
@@ -438,7 +439,6 @@ const scope = computed(() => ({
 
 const {
   notes,
-  loaded: notesLoaded,
   load: loadNotes,
   create: createNote,
   edit: editNote,
@@ -460,6 +460,77 @@ const inReadingOrder = computed<Note[]>(() =>
     (a, b) => (a.startOffset ?? Infinity) - (b.startOffset ?? Infinity),
   ),
 )
+
+/**
+ * The reader's private notes, for their own group under the thread. Their
+ * public ones are already in the public thread, and listing them twice would
+ * read as two notes.
+ */
+const privateNotes = computed<Note[]>(() =>
+  inReadingOrder.value.filter(note => !note.isPublic),
+)
+
+/**
+ * The public thread under the lesson — everyone's shared notes, twenty top-level
+ * comments at a time. Fetched in the browser like the notes, but needs no
+ * session: a signed-out visitor reads it too.
+ */
+const {
+  items: comments,
+  total: commentsTotal,
+  loaded: commentsLoaded,
+  loading: commentsLoading,
+  failed: commentsFailed,
+  hasMore: moreComments,
+  refresh: refreshComments,
+  loadMore: loadMoreComments,
+  prepend: prependComment,
+  patch: patchComment,
+  drop: dropComment,
+} = useComments(scope)
+
+/** Who is reading, for marking their own rows — null until hydrated, so the
+ *  server render and the first client render draw the same rows. */
+const readerId = computed<string | null>(() =>
+  reading.value ? (reader.value?.sub ?? null) : null,
+)
+
+/** Notes with a passage to jump back to. Only the reader's own are painted. */
+const jumpable = computed<number[]>(() =>
+  notes.value
+    .filter(note => note.startOffset !== null && note.endOffset !== null)
+    .map(note => note.id),
+)
+
+/**
+ * A public note this reader just saved, put on top of the thread by hand.
+ *
+ * The thread's answer is cached for a minute, so asking again would not have
+ * it. `create` pushes the row as the api stored it onto the end of `notes`,
+ * which is where it is read back from.
+ */
+const showPosted = (): void => {
+  const saved = notes.value.at(-1)
+  if (!saved || !saved.isPublic || saved.parentId !== null || !reader.value) return
+
+  const comment: LessonComment = {
+    id: saved.id,
+    selectedText: saved.selectedText,
+    body: saved.noteContent,
+    startOffset: saved.startOffset,
+    endOffset: saved.endOffset,
+    createdAt: saved.createdAt,
+    author: {
+      id: Number(reader.value.sub),
+      name: reader.value.name,
+      username: reader.value.username,
+      avatarUrl: reader.value.avatar,
+    },
+    replies: [],
+  }
+
+  prependComment(comment)
+}
 
 // Destructured rather than kept as objects: refs reached through a plain
 // object are not unwrapped in a template, and `bookmark.current.value` in
@@ -573,6 +644,7 @@ const saveNote = async (content: string, isPublic: boolean): Promise<void> => {
     return
   }
 
+  showPosted()
   noteDialogOpen.value = false
   clearSelection()
   repaint()
@@ -581,9 +653,10 @@ const saveNote = async (content: string, isPublic: boolean): Promise<void> => {
 const deleteOpenNote = async (): Promise<void> => {
   if (!openNote.value) return
 
+  const id = openNote.value.id
   popoverError.value = null
   removingNote.value = true
-  const refused = await removeNote(openNote.value.id)
+  const refused = await removeNote(id)
   removingNote.value = false
 
   if (refused) {
@@ -591,6 +664,7 @@ const deleteOpenNote = async (): Promise<void> => {
     return
   }
 
+  dropComment(id)
   openNote.value = null
   repaint()
 }
@@ -641,6 +715,7 @@ const postComment = async (content: string): Promise<void> => {
   postingComment.value = true
   const refused = await createNote(content)
   if (refused) commentErrors.show(refused)
+  else showPosted()
   postingComment.value = false
 }
 
@@ -650,17 +725,17 @@ const postComment = async (content: string): Promise<void> => {
  * `painted` is the only thing that knows which elements are note 12's — the
  * marks carry no id, because nothing else would have read one.
  */
-const jumpToNote = (note: Note): void => {
-  painted.get(note.id)?.[0]?.scrollIntoView({
+const jumpToNote = (id: number): void => {
+  painted.get(id)?.[0]?.scrollIntoView({
     behavior: 'smooth',
     block: 'center',
   })
 }
 
-const saveNoteEdit = async (note: Note, content: string): Promise<void> => {
+const saveNoteEdit = async (id: number, content: string): Promise<void> => {
   editErrors.clear()
-  savingNoteId.value = note.id
-  const refused = await editNote(note.id, content)
+  savingNoteId.value = id
+  const refused = await editNote(id, content)
   savingNoteId.value = null
 
   // Left open on failure, with what was typed still in the field. Closing it
@@ -670,19 +745,23 @@ const saveNoteEdit = async (note: Note, content: string): Promise<void> => {
     return
   }
 
+  // The public thread is its own copy, so it takes the stored body too.
+  patchComment(id, notes.value.find(note => note.id === id)?.noteContent ?? content)
   editingNoteId.value = null
 }
 
-const removeListedNote = async (note: Note): Promise<void> => {
+const removeListedNote = async (id: number): Promise<void> => {
   removeError.value = null
-  savingNoteId.value = note.id
-  const refused = await removeNote(note.id)
+  savingNoteId.value = id
+  const refused = await removeNote(id)
   savingNoteId.value = null
 
   if (refused) {
-    removeError.value = { id: note.id, message: refused.message || 'That note could not be deleted.' }
+    removeError.value = { id, message: refused.message || 'That note could not be deleted.' }
     return
   }
+
+  dropComment(id)
 
   // The highlight in the prose goes with it.
   repaint()
@@ -736,6 +815,16 @@ watch(readable, async () => {
   unpaintAll()
   openNote.value = null
   await loadAnnotations()
+})
+
+// The thread is per lesson, not per body: unlocking the paid half changes the
+// body without changing what anyone has said about the lesson. Back to page one
+// on every move, and whatever was being edited belonged to the old one.
+onMounted(refreshComments)
+watch([bookSlug, lessonSlug], () => {
+  editingNoteId.value = null
+  removeError.value = null
+  void refreshComments()
 })
 
 // A mark holds a reference to a listener that closes over this page's state.
@@ -892,8 +981,15 @@ useJsonLd('crumbs', () => ({
         <MarketingNewsletterSignup class="reader-signup" />
 
         <ReaderCommentsThread
-          :notes="inReadingOrder"
-          :loading="!notesLoaded && reading"
+          :comments="comments"
+          :total="commentsTotal"
+          :loaded="commentsLoaded"
+          :loading="commentsLoading"
+          :failed="commentsFailed"
+          :has-more="moreComments"
+          :private-notes="reading ? privateNotes : []"
+          :reader-id="readerId"
+          :jumpable="jumpable"
           :signed-in="reading"
           :submitting="postingComment"
           :submit-field-error="commentErrors.fields.value.note_content ?? null"
@@ -904,11 +1000,13 @@ useJsonLd('crumbs', () => ({
           :remove-error="removeError"
           @submit="postComment"
           @jump="jumpToNote"
-          @edit="editingNoteId = $event.id; editErrors.clear()"
+          @edit="editingNoteId = $event; editErrors.clear()"
           @save="saveNoteEdit"
           @cancel-edit="editingNoteId = null; editErrors.clear()"
           @remove="removeListedNote"
           @sign-in="signIn"
+          @more="loadMoreComments"
+          @retry="refreshComments"
         />
       </article>
     </div>
