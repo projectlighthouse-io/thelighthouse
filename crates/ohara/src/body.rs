@@ -3,8 +3,9 @@
 use std::sync::OnceLock;
 
 use comrak::{
-    Anchorizer, Options, markdown_to_html_with_plugins, options::Plugins,
-    plugins::syntect::SyntectAdapter,
+    Anchorizer, Arena, Options, arena_tree::NodeEdge,
+    markdown_to_html_with_plugins, nodes::NodeValue, options::Plugins,
+    parse_document, plugins::syntect::SyntectAdapter,
 };
 
 /// Where a paid region opens and closes.
@@ -307,13 +308,8 @@ fn topics_in(markdown: &str) -> Vec<String> {
 /// than guessed at — it comes back as plain text in the same panel.
 #[must_use]
 pub fn render(markdown: &str) -> String {
-    let mut options = Options::default();
+    let mut options = options();
 
-    options.extension.table = true;
-    options.extension.strikethrough = true;
-    options.extension.tasklist = true;
-    options.extension.autolink = true;
-    options.extension.footnotes = true;
     // Without this every heading renders as a bare `<h2>`, and the contents
     // list — which links to `#some-heading` — points at nothing. The empty
     // prefix means the id is the anchor itself; comrak also drops a deep-link
@@ -328,6 +324,22 @@ pub fn render(markdown: &str) -> String {
     plugins.render.codefence_syntax_highlighter = Some(highlighter);
 
     markdown_to_html_with_plugins(markdown, &options, &plugins)
+}
+
+/// The markdown dialect: GitHub flavoured, as the laravel app parsed it.
+///
+/// Shared by [`render`] and [`peek`], so a peek reads the same emphasis and
+/// strikethrough the page would have drawn.
+fn options() -> Options<'static> {
+    let mut options = Options::default();
+
+    options.extension.table = true;
+    options.extension.strikethrough = true;
+    options.extension.tasklist = true;
+    options.extension.autolink = true;
+    options.extension.footnotes = true;
+
+    options
 }
 
 /// A heading in the table of contents, and the anchor it scrolls to.
@@ -346,6 +358,30 @@ pub struct Heading {
 /// heading and a contents list full of them is worse than none.
 #[must_use]
 pub fn headings(markdown: &str) -> Vec<Heading> {
+    // Through `sections`, so the headings a contents list links to and the
+    // sections a paywall card describes are one walk and cannot disagree.
+    sections(markdown)
+        .into_iter()
+        .map(|section| section.heading)
+        .collect()
+}
+
+/// A `##` section: its heading, and the markdown under it up to the next one.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Section {
+    pub heading: Heading,
+    /// Everything between this heading and the next `##`, trimmed. What a
+    /// section's reading time and its peek are worked out from — never served
+    /// as it stands, since for a locked section it is the paid prose.
+    pub body: String,
+}
+
+/// The lesson cut at its `##` headings.
+///
+/// Whatever comes before the first heading is no section's: it is the
+/// lesson's introduction, which no contents entry names either.
+#[must_use]
+pub fn sections(markdown: &str) -> Vec<Section> {
     // Comrak's own, so these ids are the ids it writes into the html. A second
     // implementation here would agree until the first heading with a character
     // the two treat differently — and the symptom of that is a contents entry
@@ -353,21 +389,131 @@ pub fn headings(markdown: &str) -> Vec<Heading> {
     // because it is what makes a repeated heading `-1` rather than a duplicate.
     let mut anchorizer = Anchorizer::new();
     let mut fenced = false;
+    let mut found: Vec<Section> = Vec::new();
 
-    markdown
-        .lines()
-        .filter(|line| {
-            if line.trim_start().starts_with("```") {
-                fenced = !fenced;
+    for line in markdown.lines() {
+        if line.trim_start().starts_with("```") {
+            fenced = !fenced;
+        }
+
+        let heading = if fenced {
+            None
+        } else {
+            line.strip_prefix("## ")
+        };
+
+        match heading {
+            Some(text) => found.push(Section {
+                heading: Heading {
+                    id: anchorizer.anchorize(text.trim()),
+                    text: text.trim().to_owned(),
+                },
+                body: String::new(),
+            }),
+            None => {
+                if let Some(open) = found.last_mut() {
+                    open.body.push_str(line);
+                    open.body.push('\n');
+                }
             }
-            !fenced
+        }
+    }
+
+    for section in &mut found {
+        section.body = section.body.trim().to_owned();
+    }
+
+    found
+}
+
+/// How long a peek runs, in characters, before it is cut.
+const PEEK_CHARS: usize = 120;
+
+/// A locked section's opening, as a line of plain text ending in `…`.
+///
+/// What a paywall card shows under a section title so the reader can see the
+/// kind of thing behind it. The first paragraph of prose — code blocks,
+/// tables, html and images are skipped, and inline code keeps its text but not
+/// its backticks — cut at a word near [`PEEK_CHARS`].
+///
+/// **Always cut, and always from the first paragraph only.** This is the one
+/// place paid prose leaves the process, so it is bounded here rather than by
+/// whoever calls it: a peek cannot grow into the section however it is used.
+/// `None` for a section with no paragraph of prose to open on.
+#[must_use]
+pub fn peek(markdown: &str) -> Option<String> {
+    first_paragraph(markdown).map(|text| clip(&text, PEEK_CHARS))
+}
+
+/// The plain text of the first paragraph that has any.
+///
+/// Parsed rather than pattern-matched: emphasis, links and entities are what
+/// the parser already understands, and stripping them with string rules is
+/// how `snake_case` loses its underscores.
+fn first_paragraph(markdown: &str) -> Option<String> {
+    let arena = Arena::new();
+    let root = parse_document(&arena, markdown, &options());
+
+    root.descendants()
+        .filter(|node| matches!(node.data().value, NodeValue::Paragraph))
+        .map(|paragraph| {
+            let mut text = String::new();
+            // Inside an image, its alt text — which describes a picture the
+            // card is not showing.
+            let mut in_image = 0_usize;
+
+            for edge in paragraph.traverse() {
+                match edge {
+                    NodeEdge::Start(node) => match &node.data().value {
+                        NodeValue::Image(_) => in_image += 1,
+                        _ if in_image > 0 => {}
+                        NodeValue::Text(literal) => text.push_str(literal),
+                        NodeValue::Code(code) => text.push_str(&code.literal),
+                        NodeValue::SoftBreak | NodeValue::LineBreak => {
+                            text.push(' ');
+                        }
+                        _ => {}
+                    },
+                    NodeEdge::End(node) => {
+                        if matches!(node.data().value, NodeValue::Image(_)) {
+                            in_image = in_image.saturating_sub(1);
+                        }
+                    }
+                }
+            }
+
+            text.split_whitespace().collect::<Vec<_>>().join(" ")
         })
-        .filter_map(|line| line.strip_prefix("## "))
-        .map(|text| Heading {
-            id: anchorizer.anchorize(text.trim()),
-            text: text.trim().to_owned(),
-        })
-        .collect()
+        .find(|text| !text.is_empty())
+}
+
+/// `text` cut to at most `limit` characters, at a word, ending in `…`.
+///
+/// The ellipsis goes on even when nothing was cut: a peek is the start of a
+/// section by definition, and a full stop would say it was the whole of one.
+fn clip(text: &str, limit: usize) -> String {
+    let cut = text
+        .char_indices()
+        .nth(limit)
+        .map_or(text.len(), |(at, _)| at);
+    let head = text.get(..cut).unwrap_or(text);
+    let rest = text.get(cut..).unwrap_or_default();
+
+    // Back to the last whole word, unless the cut already fell between two.
+    let head = if rest.is_empty() || rest.starts_with(char::is_whitespace) {
+        head
+    } else {
+        head.rfind(char::is_whitespace)
+            .and_then(|at| head.get(..at))
+            .unwrap_or(head)
+    };
+
+    // "word.…" and "word,…" read as typos.
+    let head = head.trim_end_matches(|c: char| {
+        c.is_whitespace() || matches!(c, '.' | ',' | ';' | ':' | '!' | '?')
+    });
+
+    format!("{head}…")
 }
 
 /// Minutes to read, at 220 words a minute, and never zero.
@@ -689,6 +835,67 @@ mod tests {
         );
 
         assert_eq!(found.len(), 2, "{found:?}");
+    }
+
+    #[test]
+    fn a_section_runs_from_its_heading_to_the_next() {
+        let found = sections(
+            "Intro, which is no section's.\n\n## One\n\nfirst\n\n```sh\n## not a heading\n```\n\n## Two\n\nsecond\n",
+        );
+
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert_eq!(
+            found.first().map(|s| s.body.as_str()),
+            Some("first\n\n```sh\n## not a heading\n```")
+        );
+        assert_eq!(found.get(1).map(|s| s.body.as_str()), Some("second"));
+    }
+
+    #[test]
+    fn the_headings_are_the_sections_headings() {
+        let markdown = "## Setup\n\na\n\n## Setup\n\nb\n";
+        let from_sections: Vec<Heading> =
+            sections(markdown).into_iter().map(|s| s.heading).collect();
+
+        assert_eq!(headings(markdown), from_sections);
+    }
+
+    #[test]
+    fn a_peek_is_the_first_paragraph_as_plain_text() {
+        let peeked = peek(
+            "```c\nint secret = 1;\n```\n\n| a |\n|---|\n| b |\n\n![a figure](x.png)\n\nThe **heap** is _where_ `malloc` gets [memory](https://x.test).\n\nSecond paragraph.",
+        );
+
+        // Code, the table and the image are skipped; the markup goes and the
+        // words stay, inline code included. Nothing past the paragraph.
+        assert_eq!(
+            peeked.as_deref(),
+            Some("The heap is where malloc gets memory…")
+        );
+    }
+
+    #[test]
+    fn a_long_peek_is_cut_at_a_word_and_never_runs_long() {
+        let long = "word ".repeat(60);
+        let peeked = peek(&long).unwrap();
+
+        assert!(peeked.ends_with("word…"), "{peeked}");
+        assert!(peeked.chars().count() <= PEEK_CHARS + 1, "{peeked}");
+    }
+
+    #[test]
+    fn a_cut_counts_characters_not_bytes() {
+        // Multi-byte text cut by bytes would panic or split a character.
+        let bengali = "আমি ".repeat(50);
+        let clipped = clip(&bengali, 10);
+
+        assert_eq!(clipped, "আমি আমি…");
+    }
+
+    #[test]
+    fn a_section_with_no_prose_has_no_peek() {
+        assert_eq!(peek("```\nonly code\n```"), None);
+        assert_eq!(peek(""), None);
     }
 
     #[test]
