@@ -1,18 +1,37 @@
 # thelighthouse
 
-Deployment for [projectlighthouse.io](https://projectlighthouse.io). One image,
-three processes: Caddy in front, the Nuxt frontend and the Rust API behind it.
+The platform behind [projectlighthouse.io](https://projectlighthouse.io). One
+image, three processes: Caddy in front, the Nuxt frontend and the Rust API
+behind it.
 
 The frontend is the Nuxt app in `web/`. This repo owns it, the API, the
-routing and the deploy. Content is the separate ohara repo, read from
-`CONTENT_PATH`.
+routing and the deploy. Content — the books, lessons and projects — is the
+separate, private ohara repo, read from `CONTENT_PATH`. `fixture/` is a small
+synthetic stand-in for it, so a clone builds and tests without access; see
+[Without the private repos](#without-the-private-repos).
+
+## What is where
+
+| path | |
+|---|---|
+| `crates/api` | `lighthouse-api` — the HTTP surface: routes, the luxctl signature boundary, sessions, cache policy |
+| `crates/ohara` | reads the content repo — books, lessons, projects, prices. No database, no HTTP. Named after the repo it reads |
+| `crates/content` | `lighthouse-content sync` — upserts ohara's books and lessons into postgres |
+| `crates/migrate` | `lighthouse-migrate run\|status\|baseline` — the only thing that applies migrations |
+| `crates/prices` | `lighthouse-prices status\|apply\|resolve\|catalogue` — reconciles `pricing.yaml` with Stripe and writes the api's `billing.yaml` |
+| `crates/billing` | subscription billing behind a trait, with a Stripe driver |
+| `crates/loginwith` | OAuth 2.0 sign-in for GitHub and Google — see its [README](crates/loginwith/README.md) |
+| `crates/subscriber` | `lighthouse-subscriber` — reads, and revokes, one reader's subscription |
+| `web/` | the Nuxt frontend — see its [README](web/README.md) |
+| `migrations/` | the schema, compiled into `lighthouse-migrate` |
+| `fixture/` | a fake content repo, for tests — see its [README](fixture/README.md) |
 
 ## Shape
 
 ```
         :8080  caddy  (the only public listener)
                  │
-   /api/*  ──────┼──► :9000  api    signed requests only
+   /api/*  ──────┼──► :9000  api    signed, or a path caddy names
    /*      ──────┴──► :3000  nuxt
                           │
                           └──► :9000  api    loopback, never via caddy
@@ -25,7 +44,7 @@ does so on a reader's behalf.
 ## Running it
 
 ```bash
-cp .env.example .env   # then fill it in — every key is required
+cp .env.example .env   # then fill it in — every uncommented key is required
 make image             # build the combined image
 make run               # runs it, configured from .env
 ```
@@ -34,13 +53,45 @@ make run               # runs it, configured from .env
 |---|---|
 | `make image` | build caddy + nuxt + api into one image |
 | `make run` | run it locally, reading `.env` |
-| `make push` | push to the DO registry |
+| `make run-built` | run the last built image against the local postgres |
+| `make push` | push to the DigitalOcean registry |
 
-Deploys are manual. Nothing pushes from CI.
+`make help` lists every target.
+
+Production is DigitalOcean App Platform, running the pushed image behind
+Cloudflare. Deploys are manual. Nothing pushes from CI.
 
 In production there is no `.env` — every key comes from the platform's own
 environment, and the API reads whichever is present. What it will not do is
-start with a key missing; the boot failure names it.
+start with a required key missing; the boot failure names it. The keys
+commented out in `.env.example` — rate limits, `DISCOUNT_BANNER`,
+`ENSURE_PRICES_AT_BOOT`, Sentry — are optional, and each says its default
+there.
+
+At start the container resolves `billing.yaml` from Stripe and applies pending
+migrations before anything serves — see `docker/entrypoint.sh`.
+
+## Without the private repos
+
+The content repo, `pricing.yaml` and the Stripe keys are all private, and none
+of them is needed to build and test:
+
+```bash
+make test                          # no database, no content repo, no stripe
+make db                            # then, for the tests whose subject is SQL:
+DATABASE_URL=postgres://lighthouse:lighthouse@127.0.0.1:5433/lighthouse make test-db
+```
+
+The tests read `fixture/` in place of ohara. To build the image the same way —
+which is what CI does:
+
+```bash
+cp pricing.sample.yaml pricing.yaml
+make image CONTENT_PATH=fixture
+```
+
+A clone's `BILLING_PLANS` points at `crates/billing/billing.sample.yaml`, which
+parses and boots but cannot charge anybody.
 
 ## Running it locally
 
@@ -52,9 +103,12 @@ session cookie to cross.
 make up          # postgres + caddy
 make migrate     # build the schema
 
-cargo run -p lighthouse-api                      # :9000
+make api                                         # :9000, reloading on a change
 cd web && HOST=127.0.0.1 PORT=3000 npm run dev   # :3000
 ```
+
+Or `make dev`, which runs both in one terminal behind the same Caddy. Both
+`make api` and `make dev` need `cargo install cargo-watch`.
 
 Then visit **http://localhost:8000** — never `:3000` directly, or you are testing
 a different shape than the one that ships.
@@ -63,8 +117,11 @@ a different shape than the one that ships.
 only, and Caddy reaches the host over IPv4. The symptom is a 502 from Caddy while
 `http://localhost:3000` works perfectly in a browser.
 
-Port 8000 matches `APP_URL` and the OAuth callbacks already registered with
-Google and GitHub, so signing in works without touching either console.
+Port 8000 is the origin the project's own OAuth apps have registered, so set
+`APP_URL=http://localhost:8000` in `.env` — `.env.example` ships `8080`, the
+port `make run` uses. With your own GitHub or Google OAuth app, register
+`<APP_URL>/github/callback` or `<APP_URL>/google/callback`; leave a client id
+empty and that provider is simply skipped.
 
 There is one Caddyfile, not a dev copy. A second one would drift, and the drift
 would be in the rules that decide what a browser can reach. Only the upstreams
@@ -129,11 +186,14 @@ cargo run -p lighthouse-migrate -- run        # apply everything pending
 cargo run -p lighthouse-migrate -- baseline   # adopt an existing schema
 ```
 
-**The API never runs migrations.** It opens a connection pool and stops. A
-deploy that doubles as a schema change turns a failed migration into a container
-that will not start, and two containers coming up together would race each other
-through the same files. Applying them is a decision, so it is a separate binary
-you run on purpose.
+**The API never runs migrations.** It opens a connection pool and stops.
+Applying them is a separate binary, `lighthouse-migrate`.
+
+**The container does run them, at start.** `docker/entrypoint.sh` runs
+`lighthouse-migrate run` before the api comes up, because App Platform gives no
+console to run it by hand. The cost: a migration that fails is a container that
+will not start, and the deploy never comes up — read the log, fix the
+migration, deploy again.
 
 The migrations are compiled into that binary by `sqlx::migrate!`, so the
 deployed artifact carries them — nothing to copy onto the box, no `sqlx-cli` to
@@ -214,11 +274,14 @@ and the other one still works.
 
 ## How the API is protected
 
-Three ways in, and only three:
+Four ways in, and only four:
 
-**luxctl** signs every request with an HMAC over the body. Caddy checks that
-`X-Luxctl-Signature` is *present* and routes those to the API; the API verifies
-the signature itself, in constant time, and rejects anything it cannot prove.
+**[luxctl](https://github.com/projectlighthouse-io/luxctl)** signs every
+request: an HMAC-SHA256 over `{unix seconds}.{METHOD}.{path}`, sent as
+`X-Luxctl-Signature` with the timestamp in `X-Luxctl-Timestamp`, and good for
+five minutes. Caddy checks that `X-Luxctl-Signature` is *present* and routes
+those to the API; the API verifies the signature itself, in constant time, and
+rejects anything it cannot prove.
 
 Caddy is not the security boundary here and must not be treated as one — it
 cannot verify an HMAC, so header presence is a filter to keep unsigned traffic
@@ -227,6 +290,12 @@ off the API, nothing more. If the API ever stops verifying, the door is open.
 **The frontend** reads the API over loopback for server-rendered pages. That
 path never crosses Caddy, so it needs no signature and cannot be reached from
 outside the container.
+
+**The browser** reaches the paths the Caddyfile names one by one — sign-in,
+notes, bookmarks, articles, settings, the newsletter, billing, project progress,
+and a lesson and its public comments — and nothing else. Those authenticate with
+the session cookie where they need a reader, and a write made as a reader also
+carries the CSRF token minted at sign-in.
 
 **OAuth callbacks and webhooks** are browser navigations and third-party POSTs,
 so they cannot carry a luxctl signature. They get their own Caddy rules and
@@ -246,11 +315,24 @@ What makes it safe is that the entrypoint ties their lifetimes together. If any
 one of them exits, the container exits, and the platform restarts a known-good
 state rather than leaving a half-running site answering requests.
 
-## Status
+## Background
 
-`crates/api` is a placeholder. It binds loopback, verifies luxctl signatures and
-answers the health probe — the wiring around it is real and tested, so building
-the actual backend means replacing that crate and nothing else.
+This replaces an earlier Laravel app, against the database that app built. The
+plan it follows, including entitlements, the paywall and the payment split, is
+`docs/rebuild.md` in that app's repository, which is private.
 
-The full plan, including entitlements, the paywall and the payment split, is in
-`docs/rebuild.md` in the projectlighthouse.io repo.
+## Licence
+
+**PolyForm Strict 1.0.0** — see [LICENSE](LICENSE).
+
+The source is available to read, study and run for noncommercial purposes. It
+is not open source: the licence grants no right to modify or distribute it, or
+to use it commercially.
+
+The licence covers the code in this repository. The name, branding, visual
+design, images and written content are **not** covered by it — all rights are
+reserved; see [NOTICE](NOTICE). The books, lessons and project briefs live in a
+separate private repository, and this repo gives you the platform, not the
+content.
+
+For permission beyond what the licence allows: hello@projectlighthouse.io.
