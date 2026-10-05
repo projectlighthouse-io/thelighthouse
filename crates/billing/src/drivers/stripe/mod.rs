@@ -173,25 +173,10 @@ impl Stripe {
         &self,
         to: &Plan,
         customer: &str,
-        who: &Customer<'_>,
+        reference: &str,
         mode: Mode,
         back: &Returns,
     ) -> Result<Handoff, Error> {
-        let reference = who.reference;
-
-        // The reader's tier applied up front, so the price the page showed is
-        // the price stripe asks for without anybody typing a code. Stripe
-        // refuses a session that both applies a discount and offers the code
-        // box, so a tier replaces the box rather than joining it.
-        //
-        // Without a tier, the box: a coupon nobody can type is a coupon that
-        // does not exist, and `lighthouse-prices` would go on creating codes no
-        // reader could ever redeem.
-        let discount = who.promotion.map_or_else(
-            || field("allow_promotion_codes", "true"),
-            |promotion| field("discounts[0][promotion_code]", promotion),
-        );
-
         let session: wire::Session = self
             .client
             .send(
@@ -205,7 +190,17 @@ impl Stripe {
                     field("success_url", back.success.clone()),
                     field("cancel_url", back.cancel.clone()),
                     field("client_reference_id", reference),
-                    discount,
+                    // The promo code box on stripe's page. Without it the
+                    // hosted checkout shows none, and a coupon nobody can type
+                    // is a coupon that does not exist — `lighthouse-prices`
+                    // would go on creating tiers at stripe that no reader
+                    // could ever redeem.
+                    //
+                    // It is the whole of how a discount is applied: the api
+                    // advertises the code and never sends it, so a spoofable
+                    // country header cannot be what stands between anybody and
+                    // a cheaper price.
+                    field("allow_promotion_codes", "true"),
                     // Written here and read back on every subscription and
                     // every webhook. It is what lets a delivery about
                     // `sub_123` find the account and the plan without a
@@ -343,7 +338,7 @@ impl Gateway for Stripe {
     ) -> Result<Handoff, Error> {
         let customer = self.customer(who).await?;
 
-        self.checkout(to, &customer, who, Mode::Subscription, back)
+        self.checkout(to, &customer, who.reference, Mode::Subscription, back)
             .await
     }
 
@@ -355,7 +350,7 @@ impl Gateway for Stripe {
     ) -> Result<Handoff, Error> {
         let customer = self.customer(who).await?;
 
-        self.checkout(what, &customer, who, Mode::Payment, back)
+        self.checkout(what, &customer, who.reference, Mode::Payment, back)
             .await
     }
 
@@ -510,48 +505,7 @@ mod tests {
             reference: "41",
             email: "reader@example.com",
             existing,
-            promotion: None,
         }
-    }
-
-    /// Matches a request whose body does *not* contain `needle`. Wiremock has
-    /// a matcher for presence only, and the absence is the assertion here.
-    struct BodyLacks(&'static str);
-
-    impl wiremock::Match for BodyLacks {
-        fn matches(&self, request: &wiremock::Request) -> bool {
-            !String::from_utf8_lossy(&request.body).contains(self.0)
-        }
-    }
-
-    #[tokio::test]
-    async fn a_readers_tier_is_applied_and_the_code_box_is_not_offered() {
-        let server = MockServer::start().await;
-
-        Mock::given(method("POST"))
-            .and(path("/v1/checkout/sessions"))
-            .and(body_string_contains(
-                "discounts%5B0%5D%5Bpromotion_code%5D=promo_everyone",
-            ))
-            // Stripe refuses a session carrying both.
-            .and(BodyLacks("allow_promotion_codes"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(
-                r#"{"url":"https://checkout.stripe.com/c/pay/cs_3"}"#,
-            ))
-            .mount(&server)
-            .await;
-
-        let who = Customer {
-            promotion: Some("promo_everyone"),
-            ..reader(Some("cus_existing"))
-        };
-
-        let handoff = driver(&server, RequestStrategy::Once)
-            .subscribe(&plan(), &who, &back())
-            .await
-            .unwrap();
-
-        assert_eq!(handoff.url, "https://checkout.stripe.com/c/pay/cs_3");
     }
 
     #[tokio::test]

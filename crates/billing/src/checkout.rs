@@ -23,11 +23,6 @@ pub struct Customer<'a> {
     /// what stops a reader accumulating a customer record per purchase, and
     /// with it a payment history split across several of them.
     pub existing: Option<&'a str>,
-    /// The provider's id for the promotion code this reader's tier offers on
-    /// the plan being bought, if any — applied to the checkout up front, so
-    /// the price they were shown is the price they pay without typing a code.
-    /// `None` leaves the provider's own code box in its place.
-    pub promotion: Option<&'a str>,
 }
 
 /// Where to send the browser to finish paying.

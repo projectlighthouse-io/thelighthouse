@@ -122,8 +122,9 @@ pub(crate) async fn catalogue(
             // plan's product at stripe. A page told only "this country gets
             // 70% off" would strike out a price nobody can ever pay.
             //
-            // The same tier checkout applies — see `checkout` — so the price
-            // a page shows is the price stripe asks for.
+            // Advertised, not applied: the reader types the code at stripe,
+            // which is what keeps a spoofable country header from being the
+            // only thing standing between anybody and a discount.
             let coupon = offer(plan, country.as_deref());
 
             serde_json::json!({
@@ -329,7 +330,6 @@ pub(crate) async fn checkout(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
     Path(provider): Path<String>,
-    headers: HeaderMap,
     axum::Json(payload): axum::Json<ChosenPlan>,
 ) -> Response {
     let Some(driver) = driver_named(&state, &provider) else {
@@ -375,20 +375,10 @@ pub(crate) async fn checkout(
 
     let reference = session.user_id.to_string();
 
-    // The tier this reader's country is offered on this plan — the one the
-    // catalogue advertised to them — applied up front, so the price they saw
-    // is the price stripe asks for. The header is the same one the catalogue
-    // read, and spoofing it buys nothing a shared code would not.
-    let country = country_of(&headers);
-    let promotion = plan
-        .for_country(country.as_deref())
-        .map(billing::Ppp::promotion);
-
     let who = Customer {
         reference: &reference,
         email: &email,
         existing: existing.as_deref(),
-        promotion,
     };
 
     // The plan's own interval decides which kind of checkout this is. One
