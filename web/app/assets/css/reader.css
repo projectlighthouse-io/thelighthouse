@@ -129,9 +129,12 @@ a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink);
   cursor: pointer;
 }
 
+/* Bright on purpose: the bookmark is where the reader stopped, and it has to
+   be found at a glance on the way back. Dark text on it in either theme. */
 .reader-mark-bookmark {
-  background: var(--surface-muted);
-  border-bottom: 1px dashed var(--ink-muted);
+  background: #ffe45c;
+  color: #1a1814;
+  border-bottom: 1px dashed #8a6d00;
 }
 
 /* selection menu — fixed to the viewport */
