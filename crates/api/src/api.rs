@@ -189,6 +189,11 @@ pub(crate) fn app(
         .merge(internal)
         .merge(public)
         .layer(axum::middleware::from_fn(telemetry::trace_request))
+        // Outermost, and in this order: axum applies layers bottom-up, so the
+        // hub exists before the http layer starts a transaction in it. The
+        // Sentry docs warn the reverse order leaks memory.
+        .layer(sentry::integrations::tower::SentryHttpLayer::new().enable_transaction())
+        .layer(sentry::integrations::tower::NewSentryLayer::<axum::extract::Request>::new_from_top())
         .with_state(state)
 }
 

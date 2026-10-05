@@ -46,6 +46,12 @@ use secrecy::ExposeSecret as _;
 /// lints deny `expect` for this reason.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Early, so `.env` can set the `SENTRY_*` keys. Errors ignored here on
+    // purpose: `Config::load` reads it again and is the one that reports a
+    // malformed file.
+    let _ = dotenvy::dotenv();
+    // Before the subscriber, which is what the Sentry docs ask for.
+    let _sentry = telemetry::sentry()?;
     telemetry::init();
 
     // Before `Config`, deliberately: checking the content needs `CONTENT_PATH`

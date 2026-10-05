@@ -53,7 +53,11 @@ pub(crate) fn init() {
 
     let json = std::env::var("LOG_FORMAT").as_deref() != Ok("pretty");
 
-    let registry = tracing_subscriber::registry().with(filter);
+    // Errors become Sentry events, info and up become breadcrumbs, spans become
+    // spans. A no-op when `sentry()` found no DSN.
+    let registry = tracing_subscriber::registry()
+        .with(filter)
+        .with(sentry::integrations::tracing::layer());
 
     if json {
         registry
@@ -69,6 +73,71 @@ pub(crate) fn init() {
         // the thing you are doing is reading logs.
         registry.with(fmt::layer().pretty()).init();
     }
+}
+
+/// Error reporting. Off unless `SENTRY_DSN` is set, so a clone with no account
+/// reports nothing anywhere.
+///
+/// Read here rather than in `Config` for the same reason as `RUST_LOG`: it has
+/// to be running before anything it should catch, a bad `Config` included. The
+/// guard flushes pending events on drop, so `main` holds it to the end.
+pub(crate) fn sentry() -> Result<Option<sentry::ClientInitGuard>, String> {
+    Ok(sentry_options(|key| std::env::var(key).ok())?.map(sentry::init))
+}
+
+/// `SENTRY_SEND_DEFAULT_PII` defaults to `false`, `SENTRY_TRACES_SAMPLE_RATE` to
+/// `1.0`. Either set to something unreadable is a boot failure, not a default.
+fn sentry_options(
+    get: impl Fn(&str) -> Option<String>,
+) -> Result<Option<sentry::ClientOptions>, String> {
+    let set = |key: &str| {
+        get(key)
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+    };
+
+    let Some(dsn) = set("SENTRY_DSN") else {
+        return Ok(None);
+    };
+
+    let dsn = dsn
+        .parse::<sentry::types::Dsn>()
+        .map_err(|error| format!("SENTRY_DSN is not a valid DSN: {error}"))?;
+
+    let send_default_pii = match set("SENTRY_SEND_DEFAULT_PII").as_deref() {
+        Some("true") => true,
+        // Off unless asked for: on, the request headers go too, session cookie
+        // included, and reading the Sentry project becomes taking a session.
+        None | Some("false") => false,
+        Some(other) => {
+            return Err(format!(
+                "SENTRY_SEND_DEFAULT_PII must be true or false, and it is {other:?}"
+            ));
+        }
+    };
+
+    let traces_sample_rate = match set("SENTRY_TRACES_SAMPLE_RATE") {
+        None => 1.0,
+        Some(rate) => rate
+            .parse::<f32>()
+            .ok()
+            .filter(|rate| (0.0..=1.0).contains(rate))
+            .ok_or_else(|| {
+                format!(
+                    "SENTRY_TRACES_SAMPLE_RATE must be between 0 and 1, and it is {rate:?}"
+                )
+            })?,
+    };
+
+    // The builder's `dsn` and `traces_sample_rate` panic on a bad value; both
+    // are checked above, and the dsn goes in as the parsed field regardless.
+    let mut options = sentry::ClientOptions::new()
+        .maybe_release(sentry::release_name!())
+        .send_default_pii(send_default_pii)
+        .traces_sample_rate(traces_sample_rate);
+    options.dsn = Some(dsn);
+
+    Ok(Some(options))
 }
 
 /// Wraps each request in a span carrying its id, method and path.
@@ -122,4 +191,62 @@ pub(crate) async fn trace_request(
     }
 
     next.run(request).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sentry_options;
+
+    const DSN: &str = "https://public@sentry.example.com/1";
+
+    fn from(
+        pairs: &'static [(&'static str, &'static str)],
+    ) -> impl Fn(&str) -> Option<String> {
+        move |key| {
+            pairs
+                .iter()
+                .find(|(k, _)| *k == key)
+                .map(|(_, v)| (*v).to_owned())
+        }
+    }
+
+    #[test]
+    fn no_dsn_means_no_sentry() {
+        assert!(sentry_options(from(&[])).unwrap().is_none());
+        assert!(sentry_options(from(&[("SENTRY_DSN", " ")])).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_dsn_alone_takes_the_defaults() {
+        let options = sentry_options(from(&[("SENTRY_DSN", DSN)]))
+            .unwrap()
+            .unwrap();
+
+        assert!(!options.send_default_pii);
+    }
+
+    #[test]
+    fn the_defaults_can_be_overridden() {
+        let options = sentry_options(from(&[
+            ("SENTRY_DSN", DSN),
+            ("SENTRY_SEND_DEFAULT_PII", "true"),
+            ("SENTRY_TRACES_SAMPLE_RATE", "0.25"),
+        ]))
+        .unwrap()
+        .unwrap();
+
+        assert!(options.send_default_pii);
+    }
+
+    #[test]
+    fn unreadable_values_refuse_to_boot() {
+        for pairs in [
+            &[("SENTRY_DSN", "not a dsn")][..],
+            &[("SENTRY_DSN", DSN), ("SENTRY_SEND_DEFAULT_PII", "yes")][..],
+            &[("SENTRY_DSN", DSN), ("SENTRY_TRACES_SAMPLE_RATE", "1.5")][..],
+            &[("SENTRY_DSN", DSN), ("SENTRY_TRACES_SAMPLE_RATE", "NaN")][..],
+        ] {
+            assert!(sentry_options(from(pairs)).is_err(), "{pairs:?}");
+        }
+    }
 }
