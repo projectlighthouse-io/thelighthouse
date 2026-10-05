@@ -31,14 +31,14 @@ export const plans: CataloguePlan[] = [
     "plan": "foundation_yearly",
     "track": "foundation",
     "recurring": true,
-    "amount": 9900,
+    "amount": 11900,
     "currency": "usd"
   },
   {
     "plan": "all_lifetime",
     "track": "all",
     "recurring": false,
-    "amount": 49900,
+    "amount": 59900,
     "currency": "usd"
   }
 ]
