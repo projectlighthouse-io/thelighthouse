@@ -156,7 +156,10 @@ jobs:
 
       - name: Build image
         run: |
-          touch billing.yaml
+          # pricing.yaml is gitignored — a deployment's own — so CI builds with
+          # the sample. billing.yaml is not baked any more; the entrypoint
+          # resolves it at start.
+          cp pricing.sample.yaml pricing.yaml
           docker build --platform linux/amd64 --build-context ohara=fixture -t thelighthouse:ci .
 
       # A build that succeeds and an image that serves are different claims.

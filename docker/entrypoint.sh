@@ -15,6 +15,14 @@ API_PORT=${API_PORT:-9000}
 NUXT_PORT=${NUXT_PORT:-3000}
 export API_PORT NUXT_PORT
 
+# The api's billing config, from what this STRIPE_SECRET_KEY's account holds.
+# Read-only: it creates nothing. A pricing.yaml change that has not been
+# applied to this account stops the container here, rather than booting an api
+# that sells a price stripe does not hold — run `lighthouse-prices apply` in the
+# console, then restart.
+echo "==> resolving prices"
+/usr/local/bin/lighthouse-prices resolve
+
 # Pending migrations first, before anything serves. App Platform gives no
 # console to run them by hand. The cost: a migration that fails stops the
 # container here, under `set -e`, and the deploy never comes up — read the
