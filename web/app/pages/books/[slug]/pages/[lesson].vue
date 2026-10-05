@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Note } from '@/composables/UseNotes'
 import type { Chapter, LessonResponse, LessonSummary } from '@/types/Content'
+import type { PaywallBook, PaywallSection } from '@/types/Paywall'
 // only this route needs the reader system
 import '@/assets/css/reader.css'
 
@@ -206,10 +207,53 @@ onMounted(async () => {
   findPaywall()
 })
 
+// Null first, synchronously, so the card is back in place (the teleport
+// disabled) in the same render that replaces the body. Left in the old target,
+// it would sit in a node `v-html` just threw away, and the next patch or unmount
+// of it throws — which stalls the page transition and every navigation after.
 watch(readable, async () => {
+  paywallTopics.value = null
   await nextTick()
   findPaywall()
 })
+
+/**
+ * What the paywall card says about this lesson, from the response as served —
+ * not `toc`, which an unlock replaces, and the card is gone by then anyway.
+ *
+ * The api numbers each section, times it, and cuts a peek from each locked
+ * one; nothing here counts prose it was never sent.
+ */
+const paywallSections = computed<PaywallSection[]>(() =>
+  (data.value?.toc ?? []).map(item => ({
+    n: item.n,
+    title: item.text,
+    minutes: item.minutes,
+    peek: item.peek ?? '',
+    locked: item.locked,
+  })))
+
+/** The last section the reader could read — where the free half stops. */
+const currentSection = computed<string>(
+  () => paywallSections.value.filter(section => !section.locked).at(-1)?.n ?? '',
+)
+
+const paywallBook = computed<PaywallBook>(() => ({
+  title: book.value?.title ?? '',
+  slug: book.value?.slug ?? bookSlug.value,
+  moreLessons: data.value?.moreLessons ?? 0,
+  moreLessonChapters: data.value?.moreLessonChapters ?? 0,
+  // Nothing in ohara says a book is unfinished yet, so the card never claims
+  // it. A `book.yaml` flag would be the place to say so.
+  inProgress: false,
+}))
+
+const paywallChapter = computed(() => ({
+  number: String(data.value?.chapterNumber ?? 0).padStart(2, '0'),
+}))
+
+/** Behind the paywall, the card is the end of the page — no pager under it. */
+const paywalled = computed<boolean>(() => !!lesson.value?.locked && !unlockedHtml.value)
 
 /**
  * Which contents entry is highlighted: the section actually being read.
@@ -799,29 +843,28 @@ useJsonLd('crumbs', () => ({
         </div>
 
         <!--
-          Into the element the api left where the withheld region stood, so the
-          card reads as the chapter stopping mid-sentence rather than as a
-          footer. Client only: `Teleport` needs the target in the DOM, and the
-          target arrives with `v-html`.
+          After the body, not teleported into it. The card used to move into the
+          `[data-paywall]` element the api leaves where the withheld region
+          stood — but that element is inside `v-html`, which Vue replaces
+          wholesale on every body change, so the card kept being left in a
+          thrown-away node; the next patch crashed and stalled every navigation
+          after it. Below the body it lives in a node Vue owns, and since the
+          withheld region is the end of what a non-member is sent, it lands in
+          the same place.
         -->
-        <!--
-          One card, moved rather than replaced: it renders in place until the
-          target is found, then `disabled` lifts and the same instance moves in.
-          Swapping an inline card for a teleported one right after hydration
-          unmounted a component mid-hydration and broke the page.
-        -->
-        <Teleport v-if="lesson.locked && !unlockedHtml" to="[data-paywall]" :disabled="!paywallTopics">
-          <ReaderPaywall
-            class="paywalled"
-            :topics="paywallTopics ?? undefined"
-            :book="book.title"
-            :book-slug="book.slug"
-          />
-        </Teleport>
+        <ReaderPaywall
+          v-if="paywalled"
+          class="paywalled"
+          :book="paywallBook"
+          :chapter="paywallChapter"
+          :sections="paywallSections"
+          :current-section="currentSection"
+        />
 
         <!-- Through `previous`/`next`, not `data.…`: the button text is a slot
-             closure that re-renders on its own, and can outlive `data`. -->
-        <nav class="reader-pager" aria-label="lessons">
+             closure that re-renders on its own, and can outlive `data`. Not
+             under a paywall: there the card is the end of the page. -->
+        <nav v-if="!paywalled" class="reader-pager" aria-label="lessons">
           <UiButton
             v-if="previous"
             variant="ghost"

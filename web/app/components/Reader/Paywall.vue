@@ -1,67 +1,94 @@
 <script setup lang="ts">
+import type { CataloguePlan } from '@/data/Catalogue'
+import type { Coupon } from '@/composables/UsePlans'
 import type { Book } from '@/types/Content'
+import type { PaywallBook, PaywallPlan, PaywallSection } from '@/types/Paywall'
+import { plans as catalogue } from '@/data/Catalogue'
+import { tracks as trackWords } from '@/data/Tracks'
 
 /**
  * The card that stands where a paid region was.
  *
- * `ohara::body` leaves a `<div data-paywall data-topics="…">` at the position
- * the region held, so this lands in the middle of a lesson rather than after
- * it — the same shape the laravel app has, and the same wording.
+ * `ohara::body` leaves a `<div data-paywall>` at the position the region held,
+ * so this lands directly after the last free paragraph — see the lesson page,
+ * which teleports it there.
  *
- * **It sells a track.** The laravel card offers a Pro membership at monthly,
- * yearly or lifetime with the prices written into the component. This rebuild
- * sells a track and nothing else, and the amounts come from
- * `/api/billing/plans` — one number, one place — so the card offers the
- * cheapest track that actually contains the book being read.
+ * **Nothing on it is a literal count.** Sections, minutes, chapters and prices
+ * all arrive as data or are counted from it here, so a change to the lesson,
+ * the book or the catalogue changes the card without anyone editing it.
+ *
+ * **It sells a track.** The card offers the cheapest yearly and the cheapest
+ * outright plan that actually contain the book being read.
+ *
+ * **Priced exactly as `Marketing/PricingFrame.vue` prices.** The plans and
+ * their amounts are compiled in from `Catalogue.ts`; the purchasing-power
+ * coupon comes from `usePlans()`, in the browser only, and is applied with the
+ * same `afterOff`. Two reasons it is not fetched on the server: a lesson is
+ * edge-cached (`s-maxage` on `/books/**`), so a server-side read baked one
+ * country's tier into the html every other country was served; and the
+ * server-side `$fetch` did not forward `cf-ipcountry`, so that one country was
+ * always "nowhere".
  */
-const props = withDefaults(defineProps<{
-  topics?: string[]
-  /** Slug of the book this lesson belongs to, for picking the track. */
-  bookSlug?: string
-  /** Its title, so the offer names something concrete. */
-  book?: string
-}>(), {
-  topics: () => [],
-  bookSlug: '',
-  book: '',
+const props = defineProps<{
+  book: PaywallBook
+  /** `04` */
+  chapter: { number: string }
+  sections: PaywallSection[]
+  /** The last open section — where the reader stopped. Empty when none is. */
+  currentSection: string
+}>()
+
+/* ---------- the lesson, counted ---------- */
+
+const readCount = computed<number>(() => props.sections.filter(s => !s.locked).length)
+const total = computed<number>(() => props.sections.length)
+const minutesLeft = computed<number>(() =>
+  props.sections.filter(s => s.locked).reduce((sum, s) => sum + s.minutes, 0))
+const locked = computed<PaywallSection[]>(() => props.sections.filter(s => s.locked))
+
+/** Five rows is enough to show what is behind the card; past that the list
+ *  would be the whole card. */
+const SHOWN = 5
+const lockedShown = computed<PaywallSection[]>(() => locked.value.slice(0, SHOWN))
+
+/** What is left of the book after this lesson, for the line under the list. */
+const moreLessonsWords = computed<string>(() => {
+  const { moreLessons: lessons, moreLessonChapters: chapters } = props.book
+
+  return `and ${lessons} more ${lessons === 1 ? 'lesson' : 'lessons'} over ${chapters} ${chapters === 1 ? 'chapter' : 'chapters'}`
 })
 
-/** Three, then "and more" — the card names, it does not list. */
-const named = computed<string[]>(() => props.topics.slice(0, 3))
-const more = computed<boolean>(() => props.topics.length > 3)
+/** Headings keep their markdown backticks in the contents; on the card they
+ *  read as stray punctuation. */
+const plain = (title: string): string => title.replaceAll('`', '')
 
-/** The discount this plan is offered in the reader's country, if any.
- *  Advertised, not applied — the reader types `code` at stripe. */
-interface Coupon {
-  code: string
-  percent: number
+type StopState = 'read' | 'current' | 'locked'
+
+function stateOf(section: PaywallSection): StopState {
+  if (section.locked) return 'locked'
+
+  return section.n === props.currentSection ? 'current' : 'read'
 }
 
-/** One purchasable plan, as `/api/billing/plans` reports it. */
-interface Offer {
-  amount: number
-  currency: string
-  plan: string
-  recurring: boolean
-  track: string
-  /** The coupon that comes off *this* plan. A stripe coupon is restricted to
-   *  one plan's product, so a discount is a fact about the reader and the
-   *  plan together — never about the reader alone. */
-  coupon: Coupon | null
-}
+/** Past eight stops the read labels go, so the row does not run together. */
+const dense = computed<boolean>(() => total.value > 8)
 
-/** The whole catalogue answer — the offers, and the country the api read from
- *  Cloudflare. */
-interface Catalogue {
-  country: string | null
-  plans: Offer[]
-}
+/** The stop after the current one, whose label the "· here" would run into
+ *  on a crowded row. */
+const afterCurrent = computed<number>(() => {
+  const at = props.sections.findIndex(s => s.n === props.currentSection)
 
-const { data: catalogue } = await useAsyncData('billing-plans', () =>
-  $fetch<Catalogue>('/_api/billing/plans')
-    .catch(() => ({ country: null, plans: [] } as Catalogue)))
+  // No current stop (nothing free was read) means no "· here" to collide
+  // with — otherwise this pointed at the first stop and hid its label.
+  return at === -1 ? -1 : at + 1
+})
 
-const offers = computed<Offer[]>(() => catalogue.value?.plans ?? [])
+/* ---------- the plans ---------- */
+
+// The coupons the api offers this reader, per plan. Read in the browser only,
+// so until it lands the card shows list prices — the same neutral state the
+// pricing frame shows.
+const { data: coupons } = await usePlans()
 
 const { data: books } = await useAsyncData('paywall-books', () =>
   $fetch<Book[]>('/_api/books').catch(() => [] as Book[]), { default: () => [] })
@@ -74,89 +101,129 @@ const { data: books } = await useAsyncData('paywall-books', () =>
  * from. A second copy would be a second thing to keep right.
  */
 const tracks = computed<string[]>(() => {
-  const book = books.value.find(b => b.slug === props.bookSlug)
+  const book = books.value.find(b => b.slug === props.book.slug)
 
   return [...Object.keys(book?.tracks ?? {}), 'all']
 })
 
-/** The cheapest offer of a kind that would actually unlock this lesson. */
-function cheapest(recurring: boolean): Offer | undefined {
-  return offers.value
+/** The cheapest plan of a kind that would actually unlock this lesson. */
+function cheapest(recurring: boolean): CataloguePlan | undefined {
+  return catalogue
     .filter(o => o.recurring === recurring && tracks.value.includes(o.track))
     .sort((a, b) => a.amount - b.amount)[0]
 }
 
-const yearly = computed<Offer | undefined>(() => cheapest(true))
-const lifetime = computed<Offer | undefined>(() => cheapest(false))
-
 /**
- * What an offer unlocks, named on the button that sells it.
- *
- * The two buttons are picked independently — cheapest of each kind that covers
- * this book — so they are routinely not the same bundle. On a foundation book
- * the yearly is the foundation track and the lifetime is `all`, and before this
- * the card put $99/yr beside $499 once with nothing saying the second was five
- * times the catalogue rather than five times the price.
- *
- * The slug is what the wire carries. `all` is the one that needs a word rather
- * than its name, because `track::EVERYTHING` is called `all` in the api and
- * nothing else on this page says so.
+ * The coupon that comes off this particular plan, if any. Asked per plan, not
+ * per reader: a stripe coupon is restricted to one plan's product, so two rows
+ * can carry different codes in the same country.
  */
-function scope(o: Offer | undefined): string {
-  if (!o) return ''
-
-  return o.track === 'all' ? 'everything' : o.track
+function couponFor(o: CataloguePlan): Coupon | null {
+  return (coupons.value ?? []).find(c => c.plan === o.plan)?.coupon ?? null
 }
 
-type Choice = 'yearly' | 'lifetime'
+/** `$70` or `30%` — what `offLabel` says, without its " off", which the card
+ *  writes itself. */
+function discountAmount(coupon: Coupon): string {
+  return coupon.amount_off !== undefined ? money(coupon.amount_off) : `${coupon.percent ?? 0}%`
+}
+
+/**
+ * What a plan unlocks, named on its row.
+ *
+ * The two rows are picked independently — cheapest of each kind that covers
+ * this book — so they are routinely not the same bundle, and the note says
+ * which each one is.
+ */
+function trackName(o: CataloguePlan): string {
+  return trackWords.find(t => t.key === o.track)?.name ?? o.track
+}
+
+function priced(o: CataloguePlan): PaywallPlan {
+  const coupon = couponFor(o)
+  const reduced = coupon && o.amount ? afterOff(o.amount, coupon) : null
+
+  return {
+    id: o.plan,
+    name: o.recurring ? 'Yearly' : 'Lifetime',
+    note: o.recurring
+      ? `${trackName(o)}, and everything shipped to it while you subscribe`
+      : `${trackName(o)}, paid once and yours for good`,
+    price: money(reduced ?? o.amount),
+    listPrice: reduced !== null ? money(o.amount) : undefined,
+    per: o.recurring ? '/ year' : 'once',
+    discount: coupon ? { amount: discountAmount(coupon), code: coupon.code } : undefined,
+    cta: o.button_text ?? (o.recurring ? 'Get yearly access' : 'Get lifetime access'),
+    checkoutUrl: checkoutUrl(o.plan),
+  }
+}
+
+const yearly = computed<CataloguePlan | undefined>(() => cheapest(true))
+const lifetime = computed<CataloguePlan | undefined>(() => cheapest(false))
+
+const plans = computed<PaywallPlan[]>(() =>
+  [yearly.value, lifetime.value]
+    .filter((o): o is CataloguePlan => !!o)
+    .map(priced))
 
 /**
  * Whichever kind this book actually has, preferring the yearly.
  *
- * Not a constant `'yearly'`: the two buttons each render only if an offer of
- * that kind covers the book, and there is no longer a yearly that covers every
- * book — `all` is sold outright. A book on no track but `all` therefore shows
- * one button, and defaulting to the kind that is not there selects nothing,
- * leaves `offer` undefined and disables the buy button for good.
+ * Not a constant: each row renders only if a plan of that kind covers the book,
+ * and there is no yearly that covers every book — `all` is sold outright. A
+ * book on no track but `all` therefore has one row, and defaulting to the kind
+ * that is not there would select nothing.
  *
- * Safe to read here: both offers come from a `useAsyncData` this component
- * awaits, so they are settled before this runs and the server and the client
- * start from the same one.
+ * Safe to read at setup: both plans come from the compiled-in catalogue and the
+ * awaited book list, so the server and the client start from the same one.
  */
-const chosen = ref<Choice>(yearly.value ? 'yearly' : 'lifetime')
+const defaultPlanId = computed<string>(() => (yearly.value ?? lifetime.value)?.plan ?? '')
 
-const offer = computed<Offer | undefined>(
-  () => (chosen.value === 'lifetime' ? lifetime.value : yearly.value),
+const chosen = ref<string>(defaultPlanId.value)
+
+const selected = computed<PaywallPlan | undefined>(
+  () => plans.value.find(p => p.id === chosen.value) ?? plans.value[0],
 )
 
-/** Minor units to a price tag. The arithmetic stays in minor units on the rust
- *  side — this only reads it. */
-function priced(o: Offer | undefined): string | null {
-  return o ? money(o.amount) : null
+/* ---------- the radio group ---------- */
+
+/** By index, set from a function ref: a `v-for` ref array is not promised to
+ *  keep the list's order, and focus has to land on the row that was chosen. */
+const radios: (HTMLButtonElement | null)[] = []
+
+function keepRadio(at: number, el: unknown): void {
+  radios[at] = el instanceof HTMLButtonElement ? el : null
 }
 
 /**
- * The plan's price once its coupon is applied, or null when it has none.
- *
- * Read off the offer rather than off the answer: the api works out which tier
- * the reader's country earns *on this plan*, and a coupon is restricted to one
- * plan's product at stripe. Quoting one plan's discount against another's price
- * is a number stripe would refuse to honour.
+ * Arrow keys move the selection, as native radios do: one tab stop for the
+ * group (the checked row), and the arrows both select and focus.
  */
-function reduced(o: Offer | undefined): string | null {
-  const percent = o?.coupon?.percent
+function onKey(event: KeyboardEvent, at: number): void {
+  const count = plans.value.length
+  const moves: Record<string, number> = {
+    ArrowDown: at + 1,
+    ArrowRight: at + 1,
+    ArrowUp: at - 1,
+    ArrowLeft: at - 1,
+    Home: 0,
+    End: count - 1,
+  }
+  const to = moves[event.key]
 
-  if (!o || !percent) return null
+  if (to === undefined || !count) return
+  event.preventDefault()
 
-  return money(afterDiscount(o.amount, percent))
+  const wrapped = (to + count) % count
+  const plan = plans.value[wrapped]
+  if (!plan) return
+
+  chosen.value = plan.id
+  radios[wrapped]?.focus()
 }
 
-const summary = computed<string>(() =>
-  chosen.value === 'lifetime'
-    ? 'pay once, and every future chapter of it is yours'
-    : 'best value — cancel any time')
+/* ---------- who is reading ---------- */
 
-const { checkout, busy, reason } = useBilling()
 const { isSignedIn } = useReader()
 
 // `isSignedIn` reads a cookie hint on the client and is always false on the
@@ -170,440 +237,649 @@ onMounted(() => {
 
 const route = useRoute()
 
-async function buy(): Promise<void> {
-  const plan = offer.value?.plan
-  if (!plan || busy.value) return
+/** Back to this lesson after signing in: they were reading. */
+const signIn = computed<string>(() => `/login?redirect=${encodeURIComponent(route.fullPath)}`)
 
-  // Back to the lesson afterwards, not to the shop: they were reading.
-  if (!isSignedIn.value) {
-    await navigateTo(`/login?redirect=${encodeURIComponent(route.fullPath)}`)
-    return
-  }
+const ids = { title: useId(), plans: useId() }
 
-  await checkout(plan)
-}
+// Served from public/, so it ships in the image rather than off the CDN. The
+// same painting as the pricing section.
+const IMAGE = '/pricing-lighthouse.jpg'
 </script>
 
 <template>
   <div class="wall">
-    <!-- The prose above fades out rather than stopping on a line, so the cut
-         reads as more rather than as an ending. -->
+    <!-- The last free paragraph fades into the page rather than stopping on a
+         line, so the cut reads as more rather than as an ending. -->
     <div class="wall__fade" aria-hidden="true" />
 
-    <section class="wall__card">
-      <p class="wall__eyebrow">keep reading</p>
+    <section class="wall__card" :aria-labelledby="ids.title">
+      <header class="wall__head">
+        <div class="wall__plate">
+          <img
+            :src="IMAGE"
+            alt=""
+            width="1200"
+            height="2135"
+            loading="lazy"
+            decoding="async"
+          >
+        </div>
 
-      <h2 class="wall__title">There's more to this story</h2>
+        <div class="wall__words">
+          <p class="wall__eyebrow">
+            {{ book.title.toLowerCase() }} · chapter {{ chapter.number }}
+          </p>
+          <h2 :id="ids.title" class="wall__title">The rest of this chapter is for members</h2>
+          <!-- The book, not a language: nothing in the catalogue says which
+               language a book is written in, and most of them are not about
+               one. -->
+          <p class="wall__body">
+            You have read the setup. The part that changes how you think about {{ book.title }} is below.
+          </p>
+        </div>
+      </header>
 
-      <p class="wall__sub">
-        <template v-if="named.length">
-          The rest of this chapter covers
-          <template v-for="(topic, i) in named" :key="topic">
-            <span class="wall__topic">{{ topic }}</span
-            ><template v-if="i < named.length - 2">, </template
-            ><template v-else-if="i === named.length - 2"> and </template>
-          </template>
-          <template v-if="more">, and more</template>.
-        </template>
-        <template v-else>
-          The rest of this chapter goes deeper, with working code and the kind
-          of detail that actually sticks.
-        </template>
-        Unlock it — and every other lesson on the track.
-      </p>
+      <div v-if="total" class="wall__progress">
+        <p class="wall__counts">
+          <span>{{ readCount }} of {{ total }} sections read</span>
+          <span>{{ minutesLeft }} min left, members only</span>
+        </p>
 
-      <ul class="wall__perks">
-        <li>
-          <b>{{ books.length }} books</b> — OS internals, networking, Go, Rust, C and DSA
-        </li>
-        <li>
-          <b>Build-your-own projects</b> — Docker, DNS and HTTP servers, checked on your own machine
-        </li>
-        <li>
-          <b>Every future chapter</b> of the track, included as it ships
-        </li>
-      </ul>
-
-      <h3 class="wall__plans-head">Start the voyage</h3>
-
-      <div class="wall__plans">
-        <button
-          v-if="yearly"
-          type="button"
-          class="wall__plan"
-          :class="{ 'wall__plan--on': chosen === 'yearly' }"
-          :aria-pressed="chosen === 'yearly'"
-          @click="chosen = 'yearly'"
-        >
-          <span class="wall__radio" aria-hidden="true" />
-          <span class="wall__plan-body">
-            <span class="wall__plan-name">Yearly</span>
-            <span class="wall__plan-desc">{{ scope(yearly) }} — and everything shipped to it while you subscribe</span>
-          </span>
-          <span class="wall__price">
-            <s v-if="reduced(yearly)" class="wall__was">{{ priced(yearly) }}</s>
-            <b>{{ reduced(yearly) ?? priced(yearly) }}</b><span>/yr</span>
-          </span>
-        </button>
-
-        <button
-          v-if="lifetime"
-          type="button"
-          class="wall__plan"
-          :class="{ 'wall__plan--on': chosen === 'lifetime' }"
-          :aria-pressed="chosen === 'lifetime'"
-          @click="chosen = 'lifetime'"
-        >
-          <span class="wall__radio" aria-hidden="true" />
-          <span class="wall__plan-body">
-            <span class="wall__plan-name">Lifetime</span>
-            <span class="wall__plan-desc">{{ scope(lifetime) }} — pay once, yours for good</span>
-          </span>
-          <span class="wall__price">
-            <s v-if="reduced(lifetime)" class="wall__was">{{ priced(lifetime) }}</s>
-            <b>{{ reduced(lifetime) ?? priced(lifetime) }}</b><span>once</span>
-          </span>
-        </button>
+        <ol class="wall__route" :class="{ 'wall__route--dense': dense }" aria-label="Chapter progress">
+          <li
+            v-for="(section, at) in sections"
+            :key="section.n"
+            class="wall__stop"
+            :class="[`wall__stop--${stateOf(section)}`, { 'wall__stop--after-current': at === afterCurrent }]"
+          >
+            <span class="wall__track">
+              <span class="wall__dot" aria-hidden="true" />
+              <span
+                v-if="at < sections.length - 1"
+                class="wall__line"
+                :class="{ 'wall__line--locked': sections[at + 1]?.locked }"
+                aria-hidden="true"
+              />
+            </span>
+            <span class="wall__label">
+              {{ section.n }}<template v-if="stateOf(section) === 'current'"> · here</template>
+            </span>
+            <span class="lh-sr">
+              {{ section.title }}, {{ stateOf(section) === 'locked' ? 'members only' : stateOf(section) === 'current' ? 'where you are' : 'read' }}
+            </span>
+          </li>
+        </ol>
       </div>
 
-      <!-- No claim about where the reader is. The api answers with whichever
-           tier they are offered and does not say whether it named their
-           country or every country, and the declaration now carries one that
-           names none — so "where you are" was telling a reader in London that
-           their location earned them a discount everybody gets. -->
-      <!-- Only against a plan the coupon actually comes off. Shown for the
-           selected one, because that is the price the button is about to
-           charge. -->
-      <p v-if="offer?.coupon" class="wall__ppp">
-        {{ offer.coupon.percent }}% off — enter
-        <code>{{ offer.coupon.code }}</code> at checkout.
-      </p>
+      <ol v-if="locked.length || book.moreLessons > 0" class="wall__sections">
+        <li v-for="section in lockedShown" :key="section.n" class="wall__section">
+          <span class="wall__n">{{ section.n }}</span>
+          <span class="wall__name">{{ plain(section.title) }}</span>
+          <span class="wall__minutes">{{ section.minutes }} min</span>
+          <p v-if="section.peek" class="wall__peek">{{ section.peek }}</p>
+        </li>
+        <li v-if="book.moreLessons > 0">
+          <NuxtLink :to="`/books/${book.slug}#toc`" class="wall__section wall__more">
+            <span class="wall__n" aria-hidden="true">…</span>
+            <span class="wall__name">
+              {{ moreLessonsWords }}<template v-if="book.inProgress">, with more still being written</template>
+            </span>
+            <span class="wall__see">see contents →</span>
+          </NuxtLink>
+        </li>
+      </ol>
 
-      <p v-if="reason" class="wall__reason" role="alert">{{ reason }}</p>
+      <div v-if="plans.length" class="wall__unlock">
+        <p :id="ids.plans" class="wall__eyebrow">unlock it</p>
 
-      <div class="wall__cta">
-        <p class="wall__summary">{{ summary }}</p>
-        <div class="wall__actions">
-          <NuxtLink to="/pricing" class="wall__view">view offering</NuxtLink>
-          <button type="button" class="wall__buy" :disabled="busy || !offer" @click="buy">
-            {{ busy ? 'Loading…' : `Get ${book || 'the book'}` }}
+        <div class="wall__plans" role="radiogroup" :aria-labelledby="ids.plans">
+          <button
+            v-for="(plan, at) in plans"
+            :key="plan.id"
+            :ref="el => keepRadio(at, el)"
+            type="button"
+            role="radio"
+            class="wall__plan"
+            :class="{ 'wall__plan--on': plan.id === selected?.id }"
+            :aria-checked="plan.id === selected?.id"
+            :tabindex="plan.id === selected?.id ? 0 : -1"
+            @click="chosen = plan.id"
+            @keydown="onKey($event, at)"
+          >
+            <span class="wall__radio" aria-hidden="true" />
+            <span class="wall__plan-text">
+              <span class="wall__plan-name">{{ plan.name }}</span>
+              <span class="wall__plan-note">{{ plan.note }}</span>
+              <span v-if="plan.discount" class="wall__discount">
+                <span class="wall__off">{{ plan.discount.amount }} off with</span>
+                <span class="wall__code">{{ plan.discount.code }}</span>
+              </span>
+            </span>
+            <span class="wall__price">
+              <s v-if="plan.listPrice" class="wall__list">{{ plan.listPrice }}</s>
+              <span class="wall__amount">{{ plan.price }}</span>
+              <span class="wall__per">{{ plan.per }}</span>
+            </span>
           </button>
         </div>
       </div>
 
-      <!-- Only to somebody who is not. `isSignedIn` was already read here for
-           `buy`, so the card knew and asked anyway — a signed-in reader was
-           being told to sign in, on the one card that is asking them to
-           spend money. -->
-      <p v-if="!(hydrated && isSignedIn)" class="wall__note">
-        Already a member?
-        <NuxtLink to="/login">Sign in</NuxtLink>
-      </p>
+      <div class="wall__actions">
+        <div class="wall__links">
+          <!-- Only to somebody who is not signed in — after mount, so the
+               server and the first client render agree. -->
+          <p v-if="!(hydrated && isSignedIn)" class="wall__member">
+            already a member? <NuxtLink :to="signIn">sign in</NuxtLink>
+          </p>
+          <NuxtLink to="/pricing" class="wall__compare">compare plans</NuxtLink>
+        </div>
+
+        <NuxtLink v-if="selected" :to="selected.checkoutUrl" class="wall__cta">
+          <FlameIcon />
+          {{ selected.cta }}
+        </NuxtLink>
+      </div>
     </section>
   </div>
 </template>
 
 <style scoped>
+/*
+ * Every rule starts at `.wall`. The card is teleported into the lesson body,
+ * where `.lesson-content[data-lesson-content] h2` and friends reach it; a
+ * scoped `.wall__title` alone loses to those on specificity.
+ */
 
 .wall {
-    position: relative;
-    margin: 24px 0;
+  position: relative;
 }
 
-/* Sits above the card and over the prose before it. `--surface-page` rather
-   than white, so it fades into the reader's own ground in either theme. */
-.wall__fade {
-    pointer-events: none;
-    position: absolute;
-    top: -128px;
-    right: 0;
-    left: 0;
-    height: 128px;
-    background: linear-gradient(to bottom, transparent, var(--surface-page));
+/* Over the bottom 110px of the paragraph above, and the margin under it, from
+   nothing to the page's own ground — in either theme. */
+.wall .wall__fade {
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: calc(110px + var(--space-6));
+  background: linear-gradient(to bottom, transparent, var(--surface-page));
 }
 
-.wall__card {
-    position: relative;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface-raised);
-    padding: 34px 32px;
+/* Dark in both themes, as the home pricing section is. The tokens are
+   re-pointed here so everything inside reads them as it would on dark. */
+.wall .wall__card {
+  --ink: #f2f2f2;
+  --ink-secondary: #c9c9c9;
+  --ink-muted: #8a8a8a;
+  --border: #3a3a3a;
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --surface-sunken: rgba(255, 255, 255, 0.04);
+  --accent-strong: #7dc0ff;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding: 40px;
+  border: 0;
+  border-radius: 16px;
+  background: #202020;
+  color: var(--ink);
 }
 
-.wall__eyebrow {
-    margin: 0;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--accent-strong);
+/* No italics anywhere in the card — the lesson body turns `em` italic again,
+   and the card sits inside it. */
+.wall .wall__card,
+.wall .wall__card * {
+  font-style: normal;
 }
 
-.wall__title {
-    margin: 14px 0 0;
-    font-family: var(--font-serif);
-    font-weight: 600;
-    font-size: 30px;
-    line-height: 1.1;
-    letter-spacing: -0.015em;
-    color: var(--ink);
+/* The prose's own spacing and list markers, off. `:where` so this adds no
+   weight of its own and every rule below still wins over it. */
+.wall .wall__card :where(p, ol, li, h2) {
+  margin: 0;
+  padding: 0;
 }
 
-.wall__sub {
-    margin: 12px 0 0;
-    max-width: 40em;
-    font-family: var(--font-serif);
-    font-size: 17px;
-    line-height: 1.62;
-    color: var(--ink-secondary);
-    text-wrap: pretty;
+.wall .wall__card ol {
+  list-style: none;
 }
 
-.wall__topic {
-    font-weight: 500;
-    color: var(--ink);
+.wall .wall__card a {
+  text-decoration: none;
 }
 
-.wall__perks {
-    margin: 26px 0 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 11px;
-    font-family: var(--font-serif);
-    font-size: 16px;
-    line-height: 1.45;
-    color: var(--ink-secondary);
+/* ---------- header ---------- */
+
+.wall .wall__head {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: 28px;
+  align-items: center;
 }
 
-.wall__perks b {
-    font-weight: 600;
-    color: var(--ink);
+.wall .wall__plate {
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transform: rotate(-2deg);
 }
 
-.wall__plans-head {
-    margin: 30px 0 12px;
-    font-family: var(--font-serif);
-    font-weight: 600;
-    font-size: 20px;
-    letter-spacing: -0.01em;
-    color: var(--ink);
+.wall .wall__plate img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  aspect-ratio: 3 / 4;
+  border-radius: 7px;
+  object-fit: cover;
+  object-position: 50% 40%;
 }
 
-.wall__plans {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+.wall .wall__words {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
 }
 
-.wall__plan {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    width: 100%;
-    padding: 14px 18px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: none;
-    cursor: pointer;
-    text-align: left;
-    transition:
-        border-color 140ms,
-        background 140ms;
+.wall .wall__eyebrow {
+  font: 400 12px/18px var(--font-mono);
+  color: var(--ink-muted);
 }
 
-.wall__plan:hover {
-    border-color: var(--border-strong);
+.wall .wall__title {
+  font: 400 36px/42px var(--font-serif);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-wrap: balance;
 }
 
-.wall__plan--on {
-    border-color: var(--accent-strong);
-    background: var(--accent-tint);
+.wall .wall__body {
+  font: 400 17px/26px var(--font-serif);
+  color: var(--ink-secondary);
+  text-wrap: pretty;
 }
 
-.wall__radio {
-    display: grid;
-    place-items: center;
-    width: 18px;
-    height: 18px;
-    flex: none;
-    border: 1.5px solid var(--border-strong);
-    border-radius: 50%;
-    transition: border-color 140ms;
+/* ---------- progress route ---------- */
+
+.wall .wall__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.wall__radio::after {
-    content: '';
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--accent-strong);
-    transform: scale(0);
-    transition: transform 160ms;
+.wall .wall__counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  font: 400 12px/18px var(--font-mono);
+  color: var(--ink-secondary);
 }
 
-.wall__plan--on .wall__radio {
-    border-color: var(--accent-strong);
+.wall .wall__route {
+  display: flex;
 }
 
-.wall__plan--on .wall__radio::after {
-    transform: scale(1);
+.wall .wall__stop {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
 }
 
-.wall__plan-body {
-    flex: 1;
-    min-width: 0;
+.wall .wall__stop:last-child {
+  flex: 0 0 auto;
 }
 
-.wall__plan-name {
-    display: block;
-    font-family: var(--font-sans);
-    font-weight: 600;
-    font-size: 16px;
-    color: var(--ink);
+.wall .wall__track {
+  display: flex;
+  align-items: center;
 }
 
-.wall__plan-desc {
-    display: block;
-    margin-top: 2px;
-    font-family: var(--font-serif);
-    font-size: 14px;
-    color: var(--ink-secondary);
+.wall .wall__dot {
+  flex: none;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }
 
-.wall__price {
-    flex: none;
-    white-space: nowrap;
-    text-align: right;
+.wall .wall__line {
+  flex: 1;
+  margin: 0 6px;
+  border-top: 1px solid var(--ink-muted);
 }
 
-.wall__price b {
-    font-family: var(--font-serif);
-    font-weight: 600;
-    font-size: 21px;
-    color: var(--ink);
+.wall .wall__line--locked {
+  border-top: 1px dashed var(--border-strong);
 }
 
-.wall__price span {
-    margin-left: 3px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--ink-secondary);
+.wall .wall__label {
+  font: 400 11px/16px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-/* The list price beside the reduced one. Quiet and small: it is context for
-   the number next to it, not a second price being offered. */
-.wall__was {
-    margin-right: 5px;
-    font-family: var(--font-serif);
-    font-size: 15px;
-    color: var(--ink-faint);
+.wall .wall__stop--read .wall__dot {
+  background: var(--ink);
 }
 
-.wall__ppp {
-    margin: 12px 0 0;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--ink-secondary);
+.wall .wall__stop--read .wall__label {
+  color: var(--ink-secondary);
 }
 
-.wall__ppp code {
-    padding: 1px 5px;
-    border: 1px solid var(--border-strong);
-    border-radius: 3px;
-    color: var(--ink);
+.wall .wall__stop--current .wall__dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(90, 171, 243, 0.22);
 }
 
-.wall__reason {
-    margin: 12px 0 0;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--ink);
+.wall .wall__stop--current .wall__label {
+  color: var(--accent-strong);
 }
 
-.wall__summary {
-    margin: 0;
-    font-family: var(--font-serif);
-    font-size: 14px;
-    color: var(--ink-secondary);
+.wall .wall__stop--locked .wall__dot {
+  border: 1px solid var(--border-strong);
+  background: transparent;
 }
 
-.wall__actions {
-    display: flex;
-    align-items: center;
-    gap: 16px;
+.wall .wall__stop--locked .wall__label {
+  color: var(--ink-muted);
 }
 
-.wall__view {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--ink-secondary);
-    transition: color 140ms;
+/* Crowded: keep the label that says where the reader is, drop the ones that
+   say where they have been, and the one "· here" would run into. Hidden, not
+   removed, so the row keeps its height. */
+.wall .wall__route--dense :is(.wall__stop--read, .wall__stop--after-current) .wall__label {
+  visibility: hidden;
 }
 
-.wall__view:hover {
-    color: var(--ink);
+/* ---------- locked sections ---------- */
+
+.wall .wall__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.wall__note {
-    margin: 18px 0 0;
-    font-family: var(--font-serif);
-    font-size: 14px;
-    color: var(--ink-secondary);
+.wall .wall__section {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 4px 0;
+  align-items: baseline;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: var(--surface-sunken);
 }
 
-.wall__note a {
-    color: var(--accent-strong);
-    text-decoration: underline;
-    text-underline-offset: 2px;
+.wall .wall__n,
+.wall .wall__minutes {
+  font: 400 12px/24px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
 }
 
-.wall__cta {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 24px;
+.wall .wall__minutes {
+  padding-left: 16px;
+  white-space: nowrap;
 }
 
-.wall__buy {
-    border: 0;
-    cursor: pointer;
-    border-radius: 6px;
-    background: var(--ink);
-    padding: 13px 22px;
-    font-family: var(--font-sans);
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--ink-inverse);
-    transition: background 140ms;
+.wall .wall__name {
+  min-width: 0;
+  font: 500 16px/24px var(--font-sans);
+  color: var(--ink);
 }
 
-.wall__buy:hover:not(:disabled) {
-    background: var(--ink-secondary);
+/* The rest of the book: an outline rather than a filled row, so it reads as a
+   summary and not as one more section. */
+.wall .wall__more {
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--ink);
+  transition: background-color 0.2s ease-out;
 }
 
-.wall__buy:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+.wall .wall__more:hover {
+  background: var(--surface-sunken);
+}
+
+.wall .wall__more .wall__name {
+  color: var(--ink-secondary);
+}
+
+.wall .wall__peek {
+  grid-column: 2 / 4;
+  font: 400 15px/24px var(--font-serif);
+  color: var(--ink-muted);
 }
 
 
+.wall .wall__see {
+  padding-left: 16px;
+  font: 400 12px/18px var(--font-mono);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
 
-@media (max-width: 560px) {
-    .wall__card {
-        padding: 26px 20px;
-    }
+/* ---------- plan picker ---------- */
 
-    .wall__title {
-        font-size: 24px;
-    }
+.wall .wall__unlock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
-    .wall__buy {
-        flex: 1 1 auto;
-        text-align: center;
-    }
+.wall .wall__plans {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wall .wall__plan {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: center;
+  width: 100%;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease-out;
+}
+
+.wall .wall__plan--on {
+  border-color: var(--ink);
+}
+
+.wall .wall__plan:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.wall .wall__radio {
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  transition: border-color 0.2s ease-out, border-width 0.2s ease-out;
+}
+
+/* A thick ring in `--ink` reads as filled. */
+.wall .wall__plan--on .wall__radio {
+  border: 5px solid var(--ink);
+}
+
+.wall .wall__plan-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.wall .wall__plan-name {
+  font: 500 16px/22px var(--font-sans);
+  color: var(--ink);
+}
+
+.wall .wall__plan-note {
+  font: var(--text-caption);
+  color: var(--ink-secondary);
+}
+
+/* Two pieces that each refuse to break, so at worst the chip moves to its own
+   line whole — it never wraps inside itself. */
+.wall .wall__discount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 6px;
+  font: 400 12px/18px var(--font-mono);
+  color: var(--ink-secondary);
+}
+
+.wall .wall__off,
+.wall .wall__code {
+  flex: none;
+  white-space: nowrap;
+}
+
+.wall .wall__code {
+  padding: 1px 8px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+}
+
+.wall .wall__price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.wall .wall__list {
+  font: var(--text-caption);
+  color: var(--ink-muted);
+  text-decoration: line-through;
+}
+
+.wall .wall__amount {
+  font: 500 24px/28px var(--font-sans);
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+.wall .wall__per {
+  font: 400 12px/18px var(--font-mono);
+  color: var(--ink-muted);
+}
+
+/* ---------- actions ---------- */
+
+.wall .wall__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding-top: 24px;
+  border-top: 1px dashed var(--border);
+}
+
+.wall .wall__links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wall .wall__member {
+  font: var(--text-caption);
+  color: var(--ink-secondary);
+}
+
+.wall .wall__member a {
+  color: var(--accent-strong);
+}
+
+.wall .wall__compare {
+  font: var(--text-caption);
+  color: var(--ink-secondary);
+  transition: color 0.2s ease-out;
+}
+
+.wall .wall__compare:hover {
+  color: var(--ink);
+}
+
+/* The house Get Pro yellow, named in the spec. */
+.wall .wall__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  margin-left: auto;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 6px;
+  background: #f2a41f;
+  color: #111111;
+  font: 400 15px/1 var(--font-serif);
+  white-space: nowrap;
+  transition: opacity 0.2s ease-out;
+}
+
+.wall .wall__cta:hover {
+  opacity: 0.9;
+  color: #111111;
+}
+
+/* The flame draws in its own orange, which on this yellow is invisible. The
+   stroke follows the text and the glow goes; `!important` because the flicker
+   animates both and an animation outranks a rule — the motion itself still
+   plays, and `FlameIcon` stops it under reduced motion. */
+.wall .wall__cta :deep(.flame) {
+  stroke: currentColor !important;
+  filter: none !important;
+}
+
+/* ---------- narrow ---------- */
+
+@media (max-width: 620px) {
+  .wall .wall__card {
+    padding: 24px;
+  }
+
+  .wall .wall__head {
+    grid-template-columns: 1fr;
+  }
+
+  .wall .wall__plate {
+    width: 112px;
+  }
+
+  /* Too narrow for a number under every stop: the one that says where the
+     reader is stays, and the list below numbers the rest. */
+  .wall .wall__stop:not(.wall__stop--current) .wall__label {
+    visibility: hidden;
+  }
+
+  .wall .wall__plan {
+    grid-template-columns: auto 1fr;
+  }
+
+  .wall .wall__price {
+    grid-column: 2;
+    align-items: flex-start;
+  }
 }
 </style>
