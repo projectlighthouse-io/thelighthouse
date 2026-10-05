@@ -20,14 +20,16 @@ const links: NavLink[] = [
   { to: '/blog', label: 'blog' },
 ]
 
-const menu: NavLink[] = [
-  { to: '/dashboard', label: 'my shelf' },
-  { to: '/profile', label: 'progress' },
-  { to: '/settings/billing', label: 'billing' },
-]
 
 const route = useRoute()
 const { reader, isSignedIn, signOut } = useReader()
+
+const menu = computed<NavLink[]>(() => [
+  { to: '/dashboard', label: 'my shelf' },
+  { to: '/profile', label: 'progress' },
+  { to: ownWritingUrl(reader.value?.username), label: 'my writing' },
+  { to: '/settings/billing', label: 'billing' },
+])
 
 const isActive = (link: NavLink): boolean =>
   route.path === link.to || route.path.startsWith(`${link.to}/`)

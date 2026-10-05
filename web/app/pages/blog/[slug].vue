@@ -2,6 +2,7 @@
 import type { BlogPostResponse } from '@/types/Content'
 const route = useRoute()
 const slug = computed<string>(() => String(route.params.slug))
+const { reader } = useReader()
 
 // Fetched, not imported — importing ships every post's full markdown to render
 // one. SSR calls the handler directly, so this costs no round trip.
@@ -47,6 +48,14 @@ useJsonLd('post', () => ({
       <ul v-if="post.tags.length" class="tags" aria-label="tags">
         <li v-for="tag in post.tags" :key="tag">#{{ tag }}</li>
       </ul>
+      <!-- Client only: whether this reader wrote it is client state, and the
+           page is one cached document for everyone. The api checks ownership
+           on save regardless. -->
+      <ClientOnly>
+        <p v-if="post.authorUsername && post.authorUsername === reader?.username" class="lh-eyebrow">
+          <NuxtLink :to="`/blog/edit/${post.slug}`" class="lh-link">edit this post</NuxtLink>
+        </p>
+      </ClientOnly>
     </header>
 
     <!-- eslint-disable-next-line vue/no-v-html -- authored markdown, rendered at build -->
