@@ -1,0 +1,520 @@
+/* The lesson reader: a 730 column with an on-this-page list beside it on wide
+ * screens, plus the floating pieces — the selection menu, the note dialog and
+ * popover — and the notes thread under the lesson.
+ *
+ * Imported by the pages that read (lessons, project tasks) rather than by
+ * main.css. Scoped under .reader-shell except where a piece is fixed to the
+ * viewport.
+ */
+
+.reader-progress {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 2px;
+  background: var(--border);
+}
+
+.reader-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+}
+
+.reader-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--measure-text)) minmax(0, 1fr);
+  column-gap: var(--space-8);
+  padding-top: var(--space-16);
+}
+
+.reader-article {
+  grid-column: 2;
+  min-width: 0;
+  padding-inline: var(--space-6);
+}
+
+.reader-head {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.reader-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+}
+
+.reader-meta button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.reader-meta button:hover { color: var(--ink); }
+
+.reader-langs { display: flex; gap: var(--space-2); }
+.reader-langs a { color: var(--ink-secondary); text-decoration: none; }
+.reader-langs a:hover,
+.reader-langs a[aria-current] { color: var(--ink); }
+
+.reader-body { margin-top: var(--space-12); }
+
+/* on this page — wide screens only */
+.reader-toc {
+  grid-column: 1;
+  justify-self: end;
+  width: 220px;
+  position: sticky;
+  top: var(--space-12);
+  align-self: start;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.reader-toc__list {
+  display: grid;
+  gap: 2px;
+}
+
+.reader-toc__item {
+  display: block;
+  padding: 6px var(--space-3);
+  border-radius: var(--radius-sm);
+  font: var(--text-caption);
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition: background-color var(--duration) var(--ease-out), color var(--duration) var(--ease-out);
+}
+
+a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink); }
+
+.reader-toc__item.is-active { color: var(--ink); background: var(--surface-sunken); }
+.reader-toc__item.is-locked { color: var(--ink-faint); }
+
+@media (max-width: 1250px) {
+  .reader-layout { grid-template-columns: minmax(0, 1fr); padding-top: var(--space-12); }
+  .reader-article { grid-column: 1; width: 100%; max-width: var(--measure-text); margin-inline: auto; }
+  .reader-toc { display: none; }
+}
+
+/* the locked half: dashed rule, mono label, one button */
+.reader-pager {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-12);
+}
+
+.reader-pager > :only-child { margin-left: auto; }
+
+.reader-signup { margin-top: var(--space-12); }
+
+@media (max-width: 600px) {
+  .reader-pager { flex-direction: column; align-items: stretch; }
+  .reader-pager > * { white-space: normal; height: auto; min-height: 44px; padding-block: var(--space-2); }
+}
+
+/* highlights painted into the prose */
+.reader-mark-note {
+  background: var(--accent-tint);
+  border-bottom: 1px solid var(--accent);
+  cursor: pointer;
+}
+
+/* Bright on purpose: the bookmark is where the reader stopped, and it has to
+   be found at a glance on the way back. Dark text on it in either theme. */
+.reader-mark-bookmark {
+  background: #ffe45c;
+  color: #1a1814;
+  border-bottom: 1px dashed #8a6d00;
+}
+
+/* selection menu — fixed to the viewport */
+.reader-selectmenu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-full);
+  background: var(--surface-inverse);
+  box-shadow: var(--shadow-md);
+}
+
+.reader-selectmenu__item {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  font: var(--text-caption);
+  color: var(--ink-inverse);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--duration) var(--ease-out);
+}
+
+.reader-selectmenu__item:hover { background: rgba(255, 255, 255, 0.12); }
+
+.reader-selectmenu__sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* the note dialog */
+.reader-notedialog {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+}
+
+.reader-notedialog__veil {
+  position: absolute;
+  inset: 0;
+  background: rgba(32, 32, 32, 0.32);
+}
+
+.reader-notedialog__card {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.reader-notedialog__passage {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+.reader-notedialog__field,
+.reader-comments__textarea,
+.note-comment__field {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  font: var(--text-body-sm);
+  color: var(--ink);
+  resize: vertical;
+}
+
+.reader-notedialog__field::placeholder,
+.reader-comments__textarea::placeholder { color: var(--ink-faint); }
+
+.reader-notedialog__field:focus-visible,
+.reader-comments__textarea:focus-visible,
+.note-comment__field:focus-visible { border-color: var(--focus-ring); }
+
+.reader-notedialog__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.reader-notedialog__private {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-caption);
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.reader-notedialog__error,
+.reader-comments__error,
+.reader-notepop__error {
+  margin: 0;
+  font: var(--text-caption);
+  color: var(--ink);
+}
+
+.reader-notedialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* the note popover */
+.reader-notepop {
+  position: fixed;
+  z-index: 40;
+  width: min(320px, calc(100vw - 32px));
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-md);
+}
+
+.reader-notepop__body {
+  margin: 0;
+  font: var(--text-body-sm);
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.reader-notepop__foot,
+.reader-notepop__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.reader-notepop__action,
+.note-comment__act,
+.note-comment__cancel {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.reader-notepop__action:hover,
+.note-comment__act:hover,
+.note-comment__cancel:hover { color: var(--ink); }
+
+.reader-notepop__action:disabled,
+.note-comment__act:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* notes and highlights under the lesson */
+.reader-comments {
+  display: grid;
+  gap: var(--space-6);
+  margin-top: var(--space-24);
+  padding-top: var(--space-8);
+  border-top: 1px dashed var(--border-dashed);
+}
+
+.reader-comments__title {
+  margin: 0;
+  font: var(--text-h2);
+  letter-spacing: var(--tracking-h2);
+}
+
+.reader-comments__compose {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.reader-comments__compose-row,
+.note-comment__editrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.reader-comments__counter {
+  font: var(--text-label-mono);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.reader-comments__submit,
+.note-comment__save {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--surface-inverse);
+  font: 500 14px/1 var(--font-sans);
+  color: var(--ink-inverse);
+  cursor: pointer;
+  transition: opacity var(--duration) var(--ease-out);
+}
+
+.reader-comments__submit:not(:disabled):hover,
+.note-comment__save:not(:disabled):hover { opacity: 0.88; }
+
+.reader-comments__submit:disabled,
+.note-comment__save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.reader-comments__signin,
+.reader-comments__loading,
+.reader-comments__empty {
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  font: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+.reader-comments__signin-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.reader-comments__list {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.note-comment {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.note-comment__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+}
+
+.note-comment__avatar--initials {
+  display: grid;
+  place-items: center;
+  background: var(--surface-inverse);
+  font: var(--text-label-mono);
+  color: var(--ink-inverse);
+}
+
+.note-comment__main {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.note-comment__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.note-comment__who { font: 500 15px/24px var(--font-sans); }
+
+.note-comment__lock,
+.note-comment__dot,
+.note-comment__when {
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+}
+
+.note-comment__acts {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-3);
+}
+
+.note-comment__body {
+  margin: 0;
+  font: var(--text-body-sm);
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.note-comment__quote {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font: var(--text-caption);
+  color: var(--ink-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--duration) var(--ease-out);
+}
+
+.note-comment__quote:hover { background: var(--surface-muted); }
+
+.note-comment__edit {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.note-comment__editacts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ---------- subbar, on a page with an empty gutter ---------- */
+
+/* The task page fills no contents list, so its breadcrumb had nothing in the
+ * gutter to line up with and sat about 200px left of the article it names:
+ * `.reader-subbar__inner` centres itself in 1280px while the article is the
+ * middle track of `.reader-layout--no-aside`'s 1404px grid.
+ *
+ * Rather than an offset that has to be re-derived at every breakpoint the grid
+ * changes at, the subbar borrows the grid itself — same classes, so the
+ * breadcrumb is in the article's own column by construction and the three
+ * layout media queries below already move both. Only the box padding differs,
+ * and only vertically, so the responsive side padding still comes from
+ * `.reader-layout`.
+ *
+ * Must stay after those media queries: same specificity, so source order is
+ * what makes these win. */
+.reader-subbar__grid {
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+/* Holds column one open, the way `.reader-toc` does under it — and disappears
+   at the same width, where the layout collapses to one column. */
+@media (max-width: 880px) {
+    .reader-subbar__gutter {
+        display: none;
+    }
+}
+
+/* The breadcrumb row itself. `.reader-article`'s own side padding, so this
+   aligns with the prose rather than with the card the prose sits in. */
+.reader-subbar__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 48px;
+    font-family: var(--reader-mono);
+    font-size: 12px;
+    color: var(--reader-mute);
+}
+
+@media (max-width: 880px) {
+    .reader-subbar__row {
+        padding: 0 24px;
+    }
+}
+
+@media (max-width: 639px) {
+    .reader-subbar__row {
+        padding: 0 18px;
+    }
+}

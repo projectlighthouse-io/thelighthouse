@@ -1,0 +1,40 @@
+@import 'tailwindcss';
+
+/* Tailwind stays for its reset, and for the utility classes older lesson
+   markdown still carries in raw html. Pages and components are styled with
+   the tokens below, not utilities. */
+@source '../../**/*.vue';
+
+/* the design system: tokens in the handoff's order, then the shared layer */
+@import './tokens/fonts.css';
+@import './tokens/colors.css';
+@import './tokens/typography.css';
+@import './tokens/spacing.css';
+@import './tokens/radius.css';
+@import './tokens/elevation.css';
+@import './tokens/motion.css';
+@import './tokens/base.css';
+@import './system.css';
+@import './prose.css';
+
+/* The old palette's names, mapped onto the tokens. The article editor and
+   the topic picker were built with these utilities and still use them; this
+   keeps them themed rather than falling back to Tailwind's defaults. New work
+   uses the tokens directly. `bad` has no token yet, so it is the one literal. */
+@theme inline {
+  --color-ink: var(--ink);
+  --color-page: var(--surface-page);
+  --color-paper-warm: var(--surface-sunken);
+  --color-paper-edge: var(--border);
+  --color-rule-soft: var(--border);
+  --color-crumb: var(--ink-muted);
+  --color-faint: var(--ink-faint);
+  --color-quiet: var(--ink-secondary);
+  --color-on-ink: var(--ink-inverse);
+  --color-link: var(--ink);
+  --color-link-hover: var(--ink-secondary);
+  --color-bad: #b3261e;
+}
+
+/* reader.css is not imported here on purpose — only the pages that read need
+   it, and they import it themselves. */

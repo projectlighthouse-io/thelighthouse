@@ -1,0 +1,179 @@
+/* Rendered markdown — lessons, project tasks, blog posts, syntax pages.
+ *
+ * `.lesson-content` is the hook every page already wraps its v-html in, so it
+ * stays the selector. Body 17/29, headings from the scale, code on the
+ * terminal ground. No italics, no pills.
+ */
+
+.lesson-content {
+  font: var(--text-body);
+  color: var(--ink-secondary);
+  overflow-wrap: break-word;
+}
+
+.lesson-content > :first-child { margin-top: 0; }
+
+.lesson-content :is(p, ul, ol, blockquote, table, pre, figure) {
+  margin: 0 0 var(--space-6);
+}
+
+.lesson-content :is(h1, h2, h3, h4) {
+  color: var(--ink);
+  text-wrap: balance;
+  scroll-margin-top: var(--space-6);
+}
+
+.lesson-content h1 { margin: var(--space-12) 0 var(--space-4); font: var(--text-h1); letter-spacing: var(--tracking-h1); }
+.lesson-content h2 { margin: var(--space-12) 0 var(--space-4); font: var(--text-h2); letter-spacing: var(--tracking-h2); }
+.lesson-content h3 { margin: var(--space-8) 0 var(--space-3); font: var(--text-h3); letter-spacing: var(--tracking-title); }
+.lesson-content h4 { margin: var(--space-6) 0 var(--space-2); font: 500 16px/24px var(--font-sans); }
+
+/* the injected heading anchor: invisible until hovered or focused */
+.lesson-content .anchor {
+  margin-left: 0.4em;
+  color: var(--ink-faint);
+  opacity: 0;
+  text-decoration: none;
+  transition: opacity var(--duration) var(--ease-out);
+}
+
+.lesson-content .anchor::after { content: '#'; }
+
+.lesson-content :is(h1, h2, h3, h4):hover .anchor,
+.lesson-content .anchor:focus-visible { opacity: 1; }
+
+.lesson-content strong, .lesson-content b { font-weight: var(--weight-medium); color: var(--ink); }
+
+/* the system has no italic in running copy */
+.lesson-content em, .lesson-content i { font-style: normal; color: var(--ink); }
+
+.lesson-content a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 4px;
+  transition: text-decoration-color var(--duration) var(--ease-out);
+}
+
+.lesson-content a:hover { text-decoration-color: var(--ink); }
+
+.lesson-content :is(ul, ol) { padding-left: var(--space-6); }
+.lesson-content ul { list-style: disc; }
+.lesson-content ol { list-style: decimal; }
+.lesson-content li { margin: var(--space-1) 0; }
+.lesson-content li::marker { color: var(--ink-faint); font: var(--text-label-mono); }
+.lesson-content li > :is(ul, ol) { margin: var(--space-1) 0 0; }
+
+.lesson-content hr {
+  margin: var(--space-12) 0;
+  border: 0;
+  border-top: 1px dashed var(--border-dashed);
+}
+
+.lesson-content blockquote {
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  font: var(--text-quote);
+  color: var(--ink-secondary);
+}
+
+.lesson-content blockquote > :last-child { margin-bottom: 0; }
+
+/* images, with the sizes markdown can ask for */
+.lesson-content img {
+  max-width: 100%;
+  height: auto;
+  margin: var(--space-6) 0;
+  border-radius: var(--radius-md);
+}
+
+.lesson-content img.img-sm { width: 100%; max-width: 400px; }
+.lesson-content img.img-md { width: 100%; max-width: 600px; }
+.lesson-content img.img-lg,
+.lesson-content img.img-xl { width: 100%; }
+
+/* inline code */
+.lesson-content :not(pre) > code {
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-muted);
+  font: var(--text-code);
+  font-size: 0.85em;
+  color: var(--ink);
+}
+
+/* code blocks — the terminal ground, whatever the highlighter wrote inline */
+.lesson-content pre {
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  background: #0d1117 !important;
+  font: var(--text-code);
+  color: #c9d1d9;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.lesson-content pre code {
+  font: inherit;
+  color: inherit;
+  background: none;
+  white-space: pre;
+}
+
+/* tables */
+.lesson-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--text-body-sm);
+}
+
+.lesson-content .table-scroll-wrapper { overflow-x: auto; margin-bottom: var(--space-6); }
+.lesson-content .table-scroll-wrapper table { margin: 0; }
+
+.lesson-content th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-strong);
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+  text-align: left;
+}
+
+.lesson-content td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+/* authored callouts. Older lessons draw these with pencil-border classes;
+   they render as plain containers now. */
+.lesson-content [class*='border-pencil'] {
+  margin: var(--space-6) 0;
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.lesson-content .highlight-wavy {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 600px) {
+  .lesson-content pre { margin-inline: calc(var(--space-6) * -1); border-radius: 0; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+
+/* terms and privacy: sections open on a mono eyebrow rather than a heading */
+.lesson-content.is-legal h2 {
+  margin: var(--space-12) 0 var(--space-3);
+  font: var(--text-label-mono);
+  letter-spacing: 0;
+  color: var(--ink-muted);
+}

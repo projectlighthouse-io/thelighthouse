@@ -1,0 +1,27 @@
+# Everything not listed here is sent to the daemon as build context before the
+# first instruction runs. node_modules alone is ~500MB and is rebuilt inside the
+# image anyway, so shipping it costs a slow build and nothing else.
+node_modules
+.nuxt
+.output
+dist
+
+.git
+.gitignore
+.github
+
+*.md
+CLAUDE.local.md
+Makefile
+Dockerfile
+.dockerignore
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log
+.idea
+.vscode
+.eslintcache

@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# The default token is read-write. Nothing here writes, and a workflow that
+# cannot push is one that a compromised dependency cannot push with either.
+permissions:
+  contents: read
+
+# A second push to the same branch makes the first run irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: lint, types, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # Actions are pinned to commit SHAs, not tags. A tag is mutable — the
+      # tj-actions/changed-files compromise moved tags to a malicious commit and
+      # every repo tracking `@v4` ran it. Same reasoning as pinning package.json.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # ci, not install: exact lockfile, and it fails if the lockfile and
+      # package.json have drifted apart
+      - run: npm ci
+
+      # Deliberately separate steps rather than `make check`. The Makefile runs
+      # them in sequence and stops at the first failure; here a lint error and a
+      # type error both show up in the same run.
+      - name: Lint
+        run: make lint
+
+      - name: Typecheck
+        run: make types
+
+      - name: Build
+        run: make build
+
+  audit:
+    name: audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: make audit
+
+  image:
+    name: docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Builds but never pushes — deploys are local and deliberate, see
+      # docs/rebuild.md. This exists so the deploy path cannot rot unnoticed
+      # between releases.
+      - name: Build image
+        run: docker build --platform linux/amd64 -t lighthouse-web:ci .
+
+      # A build that succeeds and an image that serves are different claims.
+      - name: Boot it and check it serves
+        run: |
+          docker run -d --name ci -p 3000:3000 lighthouse-web:ci
+          for i in $(seq 1 60); do
+            curl -fsS -o /dev/null http://localhost:3000/ && break
+            sleep 1
+          done
+          curl -fsS -o /dev/null -w 'home %{http_code}\n' http://localhost:3000/
+          curl -fsS -o /dev/null -w 'book %{http_code}\n' http://localhost:3000/books
+          curl -fsS -o /dev/null -w 'robots %{http_code}\n' http://localhost:3000/robots.txt
+          docker rm -f ci
