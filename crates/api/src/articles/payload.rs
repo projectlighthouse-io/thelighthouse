@@ -72,12 +72,19 @@ const SLUG_SUFFIX: usize = 6;
 /// slug is minted here, so there is no field for a caller to file an article
 /// under somebody else's name or to claim a url that is already somebody's.
 #[derive(Debug, Deserialize)]
+///
+/// Every field defaults to empty, so a missing key is refused by that field's
+/// own check rather than as a body that could not be read.
 pub(crate) struct NewArticleRequest {
+    #[serde(default)]
     pub(crate) title: String,
+    #[serde(default)]
     pub(crate) subtitle: String,
     /// What the article is about — one at least, [`MAX_TOPICS`] at most.
+    #[serde(default)]
     pub(crate) topics: Vec<String>,
     /// Markdown, as typed.
+    #[serde(default)]
     pub(crate) body: String,
 }
 
@@ -85,9 +92,13 @@ pub(crate) struct NewArticleRequest {
 /// slug: a url that changed when its title did would break every link to it.
 #[derive(Debug, Deserialize)]
 pub(crate) struct EditArticleRequest {
+    #[serde(default)]
     pub(crate) title: String,
+    #[serde(default)]
     pub(crate) subtitle: String,
+    #[serde(default)]
     pub(crate) topics: Vec<String>,
+    #[serde(default)]
     pub(crate) body: String,
 }
 
@@ -172,35 +183,39 @@ pub(crate) fn validate_article<'a>(
     subtitle: &'a str,
     topics: &[String],
     body: &'a str,
-) -> Result<ValidArticle<'a>, Refusal> {
+) -> Result<ValidArticle<'a>, Vec<Refusal>> {
     let title = title.trim();
     let subtitle = subtitle.trim();
     let body = body.trim();
 
-    if title.is_empty() {
-        return Err(Refusal::EmptyTitle);
-    }
+    // Every field checked, not only up to the first failure, so the editor can
+    // mark all of them at once.
+    let mut refused = Vec::new();
 
-    if title.chars().count() > MAX_TITLE {
-        return Err(Refusal::TitleTooLong);
+    if title.is_empty() {
+        refused.push(Refusal::EmptyTitle);
+    } else if title.chars().count() > MAX_TITLE {
+        refused.push(Refusal::TitleTooLong);
     }
 
     if subtitle.is_empty() {
-        return Err(Refusal::EmptySubtitle);
+        refused.push(Refusal::EmptySubtitle);
+    } else if subtitle.chars().count() > MAX_SUBTITLE {
+        refused.push(Refusal::SubtitleTooLong);
     }
 
-    if subtitle.chars().count() > MAX_SUBTITLE {
-        return Err(Refusal::SubtitleTooLong);
-    }
-
-    let topics = validate_topics(topics)?;
+    let topics = validate_topics(topics)
+        .map_err(|cause| refused.push(cause))
+        .unwrap_or_default();
 
     if body.is_empty() {
-        return Err(Refusal::EmptyBody);
+        refused.push(Refusal::EmptyBody);
+    } else if body.chars().count() > MAX_BODY {
+        refused.push(Refusal::BodyTooLong);
     }
 
-    if body.chars().count() > MAX_BODY {
-        return Err(Refusal::BodyTooLong);
+    if !refused.is_empty() {
+        return Err(refused);
     }
 
     Ok(ValidArticle {
@@ -317,11 +332,11 @@ mod tests {
 
         assert_eq!(
             validate_article("   ", "a subtitle", &topics(&["go"]), "body"),
-            Err(Refusal::EmptyTitle)
+            Err(vec![Refusal::EmptyTitle])
         );
         assert_eq!(
             validate_article("title", "a subtitle", &topics(&["go"]), "\n\t"),
-            Err(Refusal::EmptyBody)
+            Err(vec![Refusal::EmptyBody])
         );
     }
 
@@ -340,7 +355,7 @@ mod tests {
                 &go,
                 "b"
             ),
-            Err(Refusal::TitleTooLong)
+            Err(vec![Refusal::TitleTooLong])
         );
 
         assert!(
@@ -349,7 +364,7 @@ mod tests {
         );
         assert_eq!(
             validate_article("t", "a subtitle", &go, &"b".repeat(MAX_BODY + 1)),
-            Err(Refusal::BodyTooLong)
+            Err(vec![Refusal::BodyTooLong])
         );
 
         // Three bytes each in utf-8, so this passes only if characters count.
@@ -367,11 +382,11 @@ mod tests {
     fn an_article_must_have_a_subtitle() {
         assert_eq!(
             validate_article("t", "   ", &topics(&["go"]), "b"),
-            Err(Refusal::EmptySubtitle)
+            Err(vec![Refusal::EmptySubtitle])
         );
         assert_eq!(
             validate_article("t", "", &topics(&["go"]), "b"),
-            Err(Refusal::EmptySubtitle)
+            Err(vec![Refusal::EmptySubtitle])
         );
     }
 
@@ -397,7 +412,7 @@ mod tests {
                 &topics(&["go"]),
                 "b"
             ),
-            Err(Refusal::SubtitleTooLong)
+            Err(vec![Refusal::SubtitleTooLong])
         );
 
         // Characters, not bytes — the column counts the same way.
@@ -423,7 +438,7 @@ mod tests {
     fn an_article_must_be_about_something() {
         assert_eq!(
             validate_article("t", "a subtitle", &topics(&[]), "b"),
-            Err(Refusal::NoTopics)
+            Err(vec![Refusal::NoTopics])
         );
     }
 
@@ -453,7 +468,7 @@ mod tests {
         let many = topics(&["go", "rust", "docker", "systems"]);
         assert_eq!(
             validate_article("t", "a subtitle", &many, "b"),
-            Err(Refusal::TooManyTopics)
+            Err(vec![Refusal::TooManyTopics])
         );
     }
 
@@ -477,7 +492,7 @@ mod tests {
     fn one_unknown_topic_refuses_the_whole_write() {
         assert_eq!(
             validate_article("t", "a subtitle", &topics(&["go", "php"]), "b"),
-            Err(Refusal::UnknownCategory)
+            Err(vec![Refusal::UnknownCategory])
         );
     }
 

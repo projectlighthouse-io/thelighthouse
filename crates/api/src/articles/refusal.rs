@@ -2,7 +2,7 @@
 
 use axum::response::Response;
 
-use crate::response::bad_request;
+use crate::response::{bad_request, invalid};
 
 /// Why a write was refused. An enum for the reason `notes::refusal::Refusal`
 /// is one: a `Result<_, &str>` makes every string literal a valid error.
@@ -73,6 +73,35 @@ impl Refusal {
             Self::SlugTaken => "That address was just taken. Please try again.",
         }
     }
+}
+
+impl Refusal {
+    /// The editor field this refusal is about. `None` for a slug collision,
+    /// which nothing the author typed caused.
+    const fn field(self) -> Option<&'static str> {
+        match self {
+            Self::EmptyTitle | Self::TitleTooLong => Some("title"),
+            Self::EmptySubtitle | Self::SubtitleTooLong => Some("subtitle"),
+            Self::EmptyBody | Self::BodyTooLong => Some("body"),
+            Self::UnknownCategory | Self::NoTopics | Self::TooManyTopics => {
+                Some("topics")
+            }
+            Self::SlugTaken => None,
+        }
+    }
+}
+
+/// Every field that is wrong, as one 422 the editor draws beside its inputs.
+pub(crate) fn refuse_all(causes: &[Refusal]) -> Response {
+    if let Some(&unfielded) = causes.iter().find(|c| c.field().is_none()) {
+        return refuse(unfielded);
+    }
+
+    invalid(
+        causes
+            .iter()
+            .filter_map(|c| c.field().map(|field| (field, c.message()))),
+    )
 }
 
 /// The 400 a caller sees.

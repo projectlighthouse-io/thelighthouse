@@ -17,14 +17,14 @@ use super::{
         AuthorFilter, EditArticleRequest, NewArticleRequest, TopicFilter,
         slugify, validate_article,
     },
-    refusal::{Refusal, refuse},
+    refusal::{Refusal, refuse, refuse_all},
     store::{self, Filters, StoreError},
 };
 use crate::{
     api::AppState,
     cache::CachePolicy,
     middleware,
-    request::{ListQuery, PageSize},
+    request::{JsonBody, ListQuery, PageSize},
     response::{self, PaginatedResponse, json},
     session::Session,
 };
@@ -255,7 +255,7 @@ pub(crate) async fn mine(
 pub(crate) async fn create(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
-    axum::Json(payload): axum::Json<NewArticleRequest>,
+    JsonBody(payload): JsonBody<NewArticleRequest>,
 ) -> Response {
     let checked = match validate_article(
         &payload.title,
@@ -264,7 +264,7 @@ pub(crate) async fn create(
         &payload.body,
     ) {
         Ok(checked) => checked,
-        Err(cause_of) => return refuse(cause_of),
+        Err(refused) => return refuse_all(&refused),
     };
 
     // The suffix that makes the slug unique. `random_state` is the same
@@ -306,7 +306,7 @@ pub(crate) async fn update(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
     Path(slug): Path<String>,
-    axum::Json(payload): axum::Json<EditArticleRequest>,
+    JsonBody(payload): JsonBody<EditArticleRequest>,
 ) -> Response {
     let checked = match validate_article(
         &payload.title,
@@ -315,7 +315,7 @@ pub(crate) async fn update(
         &payload.body,
     ) {
         Ok(checked) => checked,
-        Err(cause_of) => return refuse(cause_of),
+        Err(refused) => return refuse_all(&refused),
     };
 
     match store::rewrite(&state.db, &slug, session.user_id, &checked).await {
