@@ -29,7 +29,13 @@ useJsonLd('post', () => ({
   'description': post.value?.description,
   'datePublished': post.value?.publishedAt,
   'keywords': post.value?.tags.join(', '),
-  'author': { '@type': 'Person', 'name': 'Aryan Ahmed' },
+  // Whoever wrote it — readers publish here too — with their profile when
+  // they have a username to link it by.
+  'author': {
+    '@type': 'Person',
+    'name': post.value?.author,
+    ...(post.value?.authorUsername ? { url: `${SITE.url}/users/@${post.value.authorUsername}` } : {}),
+  },
   'publisher': { '@type': 'Organization', 'name': SITE.name, 'url': SITE.url },
   'mainEntityOfPage': `${SITE.url}/blog/${slug.value}`,
 }))
