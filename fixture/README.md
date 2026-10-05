@@ -9,7 +9,6 @@ the loader has a tree to walk and the paywall split has something to cut.
 ```text
   books/          the good books — with projects/, this tree loads cleanly, end to end
   projects/       one project and its tasks
-  pricing/        ppp.yaml — no longer read by anything; see crates/ohara/src/lib.rs
   mislabelled/    a content root where things are wrong on purpose
   duplicate-ids/  a content root where two lessons share an id
   drafts/         a content root whose only book is a draft, and a draft project
