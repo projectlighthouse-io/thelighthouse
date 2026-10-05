@@ -11,4 +11,4 @@ Reached from tests as `fixture::duplicate_ids()`.
 
 | what is wrong | who checks it |
 |---|---|
-| `books/twice/lessons/02-second` reuses id 91 | `catalog.rs` |
+| `books/twice/lessons/02-second` reuses `01-first`'s id | `catalog.rs` |

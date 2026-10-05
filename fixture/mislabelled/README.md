@@ -9,3 +9,4 @@ books ever meets it. Reached from tests as `fixture::broken()`.
 |---|---|
 | `books/mislabelled/book.yaml` says `not-mislabelled` | `book.rs`, `catalog.rs` |
 | `01-right-name/lesson.yaml` says `wrong-name` | `lesson.rs` |
+| `projects/fixture-project/tasks/03-misnamed/task.yaml` says `something-else` | `task.rs` |
