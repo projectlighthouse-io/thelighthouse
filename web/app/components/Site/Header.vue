@@ -29,6 +29,7 @@ const menu = computed<NavLink[]>(() => [
   { to: '/profile', label: 'progress' },
   { to: ownWritingUrl(reader.value?.username), label: 'my writing' },
   { to: '/settings/billing', label: 'billing' },
+  { to: '/settings/tokens', label: 'luxctl api' },
 ])
 
 const isActive = (link: NavLink): boolean =>
