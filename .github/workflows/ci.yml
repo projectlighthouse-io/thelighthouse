@@ -33,6 +33,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # For `make test-db`: the tests whose subject is SQL, such as who may change
+    # an article. Same image and credentials as compose.yaml.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: lighthouse
+          POSTGRES_PASSWORD: lighthouse
+          POSTGRES_DB: lighthouse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lighthouse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       # Pinned to a commit, not a tag. Tags are mutable — the
       # tj-actions/changed-files compromise moved tags to a malicious commit and
@@ -53,6 +70,11 @@ jobs:
 
       - name: Test
         run: make test
+
+      - name: Database tests
+        env:
+          DATABASE_URL: postgres://lighthouse:lighthouse@localhost:5432/lighthouse
+        run: make test-db
 
   audit:
     name: audit
