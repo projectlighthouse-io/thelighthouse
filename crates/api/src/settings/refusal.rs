@@ -20,12 +20,17 @@ pub(crate) enum Refusal {
     /// Longer than `users.tagline` can hold.
     TaglineTooLong,
     BioTooLong,
-    /// A `varchar(255)` profile field over its cap.
-    FieldTooLong,
+    /// `varchar(255)` profile fields over their cap, one each so the form can
+    /// say which.
+    CompanyTooLong,
+    EducationTooLong,
     /// Longer than `users.location`, which is narrower than the rest.
     LocationTooLong,
-    /// Not an `http(s)` link with a host — see `view::is_web_url`.
-    NotALink,
+    /// Not an `http(s)` link with a host — see `view::is_web_url` — or, for
+    /// the two named networks, a link to somewhere else.
+    LinkedinNotALink,
+    XNotALink,
+    WebsiteNotALink,
 }
 
 impl Refusal {
@@ -37,9 +42,12 @@ impl Refusal {
             Self::NoRandomness => "no_randomness",
             Self::TaglineTooLong => "tagline_too_long",
             Self::BioTooLong => "bio_too_long",
-            Self::FieldTooLong => "field_too_long",
+            Self::CompanyTooLong => "company_too_long",
+            Self::EducationTooLong => "education_too_long",
             Self::LocationTooLong => "location_too_long",
-            Self::NotALink => "not_a_link",
+            Self::LinkedinNotALink => "linkedin_not_a_link",
+            Self::XNotALink => "x_not_a_link",
+            Self::WebsiteNotALink => "website_not_a_link",
         }
     }
 
@@ -49,9 +57,12 @@ impl Refusal {
             | Self::NameTooLong
             | Self::TaglineTooLong
             | Self::BioTooLong
-            | Self::FieldTooLong
+            | Self::CompanyTooLong
+            | Self::EducationTooLong
             | Self::LocationTooLong
-            | Self::NotALink => StatusCode::UNPROCESSABLE_ENTITY,
+            | Self::LinkedinNotALink
+            | Self::XNotALink
+            | Self::WebsiteNotALink => StatusCode::UNPROCESSABLE_ENTITY,
             // Not the caller's fault, and retrying may well work.
             Self::NoRandomness => StatusCode::SERVICE_UNAVAILABLE,
         }
@@ -68,11 +79,55 @@ impl Refusal {
             }
             Self::TaglineTooLong => "Tagline must be 160 characters or less.",
             Self::BioTooLong => "Bio must be 1000 characters or less.",
-            Self::FieldTooLong => "That is longer than 255 characters.",
+            Self::CompanyTooLong => "Company must be 255 characters or less.",
+            Self::EducationTooLong => {
+                "Education must be 255 characters or less."
+            }
             Self::LocationTooLong => "Location must be 120 characters or less.",
-            Self::NotALink => "Enter a full link, starting with https://",
+            Self::LinkedinNotALink => {
+                "Enter your LinkedIn link, starting with https://linkedin.com/"
+            }
+            Self::XNotALink => {
+                "Enter your X link, starting with https://x.com/"
+            }
+            Self::WebsiteNotALink => {
+                "Enter a full link, starting with https://"
+            }
         }
     }
+
+    /// The form field this refusal is about, as the page names its input.
+    /// `None` for the one that is nobody's typing.
+    const fn field(self) -> Option<&'static str> {
+        match self {
+            Self::NameRequired | Self::NameTooLong => Some("name"),
+            Self::NoRandomness => None,
+            Self::TaglineTooLong => Some("tagline"),
+            Self::BioTooLong => Some("bio"),
+            Self::CompanyTooLong => Some("company"),
+            Self::EducationTooLong => Some("education"),
+            Self::LocationTooLong => Some("location"),
+            Self::LinkedinNotALink => Some("linkedin_url"),
+            Self::XNotALink => Some("x_url"),
+            Self::WebsiteNotALink => Some("website_url"),
+        }
+    }
+}
+
+/// Every field that is wrong, as one 422 the form draws beside its inputs.
+///
+/// A refusal with no field — the random source — has nothing to draw, so it
+/// answers on its own instead.
+pub(crate) fn refuse_all(causes: &[Refusal]) -> Response {
+    if let Some(&unfielded) = causes.iter().find(|c| c.field().is_none()) {
+        return refuse(unfielded);
+    }
+
+    response::invalid(
+        causes
+            .iter()
+            .filter_map(|c| c.field().map(|field| (field, c.message()))),
+    )
 }
 
 /// The refusal a caller sees.
@@ -91,15 +146,18 @@ pub(crate) fn refuse(cause_of: Refusal) -> Response {
 mod tests {
     use super::*;
 
-    const REFUSALS: [Refusal; 8] = [
+    const REFUSALS: [Refusal; 11] = [
         Refusal::NameRequired,
         Refusal::NameTooLong,
         Refusal::NoRandomness,
         Refusal::TaglineTooLong,
         Refusal::BioTooLong,
-        Refusal::FieldTooLong,
+        Refusal::CompanyTooLong,
+        Refusal::EducationTooLong,
         Refusal::LocationTooLong,
-        Refusal::NotALink,
+        Refusal::LinkedinNotALink,
+        Refusal::XNotALink,
+        Refusal::WebsiteNotALink,
     ];
 
     #[test]

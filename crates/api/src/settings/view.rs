@@ -52,6 +52,9 @@ pub(crate) struct MintedView {
 /// The body of `POST /api/settings/tokens`.
 #[derive(Debug, Deserialize)]
 pub(crate) struct NewToken {
+    /// Defaulted, so a missing key is refused as an empty name rather than as
+    /// a body that could not be read.
+    #[serde(default)]
     pub(crate) name: String,
 }
 
@@ -173,15 +176,32 @@ fn is_web_url(value: &str) -> bool {
     host.len() > 1 && host.contains('.')
 }
 
+/// Whether a link points at one of `hosts`, `www.` or not.
+///
+/// For the two fields named after a network: a link in the linkedin field
+/// that goes anywhere else is a mistake, or a link dressed up as a profile.
+fn is_link_to(url: &str, hosts: &[&str]) -> bool {
+    let Some((_, rest)) = url.split_once("://") else {
+        return false;
+    };
+    let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host = host.strip_prefix("www.").unwrap_or(host);
+
+    hosts.iter().any(|known| host.eq_ignore_ascii_case(known))
+}
+
 impl EditProfile {
-    /// The fields as they will be written, or the first thing wrong with them.
+    /// The fields as they will be written, or everything wrong with them.
+    ///
+    /// Every field is checked, not only up to the first failure, so the form
+    /// can mark all of them at once.
     ///
     /// # Errors
     ///
     /// A field over its cap, or a link that is not an http(s) one.
     pub(crate) fn checked(
         &self,
-    ) -> Result<crate::users::Profile, super::refusal::Refusal> {
+    ) -> Result<crate::users::Profile, Vec<super::refusal::Refusal>> {
         use super::refusal::Refusal;
 
         let tagline = tidy(self.tagline.as_ref());
@@ -198,27 +218,39 @@ impl EditProfile {
             value.as_ref().is_some_and(|v| v.chars().count() > cap)
         };
 
-        if over(&tagline, MAX_TAGLINE) {
-            return Err(Refusal::TaglineTooLong);
-        }
-        if over(&bio, MAX_BIO) {
-            return Err(Refusal::BioTooLong);
-        }
-        if over(&company, MAX_SHORT) || over(&education, MAX_SHORT) {
-            return Err(Refusal::FieldTooLong);
-        }
-        if over(&location, MAX_LOCATION) {
-            return Err(Refusal::LocationTooLong);
-        }
-
         // Every one of the three is reader-supplied and comes back out of the
-        // profile page as an `href`, so all three go through the same check.
-        let links = [&linkedin_url, &x_url, &website_url];
-        if links
-            .iter()
-            .any(|link| link.as_deref().is_some_and(|url| !is_web_url(url)))
-        {
-            return Err(Refusal::NotALink);
+        // profile page as an `href`, so all three go through `is_web_url`.
+        let bad_link = |value: &Option<String>, hosts: &[&str]| {
+            value.as_deref().is_some_and(|url| {
+                !is_web_url(url)
+                    || (!hosts.is_empty() && !is_link_to(url, hosts))
+            })
+        };
+
+        let checks = [
+            (over(&tagline, MAX_TAGLINE), Refusal::TaglineTooLong),
+            (over(&bio, MAX_BIO), Refusal::BioTooLong),
+            (over(&company, MAX_SHORT), Refusal::CompanyTooLong),
+            (over(&education, MAX_SHORT), Refusal::EducationTooLong),
+            (over(&location, MAX_LOCATION), Refusal::LocationTooLong),
+            (
+                bad_link(&linkedin_url, &["linkedin.com"]),
+                Refusal::LinkedinNotALink,
+            ),
+            (
+                bad_link(&x_url, &["x.com", "twitter.com"]),
+                Refusal::XNotALink,
+            ),
+            (bad_link(&website_url, &[]), Refusal::WebsiteNotALink),
+        ];
+
+        let refused: Vec<Refusal> = checks
+            .into_iter()
+            .filter_map(|(failed, refusal)| failed.then_some(refusal))
+            .collect();
+
+        if !refused.is_empty() {
+            return Err(refused);
         }
 
         Ok(crate::users::Profile {
@@ -283,7 +315,7 @@ mod tests {
     #[test]
     fn a_field_over_its_cap_is_refused_by_name() {
         let too_long = |field: fn(String) -> EditProfile, n: usize| {
-            field("x".repeat(n)).checked().unwrap_err()
+            field("x".repeat(n)).checked().unwrap_err().first().copied()
         };
 
         assert_eq!(
@@ -294,7 +326,7 @@ mod tests {
                 },
                 MAX_TAGLINE + 1
             ),
-            super::super::refusal::Refusal::TaglineTooLong
+            Some(super::super::refusal::Refusal::TaglineTooLong)
         );
         assert_eq!(
             too_long(
@@ -304,7 +336,7 @@ mod tests {
                 },
                 MAX_BIO + 1
             ),
-            super::super::refusal::Refusal::BioTooLong
+            Some(super::super::refusal::Refusal::BioTooLong)
         );
     }
 
@@ -335,38 +367,95 @@ mod tests {
 
         assert_eq!(
             edit.checked().unwrap_err(),
-            super::super::refusal::Refusal::LocationTooLong
+            vec![super::super::refusal::Refusal::LocationTooLong]
         );
     }
 
     #[test]
     fn every_link_field_is_checked_and_not_only_linkedin() {
-        let fields: [fn(String) -> EditProfile; 3] = [
-            |v| EditProfile {
-                linkedin_url: Some(v),
-                ..EditProfile::default()
-            },
-            |v| EditProfile {
-                x_url: Some(v),
-                ..EditProfile::default()
-            },
-            |v| EditProfile {
-                website_url: Some(v),
-                ..EditProfile::default()
-            },
+        use super::super::refusal::Refusal;
+
+        /// A link field, what refusing it says, and a link it accepts.
+        type LinkCase = (fn(String) -> EditProfile, Refusal, &'static str);
+
+        let fields: [LinkCase; 3] = [
+            (
+                |v| EditProfile {
+                    linkedin_url: Some(v),
+                    ..EditProfile::default()
+                },
+                Refusal::LinkedinNotALink,
+                "https://www.linkedin.com/in/someone",
+            ),
+            (
+                |v| EditProfile {
+                    x_url: Some(v),
+                    ..EditProfile::default()
+                },
+                Refusal::XNotALink,
+                "https://x.com/someone",
+            ),
+            (
+                |v| EditProfile {
+                    website_url: Some(v),
+                    ..EditProfile::default()
+                },
+                Refusal::WebsiteNotALink,
+                "https://example.com/a",
+            ),
         ];
 
-        for field in fields {
+        for (field, refusal, good) in fields {
             assert_eq!(
                 field("javascript:alert(1)".to_owned())
                     .checked()
                     .unwrap_err(),
-                super::super::refusal::Refusal::NotALink
+                vec![refusal]
             );
-            assert!(
-                field("https://example.com/a".to_owned()).checked().is_ok()
-            );
+            assert!(field(good.to_owned()).checked().is_ok(), "{good}");
         }
+    }
+
+    #[test]
+    fn a_network_link_must_point_at_that_network() {
+        use super::super::refusal::Refusal;
+
+        let linkedin = EditProfile {
+            linkedin_url: Some("https://evil.example/in/someone".to_owned()),
+            ..EditProfile::default()
+        };
+        assert_eq!(
+            linkedin.checked().unwrap_err(),
+            vec![Refusal::LinkedinNotALink]
+        );
+
+        // A host that only *starts* with the network's name is not it.
+        let x = EditProfile {
+            x_url: Some("https://x.com.evil.example/someone".to_owned()),
+            ..EditProfile::default()
+        };
+        assert_eq!(x.checked().unwrap_err(), vec![Refusal::XNotALink]);
+    }
+
+    #[test]
+    fn every_bad_field_is_named_not_only_the_first() {
+        use super::super::refusal::Refusal;
+
+        let edit = EditProfile {
+            company: Some("c".repeat(MAX_SHORT + 1)),
+            education: Some("e".repeat(MAX_SHORT + 1)),
+            website_url: Some("not a link".to_owned()),
+            ..EditProfile::default()
+        };
+
+        assert_eq!(
+            edit.checked().unwrap_err(),
+            vec![
+                Refusal::CompanyTooLong,
+                Refusal::EducationTooLong,
+                Refusal::WebsiteNotALink,
+            ]
+        );
     }
 
     #[test]

@@ -1,14 +1,14 @@
 //! One function per route. No SQL, and no rendering decisions.
 
 use axum::{
-    Extension, Json,
+    Extension,
     extract::{Path, State},
     http::StatusCode,
     response::Response,
 };
 
 use super::{
-    refusal::{Refusal, refuse},
+    refusal::{Refusal, refuse, refuse_all},
     view::{
         EditProfile, MAX_NAME, MintedView, NewToken, ProfileView, TokenView,
     },
@@ -16,6 +16,7 @@ use super::{
 use crate::{
     api::AppState,
     cache::CachePolicy,
+    request::JsonBody,
     response::{self, not_found},
     session::Session,
     tokens::{store, token},
@@ -48,17 +49,17 @@ pub(crate) async fn list(
 pub(crate) async fn create(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
-    Json(body): Json<NewToken>,
+    JsonBody(body): JsonBody<NewToken>,
 ) -> Response {
     let name = body.name();
 
     if name.is_empty() {
-        return refuse(Refusal::NameRequired);
+        return refuse_all(&[Refusal::NameRequired]);
     }
     // Counted in characters, not bytes: a name of sixty accented letters is
     // sixty characters and should not be refused for being a hundred bytes.
     if name.chars().count() > MAX_NAME {
-        return refuse(Refusal::NameTooLong);
+        return refuse_all(&[Refusal::NameTooLong]);
     }
 
     let Some(minted) = token::mint() else {
@@ -150,11 +151,11 @@ pub(crate) async fn profile(
 pub(crate) async fn edit_profile(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
-    Json(body): Json<EditProfile>,
+    JsonBody(body): JsonBody<EditProfile>,
 ) -> Response {
     let fields = match body.checked() {
         Ok(fields) => fields,
-        Err(refusal) => return refuse(refusal),
+        Err(refused) => return refuse_all(&refused),
     };
 
     match crate::users::update_profile(&state.db, session.user_id, &fields)
