@@ -97,6 +97,14 @@ async function entries(): Promise<Entry[]> {
     })
   }
 
+  // Authors' profiles: a public page per person who has published, linked from
+  // every article they wrote. Readers who have not written are not listed —
+  // their profile is a name and maybe a tagline, which is not a page to rank.
+  const authors = new Set(articles.items.map(a => a.author_username).filter(Boolean))
+  for (const username of authors) {
+    out.push({ path: `/users/@${username}`, priority: 0.4, changefreq: 'monthly' })
+  }
+
   for (const lang of languages) {
     out.push({ path: `/syntax/${lang.slug}`, priority: 0.6, changefreq: 'monthly' })
   }
@@ -110,7 +118,9 @@ export default defineEventHandler(async (event) => {
   const urls = (await entries())
     .map(e => [
       '  <url>',
-      `    <loc>${SITE}${e.path}</loc>`,
+      // The root without its slash, matching the canonical `useSeo` writes —
+      // two spellings of one url is two urls to a crawler.
+      `    <loc>${SITE}${e.path === '/' ? '' : e.path}</loc>`,
       e.lastmod ? `    <lastmod>${e.lastmod}</lastmod>` : '',
       `    <changefreq>${e.changefreq}</changefreq>`,
       `    <priority>${e.priority.toFixed(1)}</priority>`,
