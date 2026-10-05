@@ -1,4 +1,7 @@
 <script setup lang="ts">
+// The laravel app had both; with OAuth only there is nothing to tell apart.
+definePageMeta({ alias: '/register' })
+
 useSeo({
   title: 'Join projectlighthouse',
   description: 'Sign in with GitHub or Google to pick up where you left off.',
