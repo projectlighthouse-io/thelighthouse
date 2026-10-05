@@ -3,7 +3,7 @@ import type { ProjectProgress, TaskProgress } from '@/types/Content'
 /**
  * What a reader has done on a project, refreshed while they work.
  *
- * The reader is in their terminal, not on this page. They run `lux submit`,
+ * The reader is in their terminal, not on this page. They run `luxctl submit`,
  * and the tab they left open should catch up without being reloaded — that is
  * the whole feature.
  *
