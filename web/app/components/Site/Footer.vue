@@ -19,6 +19,7 @@ const links: FooterLink[] = [
   { to: 'https://www.linkedin.com/company/projectlighthouse-io', label: 'linkedin', external: true },
   { to: 'https://projectlighthouse.substack.com/', label: 'substack', external: true },
   { to: '/blog', label: 'blog' },
+  { to: 'https://paperkites.app/', label: 'paperkites ↗', external: true },
 ]
 
 /** 5×7 glyphs for the wordmark; a `█` is a lit cell. */
