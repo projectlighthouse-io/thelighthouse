@@ -117,9 +117,9 @@ a different shape than the one that ships.
 only, and Caddy reaches the host over IPv4. The symptom is a 502 from Caddy while
 `http://localhost:3000` works perfectly in a browser.
 
-Port 8000 is the origin the project's own OAuth apps have registered, so set
-`APP_URL=http://localhost:8000` in `.env` — `.env.example` ships `8080`, the
-port `make run` uses. With your own GitHub or Google OAuth app, register
+Port 8000 is the origin the project's own OAuth apps have registered, which is
+why `.env.example` ships `APP_URL=http://localhost:8000`. `make run` serves on
+`8080` instead; set `APP_URL` to match when using it. With your own GitHub or Google OAuth app, register
 `<APP_URL>/github/callback` or `<APP_URL>/google/callback`; leave a client id
 empty and that provider is simply skipped.
 
