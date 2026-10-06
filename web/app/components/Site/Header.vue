@@ -43,6 +43,7 @@ const handle = computed<string>(() => {
 })
 
 const join = useTemplateRef<{ open: (event?: MouseEvent) => void }>('join')
+const palette = useTemplateRef<{ open: () => void }>('palette')
 
 const open = ref(false)
 const root = useTemplateRef<HTMLElement>('root')
@@ -89,6 +90,13 @@ async function onSignOut(): Promise<void> {
     </nav>
 
     <div class="who">
+      <button type="button" class="search" aria-label="search" title="Search (⌘K)" @click="palette?.open()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+      </button>
+
       <ClientOnly>
         <div v-if="isSignedIn" ref="root" class="account" @keydown.esc="close(true)">
           <button
@@ -129,6 +137,7 @@ async function onSignOut(): Promise<void> {
       </ClientOnly>
 
       <SiteJoinDialog ref="join" />
+      <SiteCommandPalette ref="palette" />
     </div>
   </header>
 </template>
@@ -178,6 +187,22 @@ async function onSignOut(): Promise<void> {
   align-items: center;
   min-width: 0;
 }
+
+.search {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-right: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+
+.search:hover { color: var(--ink); background: var(--surface-sunken); }
 
 .account { position: relative; }
 
