@@ -295,12 +295,13 @@ The source is available to read, study and run for noncommercial purposes. It
 is not open source: the licence grants no right to modify or distribute it, or
 to use it commercially.
 
-The licence covers the code in this repository. The name, branding, visual
-design, images and written content are **not** covered by it — all rights are
-reserved; see [NOTICE](NOTICE). The books, lessons and project briefs live in a
-separate private repository, and this repo gives you the platform, not the
-content.
+The licence applies to the source code only. It gives you **no rights at all**
+to the ProjectLighthouse name, branding, visual design, images or written
+content: those are all rights reserved, and may not be copied, reused or
+adapted in any way, commercial or not, without written permission — see
+[NOTICE](NOTICE). The books, lessons and project briefs live in a separate
+private repository, and this repo gives you the platform, not the content.
 
-For permission beyond what the licence allows: hello@projectlighthouse.io.
+For permission beyond what the licence allows: thearyanahmed@projectlighthouse.io.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or pull request.

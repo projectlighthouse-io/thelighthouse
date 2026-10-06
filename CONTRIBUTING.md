@@ -9,7 +9,8 @@ read it and learn from it.
 **PolyForm Strict 1.0.0** — see [LICENSE](LICENSE). You may read, study and run
 the code for noncommercial purposes. You may not modify it, redistribute it, or
 use it commercially. The name, branding, visual design, images and written
-content are reserved; see [NOTICE](NOTICE).
+content are not licensed to you at all: all rights are reserved, and none of
+them may be used in any way without written permission. See [NOTICE](NOTICE).
 
 ## Pull requests
 
@@ -33,7 +34,7 @@ browser and OS. Issues with the CLI belong in
 
 ## Security
 
-Do **not** open a public issue. Email hello@projectlighthouse.io with what you
+Do **not** open a public issue. Email thearyanahmed@projectlighthouse.io with what you
 found, the URL or endpoint it affects, the steps to reproduce it, and what an
 attacker could do with it. Every report is acknowledged.
 
@@ -46,4 +47,4 @@ without access to the content, pricing or Stripe keys can still build and test.
 ## Anything else
 
 Commercial use, a licence, or reuse of the content or design:
-hello@projectlighthouse.io.
+thearyanahmed@projectlighthouse.io.

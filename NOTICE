@@ -4,7 +4,11 @@ Copyright © 2026 Aryan Ahmed Anik
 The source code in this repository is available under the PolyForm Strict
 License 1.0.0. See LICENSE.
 
-The following are not covered by that licence. All rights are reserved:
+That licence grants rights to the source code only. It grants no rights at all
+to the following, which remain the exclusive property of Aryan Ahmed Anik. All
+rights are reserved: none of them may be copied, reproduced, modified,
+distributed, displayed or used in any way, commercial or not, without prior
+written permission.
 
 - The ProjectLighthouse name, logos and other branding.
 - The visual design and styling of the site, including web/app/assets and
@@ -17,4 +21,4 @@ Third-party components, including dependencies and Google Fonts, remain under
 their own licences.
 
 For permission to use anything beyond what the licence allows, contact
-hello@projectlighthouse.io.
+thearyanahmed@projectlighthouse.io.
