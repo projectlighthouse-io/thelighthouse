@@ -235,11 +235,8 @@ export interface LessonResponse {
   remainingSections: number
   /** Which chapter of the book this lesson is in, counting from 1. */
   chapterNumber: number
-  /** Published lessons after this one, in reading order. */
-  moreLessons: number
-  /** Chapters those lessons fall in, this lesson's own included while it has
-   *  lessons left. */
-  moreLessonChapters: number
+  /** Chapters after this lesson's own. */
+  moreChapters: number
   position: number
   total: number
   percent: number

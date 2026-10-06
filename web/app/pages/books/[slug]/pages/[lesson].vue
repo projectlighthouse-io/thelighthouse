@@ -242,8 +242,7 @@ const currentSection = computed<string>(
 const paywallBook = computed<PaywallBook>(() => ({
   title: book.value?.title ?? '',
   slug: book.value?.slug ?? bookSlug.value,
-  moreLessons: data.value?.moreLessons ?? 0,
-  moreLessonChapters: data.value?.moreLessonChapters ?? 0,
+  moreChapters: data.value?.moreChapters ?? 0,
   // Nothing in ohara says a book is unfinished yet, so the card never claims
   // it. A `book.yaml` flag would be the place to say so.
   inProgress: false,

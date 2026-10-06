@@ -122,8 +122,7 @@ export interface ApiLesson {
   unlocked: boolean
   remaining_sections: number
   chapter_number: number
-  more_lessons: number
-  more_lesson_chapters: number
+  more_chapters: number
   position: number
   total: number
   percent: number

@@ -20,11 +20,8 @@ export interface PaywallSection {
 export interface PaywallBook {
   title: string
   slug: string
-  /** Published lessons after this one. Zero hides the "and N more lessons" row. */
-  moreLessons: number
-  /** Chapters those lessons fall in, this lesson's own included while it has
-   *  lessons left. */
-  moreLessonChapters: number
+  /** Chapters after this one. Zero hides the "and after this chapter" row. */
+  moreChapters: number
   /** Whether more of the book is still being written. */
   inProgress: boolean
 }

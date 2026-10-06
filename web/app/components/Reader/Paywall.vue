@@ -5,6 +5,7 @@ import type { Book } from '@/types/Content'
 import type { PaywallBook, PaywallPlan, PaywallSection } from '@/types/Paywall'
 import { plans as catalogue } from '@/data/Catalogue'
 import { tracks as trackWords } from '@/data/Tracks'
+import { cheapestPlan, lessonProgress, moreChaptersWords, pricePlan, stopState } from '@/utils/Paywall'
 
 /**
  * The card that stands where a paid region was.
@@ -40,35 +41,20 @@ const props = defineProps<{
 
 /* ---------- the lesson, counted ---------- */
 
-const readCount = computed<number>(() => props.sections.filter(s => !s.locked).length)
-const total = computed<number>(() => props.sections.length)
-const minutesLeft = computed<number>(() =>
-  props.sections.filter(s => s.locked).reduce((sum, s) => sum + s.minutes, 0))
+const progress = computed(() => lessonProgress(props.sections))
+const readCount = computed<number>(() => progress.value.readCount)
+const total = computed<number>(() => progress.value.total)
+const minutesLeft = computed<number>(() => progress.value.minutesLeft)
 const locked = computed<PaywallSection[]>(() => props.sections.filter(s => s.locked))
 
-/** Five rows is enough to show what is behind the card; past that the list
- *  would be the whole card. */
-const SHOWN = 5
-const lockedShown = computed<PaywallSection[]>(() => locked.value.slice(0, SHOWN))
-
-/** What is left of the book after this lesson, for the line under the list. */
-const moreLessonsWords = computed<string>(() => {
-  const { moreLessons: lessons, moreLessonChapters: chapters } = props.book
-
-  return `and ${lessons} more ${lessons === 1 ? 'lesson' : 'lessons'} over ${chapters} ${chapters === 1 ? 'chapter' : 'chapters'}`
-})
+/** What is left of the book after this chapter, for the row under the list. */
+const afterWords = computed<string>(() => moreChaptersWords(props.book.moreChapters, props.book.title))
 
 /** Headings keep their markdown backticks in the contents; on the card they
  *  read as stray punctuation. */
 const plain = (title: string): string => title.replaceAll('`', '')
 
-type StopState = 'read' | 'current' | 'locked'
-
-function stateOf(section: PaywallSection): StopState {
-  if (section.locked) return 'locked'
-
-  return section.n === props.currentSection ? 'current' : 'read'
-}
+const stateOf = (section: PaywallSection) => stopState(section, props.currentSection)
 
 /** Past eight stops the read labels go, so the row does not run together. */
 const dense = computed<boolean>(() => total.value > 8)
@@ -107,11 +93,8 @@ const tracks = computed<string[]>(() => {
 })
 
 /** The cheapest plan of a kind that would actually unlock this lesson. */
-function cheapest(recurring: boolean): CataloguePlan | undefined {
-  return catalogue
-    .filter(o => o.recurring === recurring && tracks.value.includes(o.track))
-    .sort((a, b) => a.amount - b.amount)[0]
-}
+const cheapest = (recurring: boolean): CataloguePlan | undefined =>
+  cheapestPlan(catalogue, tracks.value, recurring)
 
 /**
  * The coupon that comes off this particular plan, if any. Asked per plan, not
@@ -120,12 +103,6 @@ function cheapest(recurring: boolean): CataloguePlan | undefined {
  */
 function couponFor(o: CataloguePlan): Coupon | null {
   return (coupons.value ?? []).find(c => c.plan === o.plan)?.coupon ?? null
-}
-
-/** `$70` or `30%` — what `offLabel` says, without its " off", which the card
- *  writes itself. */
-function discountAmount(coupon: Coupon): string {
-  return coupon.amount_off !== undefined ? money(coupon.amount_off) : `${coupon.percent ?? 0}%`
 }
 
 /**
@@ -140,22 +117,7 @@ function trackName(o: CataloguePlan): string {
 }
 
 function priced(o: CataloguePlan): PaywallPlan {
-  const coupon = couponFor(o)
-  const reduced = coupon && o.amount ? afterOff(o.amount, coupon) : null
-
-  return {
-    id: o.plan,
-    name: o.recurring ? 'Yearly' : 'Lifetime',
-    note: o.recurring
-      ? `${trackName(o)}, and everything shipped to it while you subscribe`
-      : `${trackName(o)}, paid once and yours for good`,
-    price: money(reduced ?? o.amount),
-    listPrice: reduced !== null ? money(o.amount) : undefined,
-    per: o.recurring ? '/ year' : 'once',
-    discount: coupon ? { amount: discountAmount(coupon), code: coupon.code } : undefined,
-    cta: o.button_text ?? (o.recurring ? 'Get yearly access' : 'Get lifetime access'),
-    checkoutUrl: checkoutUrl(o.plan),
-  }
+  return pricePlan(o, couponFor(o), trackName(o), checkoutUrl(o.plan))
 }
 
 const yearly = computed<CataloguePlan | undefined>(() => cheapest(true))
@@ -312,23 +274,24 @@ const IMAGE = '/pricing-lighthouse.jpg'
         </ol>
       </div>
 
-      <ol v-if="locked.length || book.moreLessons > 0" class="wall__sections">
-        <li v-for="section in lockedShown" :key="section.n" class="wall__section">
+      <ol v-if="locked.length" class="wall__sections">
+        <li v-for="section in locked" :key="section.n" class="wall__section">
           <span class="wall__n">{{ section.n }}</span>
           <span class="wall__name">{{ plain(section.title) }}</span>
           <span class="wall__minutes">{{ section.minutes }} min</span>
           <p v-if="section.peek" class="wall__peek">{{ section.peek }}</p>
         </li>
-        <li v-if="book.moreLessons > 0">
-          <NuxtLink :to="`/books/${book.slug}#toc`" class="wall__section wall__more">
-            <span class="wall__n" aria-hidden="true">…</span>
-            <span class="wall__name">
-              {{ moreLessonsWords }}<template v-if="book.inProgress">, with more still being written</template>
-            </span>
-            <span class="wall__see">see contents →</span>
-          </NuxtLink>
-        </li>
       </ol>
+
+      <NuxtLink v-if="book.moreChapters > 0" :to="`/books/${book.slug}#toc`" class="wall__more">
+        <span class="wall__more-text">
+          <span class="wall__eyebrow">and after this chapter</span>
+          <span class="wall__more-line">
+            {{ afterWords }}<template v-if="book.inProgress">, with more still being written</template>
+          </span>
+        </span>
+        <span class="wall__see">see contents →</span>
+      </NuxtLink>
 
       <div v-if="plans.length" class="wall__unlock">
         <p :id="ids.plans" class="wall__eyebrow">unlock it</p>
@@ -634,32 +597,47 @@ const IMAGE = '/pricing-lighthouse.jpg'
   color: var(--ink);
 }
 
-/* The rest of the book: an outline rather than a filled row, so it reads as a
-   summary and not as one more section. */
-.wall .wall__more {
-  border: 1px dashed var(--border-strong);
-  background: transparent;
-  color: var(--ink);
-  transition: background-color 0.2s ease-out;
-}
-
-.wall .wall__more:hover {
-  background: var(--surface-sunken);
-}
-
-.wall .wall__more .wall__name {
-  color: var(--ink-secondary);
-}
-
 .wall .wall__peek {
   grid-column: 2 / 4;
   font: 400 15px/24px var(--font-serif);
   color: var(--ink-muted);
 }
 
+/* ---------- and after this chapter ---------- */
+
+/* An outline rather than a filled row, so it reads as the rest of the book and
+   not as one more section. */
+.wall .wall__more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  color: var(--ink);
+  transition: background-color 0.2s ease-out;
+}
+
+.wall .wall__more:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+.wall .wall__more-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.wall .wall__more-line {
+  font: 500 16px/24px var(--font-sans);
+  color: var(--ink);
+}
 
 .wall .wall__see {
-  padding-left: 16px;
+  flex: none;
   font: 400 12px/18px var(--font-mono);
   color: var(--ink-secondary);
   white-space: nowrap;
@@ -867,9 +845,8 @@ const IMAGE = '/pricing-lighthouse.jpg'
     width: 112px;
   }
 
-  /* Too narrow for a number under every stop: the one that says where the
-     reader is stays, and the list below numbers the rest. */
-  .wall .wall__stop:not(.wall__stop--current) .wall__label {
+  /* "· here" runs into the next stop's number at phone width. */
+  .wall .wall__stop--after-current .wall__label {
     visibility: hidden;
   }
 
