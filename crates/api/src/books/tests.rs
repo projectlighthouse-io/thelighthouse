@@ -240,11 +240,14 @@ async fn a_locked_section_names_its_place_and_peeks_without_telling() {
     assert_eq!(at(&lesson, "/chapter_number"), 1);
     assert_eq!(at(&lesson, "/more_lessons"), 0);
     assert_eq!(at(&lesson, "/more_lesson_chapters"), 0);
+    assert_eq!(at(&lesson, "/more_chapters"), 0);
 
     // The first lesson has the split one still to come, in the same chapter.
     let first = json("/api/books/fixture-book/lessons/free-lesson").await;
     assert_eq!(at(&first, "/more_lessons"), 1);
     assert_eq!(at(&first, "/more_lesson_chapters"), 1);
+    // Still to come, but in its own chapter: no chapter after this one.
+    assert_eq!(at(&first, "/more_chapters"), 0);
 
     assert_eq!(at(&lesson, "/toc/0/n"), "01.1");
     assert_eq!(at(&lesson, "/toc/2/n"), "01.3");

@@ -190,6 +190,9 @@ pub(crate) struct LessonView<'b> {
     /// How many chapters those `more_lessons` are spread over — this lesson's
     /// own chapter among them while it still has lessons to come.
     more_lesson_chapters: usize,
+    /// How many chapters come after this lesson's own — the paywall's "and
+    /// after this chapter" row. Zero in the book's last chapter.
+    more_chapters: usize,
     /// Which lesson of the book this is, counting published ones only.
     position: usize,
     total: usize,
@@ -269,6 +272,14 @@ impl<'b> LessonView<'b> {
                 .map(|lesson| lesson.chapter_id),
         );
 
+        let more_chapters = chapters_after(
+            ordered
+                .iter()
+                .skip(position)
+                .map(|lesson| lesson.chapter_id),
+            entry.chapter_id,
+        );
+
         // Counted from the paid markdown, which only this process ever holds.
         // The number is how the page says "4 more sections" without the
         // frontend having seen a word of them.
@@ -299,6 +310,7 @@ impl<'b> LessonView<'b> {
             chapter_number,
             more_lessons,
             more_lesson_chapters,
+            more_chapters,
             position,
             total: ordered.len(),
             percent: percent(position, ordered.len()),
@@ -375,6 +387,16 @@ fn still_to_come(lesson_chapters: impl Iterator<Item = i32>) -> (usize, usize) {
     }
 
     (lessons, chapters)
+}
+
+/// How many chapters the lessons still to come fall in, leaving out the
+/// reader's own. Chapters are contiguous in reading order, so what is left is
+/// exactly the chapters after it.
+fn chapters_after(
+    lesson_chapters: impl Iterator<Item = i32>,
+    own: i32,
+) -> usize {
+    still_to_come(lesson_chapters.filter(|id| *id != own)).1
 }
 
 /// `04.3`: the chapter, two digits, then the section counting from 1.
@@ -515,6 +537,18 @@ mod tests {
         assert_eq!(still_to_come([1].into_iter()), (1, 1));
         // The last lesson of the book.
         assert_eq!(still_to_come(std::iter::empty()), (0, 0));
+    }
+
+    #[test]
+    fn chapters_after_leave_out_the_readers_own() {
+        // Mid chapter 3: the rest of it does not count, 7 and 1 do.
+        assert_eq!(chapters_after([3, 7, 7, 7, 1].into_iter(), 3), 2);
+        // The last lesson of chapter 3: the same two.
+        assert_eq!(chapters_after([7, 7, 7, 1].into_iter(), 3), 2);
+        // Lessons left, all in this chapter: no chapter after it.
+        assert_eq!(chapters_after([1, 1].into_iter(), 1), 0);
+        // The last lesson of the book.
+        assert_eq!(chapters_after(std::iter::empty(), 1), 0);
     }
 
     #[test]
