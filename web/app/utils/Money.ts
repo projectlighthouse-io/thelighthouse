@@ -52,9 +52,14 @@ export function afterOff(minor: number, off: Off): number {
   return minor
 }
 
+/** `$20` or `40%` — what comes off, without saying so. */
+export function offAmount(off: Off): string {
+  if (off.amount_off !== undefined) return money(off.amount_off)
+
+  return `${off.percent ?? 0}%`
+}
+
 /** `$20 off` or `40% off`. */
 export function offLabel(off: Off): string {
-  if (off.amount_off !== undefined) return `${money(off.amount_off)} off`
-
-  return `${off.percent ?? 0}% off`
+  return `${offAmount(off)} off`
 }
