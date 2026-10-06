@@ -19,23 +19,28 @@ export default defineCachedEventHandler(async () => {
     books.map(book => fromApi<ApiBookDetail>(`/api/books/${book.slug}`)),
   )
 
-  return details.flatMap((book): SearchEntry[] => [
-    { kind: 'book', title: book.title, context: '', to: `/books/${book.slug}` },
-    ...book.chapters.flatMap((chapter): SearchEntry[] => {
-      const first = chapter.lessons[0]
+  return details.flatMap((book): SearchEntry[] => {
+    const shelf = book.title.toLowerCase()
 
-      return [
-        // A chapter has no page of its own; its first lesson is where it starts.
-        ...(first
-          ? [{ kind: 'chapter' as const, title: chapter.title, context: book.title, to: `/books/${book.slug}/pages/${first.slug}` }]
-          : []),
-        ...chapter.lessons.map(lesson => ({
-          kind: 'lesson' as const,
-          title: lesson.title,
-          context: `${book.title} · ${chapter.title}`,
-          to: `/books/${book.slug}/pages/${lesson.slug}`,
-        })),
-      ]
-    }),
-  ])
+    return [
+      { kind: 'book', title: book.title, description: book.description ?? '', group: 'books', to: `/books/${book.slug}` },
+      ...book.chapters.flatMap((chapter): SearchEntry[] => {
+        const first = chapter.lessons[0]
+
+        return [
+          // A chapter has no page of its own; its first lesson is where it starts.
+          ...(first
+            ? [{ kind: 'chapter' as const, title: chapter.title, description: '', group: shelf, to: `/books/${book.slug}/pages/${first.slug}` }]
+            : []),
+          ...chapter.lessons.map(lesson => ({
+            kind: 'lesson' as const,
+            title: lesson.title,
+            description: lesson.description ?? '',
+            group: `${shelf} / ${chapter.title.toLowerCase()}`,
+            to: `/books/${book.slug}/pages/${lesson.slug}`,
+          })),
+        ]
+      }),
+    ]
+  })
 }, { name: 'search', maxAge: 300, swr: true })

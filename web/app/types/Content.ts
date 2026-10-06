@@ -286,9 +286,12 @@ export interface TocSection {
 /** One row in the command palette. Built by `/_api/search` for content; the
  *  pages are listed in the palette itself. */
 export interface SearchEntry {
-  kind: 'book' | 'chapter' | 'lesson' | 'page'
+  kind: 'book' | 'chapter' | 'lesson' | 'setting' | 'page'
   title: string
-  /** Where it sits — `book · chapter` for a lesson, empty for a top level. */
-  context: string
+  /** The line under the title. Empty when there is none to show. */
+  description: string
+  /** The heading it is listed under — `books`, or `c programming / pointers`
+   *  for a lesson. Also searched, so a book's name finds its lessons. */
+  group: string
   to: string
 }
