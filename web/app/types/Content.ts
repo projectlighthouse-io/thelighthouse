@@ -282,3 +282,13 @@ export interface TocSection {
   title: string
   rows: TocRow[]
 }
+
+/** One row in the command palette. Built by `/_api/search` for content; the
+ *  pages are listed in the palette itself. */
+export interface SearchEntry {
+  kind: 'book' | 'chapter' | 'lesson' | 'page'
+  title: string
+  /** Where it sits — `book · chapter` for a lesson, empty for a top level. */
+  context: string
+  to: string
+}
