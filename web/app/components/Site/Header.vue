@@ -127,12 +127,12 @@ async function onSignOut(): Promise<void> {
           </div>
         </div>
 
-        <UiButton v-else variant="inverse" size="sm" @click="join?.open($event)">join</UiButton>
+        <UiButton v-else class="join" variant="inverse" size="sm" @click="join?.open($event)">join</UiButton>
 
         <!-- Before hydration there is no dialog to open; /login is the same
              sign-in on its own page. -->
         <template #fallback>
-          <UiButton variant="inverse" size="sm" to="/login">join</UiButton>
+          <UiButton class="join" variant="inverse" size="sm" to="/login">join</UiButton>
         </template>
       </ClientOnly>
 
@@ -266,12 +266,35 @@ async function onSignOut(): Promise<void> {
 
 .item-quiet { color: var(--ink-muted); }
 
-/* phones: logo mark only, the nav takes the middle and gives way first,
-   the handle truncates rather than running into it */
-@media (max-width: 560px) {
-  .header { grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-3); }
-  .wordmark { display: none; }
-  .nav { justify-content: center; gap: var(--space-3); min-width: 0; }
-  .pill { max-width: 104px; }
+/* phones: the logo and search, nothing else. The links and the account live
+   in the bottom bar — SiteTabBar — so none of them are repeated up here. */
+@media (max-width: 720px) {
+  .header {
+    position: relative;
+    z-index: 20;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 12px 16px;
+  }
+
+  .brand :deep(svg) { width: 32px; height: 32px; }
+
+  .wordmark,
+  .nav,
+  .account,
+  .join { display: none; }
+
+  .search {
+    width: 44px;
+    height: 44px;
+    margin-right: 0;
+  }
+
+  .search svg { width: 18px; height: 18px; stroke-width: 1.6; }
+}
+
+.search:focus-visible,
+.pill:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 </style>
