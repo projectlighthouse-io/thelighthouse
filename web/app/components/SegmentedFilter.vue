@@ -64,4 +64,23 @@ const model = defineModel<K>({ required: true })
 }
 
 .count { font: var(--text-label-mono); color: var(--ink-muted); }
+
+/* phones: one row across the full width, rather than a centred track that
+   wraps its last tab onto a second line. Each tab sizes to its label and
+   shares what is left — equal thirds clip "Challenges 12" at 360px. */
+@media (max-width: 720px) {
+  .track {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+
+  .tab {
+    flex: 1 1 auto;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 var(--space-2);
+    white-space: nowrap;
+  }
+}
 </style>
