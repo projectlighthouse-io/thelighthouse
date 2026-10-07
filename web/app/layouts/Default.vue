@@ -85,7 +85,7 @@ useSeoMeta({
 
 /* Room for the floating tab bar, so it never sits on the footer's last line. */
 @media (max-width: 720px) {
-  .site { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  .site { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 }
 
 @media (min-width: 1024px) {
