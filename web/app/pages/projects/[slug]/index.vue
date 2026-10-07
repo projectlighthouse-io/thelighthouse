@@ -137,10 +137,6 @@ const { getPro } = useGetPro()
         </li>
       </ul>
     </section>
-
-    <div class="end" aria-hidden="true">
-      <UiLogo variant="mark" :size="20" class="end-mark" />
-    </div>
   </div>
 </template>
 
@@ -173,14 +169,6 @@ const { getPro } = useGetPro()
 }
 
 .feature-grid li { display: grid; gap: var(--space-2); align-content: start; }
-
-.end {
-  display: flex;
-  justify-content: center;
-  margin-top: var(--space-24);
-}
-
-.end-mark { opacity: 0.35; }
 
 @media (max-width: 700px) {
   .feature-grid { grid-template-columns: minmax(0, 1fr); }

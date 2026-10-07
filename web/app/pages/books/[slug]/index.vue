@@ -236,10 +236,6 @@ const { getPro } = useGetPro()
 
       <TocList v-else :sections="sections" />
     </div>
-
-    <div class="end" aria-hidden="true">
-      <UiLogo variant="mark" :size="20" class="end-mark" />
-    </div>
   </div>
 </template>
 
@@ -248,11 +244,4 @@ const { getPro } = useGetPro()
 
 .empty { padding: 0 var(--space-4); }
 
-.end {
-  display: flex;
-  justify-content: center;
-  margin-top: var(--space-24);
-}
-
-.end-mark { opacity: 0.35; }
 </style>
