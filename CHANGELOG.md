@@ -3,7 +3,7 @@
 What changed, newest first. The site's own `/changelog` page is written for
 readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
 
-## Unreleased
+## 2026-10-07
 
 ### Mobile
 
