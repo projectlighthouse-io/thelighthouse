@@ -17,6 +17,12 @@ readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
 - The newsletter input keeps its full height when the form stacks.
 - The lesson breadcrumb no longer widens the page past the screen.
 
+### Lessons
+
+- A signed-in reader who paid no longer sees the paywall when their browser
+  had cached the lesson from a signed-out visit. The unlock request skips the
+  browser cache; `npm run test:unlock` in `web/` reproduces it in Chrome.
+
 ### Layout
 
 - Less space under the header: 64px on desktop, 48px on phones. The projects
