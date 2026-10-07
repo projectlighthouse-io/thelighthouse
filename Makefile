@@ -185,10 +185,14 @@ run-built: ## run the last built image against the local postgres
 login: ## authenticate to the DO registry
 	doctl registry login --context thelighthouse
 
-# login first — DO registry credentials expire, and a stale docker credential
-# fails the push looking like a doctl auth problem
-push: login ## push the image to the registry
-	docker push $(TAG)
+# Push on the credential docker already has, and log in only when that fails —
+# DO registry credentials expire, and a stale one fails the push looking like a
+# doctl auth problem. Any failure gets one login and one retry, not just a 401:
+# a push that failed for another reason fails the same way the second time.
+# doctl directly, not `$(MAKE) login`: make runs any line holding $(MAKE) even
+# under `make -n`, so a dry run would push for real.
+push: ## push the image to the registry, logging in only if the push is refused
+	docker push $(TAG) || { doctl registry login --context thelighthouse && docker push $(TAG); }
 	@echo "\npushed $(TAG)"
 
 clean: ## drop build artefacts
