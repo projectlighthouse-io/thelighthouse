@@ -35,8 +35,10 @@ export default defineEventHandler(async (event) => {
       slug: lesson.slug,
       title: lesson.title,
       description: lesson.description ?? '',
-      // Both halves are the api's answer here — this url is asked with the
-      // session cookie, so `unlocked` is real rather than absent.
+      // Asked without the session cookie, so `unlocked` is always absent and
+      // a lesson with a paid part is always locked here. The document this
+      // renders is held at the edge for everyone; the reader's real answer
+      // comes from the browser asking the api again, cookie attached.
       locked: isLocked(lesson),
     },
     html: lesson.html,
