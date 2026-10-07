@@ -135,5 +135,7 @@ input:disabled { opacity: 0.5; }
 @media (max-width: 560px) {
   .signup { padding: var(--space-6); }
   .row { flex-direction: column; }
+  /* flex: 1 is a zero basis, which in a column squeezes the height. */
+  input { flex: none; }
 }
 </style>
