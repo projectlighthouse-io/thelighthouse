@@ -201,4 +201,40 @@ const year = new Date().getFullYear()
   font: var(--text-body-sm);
   color: var(--ink-secondary);
 }
+
+/* A centred wrap of eleven links leaves ragged rows on a phone. Two even
+   columns read as a list, and every link gets a full-height tap target. */
+@media (max-width: 640px) {
+  .footer {
+    gap: 40px;
+    margin-top: var(--space-24);
+  }
+
+  .mark { width: 100%; }
+
+  .middle {
+    justify-items: stretch;
+    width: 100%;
+    max-width: 360px;
+  }
+
+  .links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 var(--space-6);
+    text-align: left;
+    border-top: 1px solid var(--border);
+    padding-top: var(--space-4);
+  }
+
+  .links > * {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .language { justify-self: start; }
+
+  .copyright { font-size: 13px; }
+}
 </style>
