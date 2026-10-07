@@ -62,7 +62,7 @@ export default defineNuxtConfig({
       htmlAttrs: { lang: 'en' },
       meta: [
         { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
         { name: 'theme-color', content: '#fcfcfc', media: '(prefers-color-scheme: light)' },
         { name: 'theme-color', content: '#202020', media: '(prefers-color-scheme: dark)' },
       ],
