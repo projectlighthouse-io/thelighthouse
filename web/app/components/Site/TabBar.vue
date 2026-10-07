@@ -205,12 +205,12 @@ onBeforeUnmount(() => {
         <span class="initial">{{ initial }}</span>
       </button>
 
-      <button v-else type="button" class="join" @click="join?.open($event)">join</button>
+      <button v-else type="button" class="join-btn" @click="join?.open($event)">join</button>
 
       <!-- Before hydration there is no dialog to open; /login is the same
            sign-in on its own page. -->
       <template #fallback>
-        <NuxtLink to="/login" class="join">join</NuxtLink>
+        <NuxtLink to="/login" class="join-btn">join</NuxtLink>
       </template>
     </ClientOnly>
   </nav>
@@ -314,7 +314,7 @@ onBeforeUnmount(() => {
   background: var(--border);
 }
 
-.join {
+.join-btn {
   flex: none;
   display: flex;
   align-items: center;
@@ -331,7 +331,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.join:hover { opacity: 0.9; color: var(--ink-inverse); }
+.join-btn:hover { opacity: 0.9; color: var(--ink-inverse); }
 
 .avatar {
   flex: none;
@@ -394,7 +394,7 @@ onBeforeUnmount(() => {
 }
 
 .tab:focus-visible,
-.join:focus-visible,
+.join-btn:focus-visible,
 .avatar:focus-visible,
 .row:focus-visible {
   outline: 2px solid var(--focus-ring);
