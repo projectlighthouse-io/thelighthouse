@@ -371,12 +371,12 @@ onBeforeUnmount(() => {
 .row {
   display: flex;
   align-items: center;
-  min-height: 48px;
+  min-height: 40px;
   padding: 0 12px;
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
-  font: var(--text-body);
+  font: var(--text-caption);
   color: var(--ink);
   text-align: left;
   text-decoration: none;
