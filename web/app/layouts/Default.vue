@@ -62,6 +62,7 @@ useSeoMeta({
     </main>
 
     <SiteFooter v-if="!bare" />
+    <SiteTabBar />
   </div>
 </template>
 
@@ -81,6 +82,11 @@ useSeoMeta({
 }
 
 .main > :deep(*) { width: 100%; }
+
+/* Room for the floating tab bar, so it never sits on the footer's last line. */
+@media (max-width: 720px) {
+  .site { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+}
 
 @media (min-width: 1024px) {
   .site--bare { height: 100dvh; min-height: 0; }
