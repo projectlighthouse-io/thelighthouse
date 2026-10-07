@@ -38,6 +38,10 @@
 
 .reader-head {
   display: grid;
+  /* minmax(0, …) so the one-line breadcrumb ellipsises instead of setting the
+     column's width — an auto track grows to its full title and overflows a
+     phone. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
 }
 
