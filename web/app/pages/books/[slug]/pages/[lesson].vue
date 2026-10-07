@@ -149,7 +149,13 @@ async function unlock(): Promise<void> {
       html: string
       toc: Heading[]
       unlocked: boolean
-    }>(`/api/books/${bookSlug.value}/lessons/${lessonSlug.value}`, { query: langQuery.value })
+    }>(`/api/books/${bookSlug.value}/lessons/${lessonSlug.value}`, {
+      query: langQuery.value,
+      // Same url as the anonymous answer, which is cacheable with
+      // stale-while-revalidate — so a browser that read this lesson signed out
+      // would hand that locked copy straight back here. Always ask the api.
+      cache: 'no-store',
+    })
 
     if (!full.unlocked) return
 
