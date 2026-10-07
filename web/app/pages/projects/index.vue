@@ -36,6 +36,16 @@ useJsonLd('projects', () => ({
 
 <template>
   <div class="projects">
-    <MarketingBuildAndDrill :projects="all" eyebrow="build and drill" heading="h1" sync-url />
+    <MarketingBuildAndDrill class="page-top" :projects="all" eyebrow="build and drill" heading="h1" sync-url />
   </div>
 </template>
+
+<style scoped>
+/* The section carries the home page's between-sections gap; opening a page
+   it takes the same top as every other page, `.lh-gap`'s. */
+.page-top { padding-top: 64px; }
+
+@media (max-width: 720px) {
+  .page-top { padding-top: 48px; }
+}
+</style>

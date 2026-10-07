@@ -35,8 +35,15 @@ summary::-webkit-details-marker { display: none; }
 .lh-narrow { max-width: 768px; }
 
 /* the standing gaps between sections */
-.lh-gap { padding-top: var(--space-24); }
+.lh-gap { padding-top: 64px; }
 .lh-gap-lg { padding-top: 128px; }
+
+/* A phone screen is short; the desktop air pushes the page's first line
+   halfway down it. */
+@media (max-width: 720px) {
+  .lh-gap { padding-top: 48px; }
+  .lh-gap-lg { padding-top: 64px; }
+}
 
 /* type */
 
