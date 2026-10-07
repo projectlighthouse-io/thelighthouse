@@ -96,6 +96,7 @@ function onTab(tab: Tab): void {
 
 // ---------- the account sheet ----------
 
+const join = useTemplateRef<{ open: (event?: MouseEvent) => void }>('join')
 const sheetOpen = ref(false)
 const bar = useTemplateRef<HTMLElement>('bar')
 const sheet = useTemplateRef<HTMLElement>('sheet')
@@ -204,13 +205,17 @@ onBeforeUnmount(() => {
         <span class="initial">{{ initial }}</span>
       </button>
 
-      <NuxtLink v-else to="/pricing" class="join" @click="closeSheet()">join</NuxtLink>
+      <button v-else type="button" class="join" @click="join?.open($event)">join</button>
 
+      <!-- Before hydration there is no dialog to open; /login is the same
+           sign-in on its own page. -->
       <template #fallback>
-        <NuxtLink to="/pricing" class="join">join</NuxtLink>
+        <NuxtLink to="/login" class="join">join</NuxtLink>
       </template>
     </ClientOnly>
   </nav>
+
+  <SiteJoinDialog ref="join" />
 
   <div v-if="sheetOpen" id="account-sheet" ref="sheet" class="sheet">
     <div class="sheet-handle">{{ handle }}</div>
@@ -321,7 +326,9 @@ onBeforeUnmount(() => {
   font: var(--text-caption);
   font-weight: 500;
   white-space: nowrap;
+  border: 0;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .join:hover { opacity: 0.9; color: var(--ink-inverse); }
