@@ -26,3 +26,5 @@ pricing.yaml
 .tinker/
 # Local agent state.
 .claude/
+# Generated launch videos.
+brag-output/
