@@ -22,6 +22,7 @@
 //! let handoff = driver.subscribe(plan, &Customer {
 //!     reference: &user.id.to_string(),
 //!     email: &user.email,
+//!     name: Some(&user.name),
 //!     existing: user.customer_id.as_deref(),
 //! }).await?;
 //! redirect(handoff.url);

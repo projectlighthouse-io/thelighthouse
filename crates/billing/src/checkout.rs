@@ -17,6 +17,11 @@ pub struct Customer<'a> {
     pub reference: &'a str,
     /// Where a receipt goes.
     pub email: &'a str,
+    /// What the provider shows them as. Without it the provider names them
+    /// from whatever was typed at checkout, usually a cardholder name.
+    ///
+    /// Only read when a customer is minted; a blank one is not sent.
+    pub name: Option<&'a str>,
     /// The provider's own identifier for them, if one has been minted.
     ///
     /// `None` the first time somebody pays. Passing the existing one back is

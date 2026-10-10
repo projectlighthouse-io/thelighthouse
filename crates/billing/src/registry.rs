@@ -267,6 +267,7 @@ mod tests {
                 &Customer {
                     reference: "1",
                     email: "reader@example.com",
+                    name: None,
                     existing: None,
                 },
                 &Returns {

@@ -62,14 +62,14 @@ pub(crate) async fn ensure(
 
     let mut tx = state.db.begin().await?;
 
-    let row: Option<(Option<String>, String)> = sqlx::query_as(
-        "SELECT stripe_id, email FROM users WHERE id = $1 FOR UPDATE",
+    let row: Option<(Option<String>, String, String)> = sqlx::query_as(
+        "SELECT stripe_id, email, name FROM users WHERE id = $1 FOR UPDATE",
     )
     .bind(user_id)
     .fetch_optional(&mut *tx)
     .await?;
 
-    let Some((existing, email)) = row else {
+    let Some((existing, email, name)) = row else {
         return Err(Error::NoReader);
     };
 
@@ -82,6 +82,7 @@ pub(crate) async fn ensure(
         .enroll(&Customer {
             reference: &reference,
             email: &email,
+            name: Some(&name),
             existing: None,
         })
         .await

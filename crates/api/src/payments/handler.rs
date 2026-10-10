@@ -391,6 +391,8 @@ pub(crate) async fn checkout(
     let who = Customer {
         reference: &reference,
         email: &email,
+        // Stripe's customer is already minted by `customer::ensure`.
+        name: None,
         existing: existing.as_deref(),
     };
 

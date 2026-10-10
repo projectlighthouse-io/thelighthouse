@@ -140,19 +140,18 @@ impl Stripe {
             return Ok(existing.to_owned());
         }
 
+        let mut form = vec![
+            field("email", who.email),
+            field(format!("metadata[{}]", wire::REFERENCE_KEY), who.reference),
+        ];
+
+        if let Some(name) = who.name.map(str::trim).filter(|n| !n.is_empty()) {
+            form.push(field("name", name));
+        }
+
         let created: wire::Customer = self
             .client
-            .send(
-                Method::POST,
-                "/v1/customers",
-                &[
-                    field("email", who.email),
-                    field(
-                        format!("metadata[{}]", wire::REFERENCE_KEY),
-                        who.reference,
-                    ),
-                ],
-            )
+            .send(Method::POST, "/v1/customers", &form)
             .await?;
 
         Ok(created.id)
@@ -508,6 +507,7 @@ mod tests {
         Customer {
             reference: "41",
             email: "reader@example.com",
+            name: Some("Ada Lovelace"),
             existing,
         }
     }
@@ -614,6 +614,7 @@ mod tests {
             .and(path("/v1/customers"))
             .and(body_string_contains("email=reader%40example.com"))
             .and(body_string_contains("metadata%5Breference%5D=41"))
+            .and(body_string_contains("name=Ada+Lovelace"))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_string(r#"{"id":"cus_new"}"#),
