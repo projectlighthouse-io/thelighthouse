@@ -17,6 +17,9 @@ readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
   in the logs, carrying the user id and Stripe's error code only.
 - Checkout ensures it again before redirecting, and refuses with
   `unavailable` rather than sending a reader to Stripe without one.
+- A new Stripe customer carries the reader's name, so the dashboard shows
+  who they are rather than whatever was typed at checkout. Customers that
+  already exist keep the name they have.
 - Customers minted twice before this change are still in Stripe.
 
 ## 2026-10-07
