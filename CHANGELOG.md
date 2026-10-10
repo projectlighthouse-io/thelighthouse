@@ -3,6 +3,22 @@
 What changed, newest first. The site's own `/changelog` page is written for
 readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
 
+## 2026-10-10
+
+### Billing
+
+- One Stripe customer per reader. The customer id is stored the moment it is
+  minted, not when a checkout completes, so an abandoned checkout no longer
+  leaves behind a customer nothing remembers. The row is locked while it is
+  minted, so a sign-in and a checkout racing for one reader make one between
+  them.
+- Signing in or registering ensures the customer in the background. Sign-in
+  never waits on Stripe and never fails because of it; a failure is a warning
+  in the logs, carrying the user id and Stripe's error code only.
+- Checkout ensures it again before redirecting, and refuses with
+  `unavailable` rather than sending a reader to Stripe without one.
+- Customers minted twice before this change are still in Stripe.
+
 ## 2026-10-07
 
 ### Mobile
