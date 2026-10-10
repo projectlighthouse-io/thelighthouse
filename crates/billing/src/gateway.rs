@@ -78,6 +78,17 @@ pub trait Gateway: std::fmt::Debug + Send + Sync {
         back: &Returns,
     ) -> Result<Handoff, Error>;
 
+    /// The provider's customer for somebody, minted if they have none.
+    ///
+    /// Returns `who.existing` untouched when there is one. Otherwise creates a
+    /// customer and returns its id, which the caller must store: a customer
+    /// that is minted and forgotten is how one reader ends up as several.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Refused`] if the provider will not create the customer.
+    async fn enroll(&self, who: &Customer<'_>) -> Result<String, Error>;
+
     /// Stop a subscription, at the end of the paid period or immediately.
     ///
     /// Returns it as it now stands rather than nothing, because the two

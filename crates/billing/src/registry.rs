@@ -166,6 +166,10 @@ mod tests {
             })
         }
 
+        async fn enroll(&self, _who: &Customer<'_>) -> Result<String, Error> {
+            Ok(self.answer.to_owned())
+        }
+
         async fn cancel(
             &self,
             _subscription: &str,

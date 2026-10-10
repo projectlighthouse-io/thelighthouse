@@ -354,6 +354,10 @@ impl Gateway for Stripe {
             .await
     }
 
+    async fn enroll(&self, who: &Customer<'_>) -> Result<String, Error> {
+        self.customer(who).await
+    }
+
     async fn cancel(
         &self,
         subscription: &str,
