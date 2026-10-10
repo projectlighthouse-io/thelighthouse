@@ -21,7 +21,7 @@ use super::{
 use crate::{
     api::AppState,
     cookie::{self, Cookie},
-    session, users,
+    payments, session, users,
 };
 
 /// Long enough for a reader to fill in a provider's login form and a 2FA
@@ -181,6 +181,10 @@ pub(crate) async fn callback(
     };
 
     tracing::info!(%provider, user_id = reader.id, "signed in");
+
+    // Whether this reader is new or returning. Never awaited: a sign-in must
+    // not wait on Stripe, or fail because of it. Checkout ensures it again.
+    payments::customer::ensure_in_background(&state, reader.id);
 
     redirect(
         &target,
