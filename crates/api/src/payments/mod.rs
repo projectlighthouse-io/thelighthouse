@@ -43,6 +43,7 @@
 //! Nothing is cacheable. Every response depends on what somebody has paid for,
 //! and `private` alone still permits a browser cache on a shared machine.
 
+pub(crate) mod customer;
 mod handler;
 mod membership;
 mod payload;

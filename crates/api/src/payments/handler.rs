@@ -13,6 +13,7 @@ use axum::{
 use billing::{Customer, Event, Gateway, PlanId, Subscription};
 
 use super::{
+    customer,
     membership::Membership,
     payload::ChosenPlan,
     refusal::{Refusal, refuse},
@@ -360,13 +361,25 @@ pub(crate) async fn checkout(
         }
     }
 
-    let (email, existing) = match tokio::try_join!(
-        store::email(&state.db, session.user_id),
-        store::customer(&state.db, session.user_id),
-    ) {
-        Ok((Some(email), existing)) => (email, existing),
+    // Stored before the reader leaves for Stripe, so an abandoned checkout
+    // cannot leave behind a customer nothing remembers. Only Stripe's:
+    // `users.stripe_id` is the one column there is.
+    let existing = if provider == billing::drivers::stripe::NAME {
+        match customer::ensure(&state, session.user_id).await {
+            Ok(id) => Some(id),
+            Err(error) => {
+                tracing::error!(%error, "failed to ensure a stripe customer");
+                return refuse(Refusal::Unavailable);
+            }
+        }
+    } else {
+        None
+    };
+
+    let email = match store::email(&state.db, session.user_id).await {
+        Ok(Some(email)) => email,
         // A session whose user is gone. The session is the bug, not this.
-        Ok((None, _)) => return response::server_error(),
+        Ok(None) => return response::server_error(),
         Err(error) => {
             tracing::error!(%error, "failed to read a reader for checkout");
             return response::server_error();
