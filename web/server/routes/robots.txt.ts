@@ -24,6 +24,8 @@ export default defineEventHandler((event) => {
 
   return `${[
     'User-agent: *',
+    // https://contentsignals.org — no training, yes to search and to AI answers that cite us
+    'Content-Signal: ai-train=no, search=yes, ai-input=yes',
     ...DISALLOW.map(path => `Disallow: ${path}`),
     '',
     'Sitemap: https://projectlighthouse.io/sitemap.xml',
