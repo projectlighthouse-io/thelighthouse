@@ -3,6 +3,16 @@
 What changed, newest first. The site's own `/changelog` page is written for
 readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
 
+## 2026-10-12
+
+### Reader
+
+- A heading with inline html — the `<span>`-coloured "Mutual Exclusion" in Go
+  Intermediate's sync primitives — showed its tags in the contents list, and
+  its entry linked to an id the page never had. Contents entries now take the
+  heading's text the way comrak reads it, so they show the words and scroll to
+  the heading.
+
 ## 2026-10-10
 
 ### Billing
