@@ -20,20 +20,21 @@ const LINKS = {
   support: { to: '/support', label: 'support' },
   linkedin: { to: 'https://www.linkedin.com/company/projectlighthouse-io', label: 'linkedin', external: true },
   substack: { to: 'https://projectlighthouse.substack.com/', label: 'substack', external: true },
+  github: { to: 'https://github.com/projectlighthouse-io/thelighthouse', label: 'github', external: true },
   blog: { to: '/blog', label: 'blog' },
   paperkites: { to: 'https://paperkites.app/', label: 'paperkites ↗', external: true },
 } satisfies Record<string, FooterLink>
 
 const links: FooterLink[] = [
   LINKS.books, LINKS.projects, LINKS.dots, LINKS.terms, LINKS.privacy, LINKS.changelog,
-  LINKS.support, LINKS.linkedin, LINKS.substack, LINKS.blog, LINKS.paperkites,
+  LINKS.support, LINKS.linkedin, LINKS.substack, LINKS.github, LINKS.blog, LINKS.paperkites,
 ]
 
 /** The phone footer's three columns, anchored left, centre and right. */
 const columns: { heading: string, links: FooterLink[] }[] = [
   { heading: 'read', links: [LINKS.books, LINKS.projects, LINKS.blog, LINKS.dots] },
   { heading: 'company', links: [LINKS.changelog, LINKS.support, LINKS.terms, LINKS.privacy] },
-  { heading: 'follow', links: [LINKS.linkedin, LINKS.substack, LINKS.paperkites] },
+  { heading: 'follow', links: [LINKS.linkedin, LINKS.substack, LINKS.github, LINKS.paperkites] },
 ]
 
 /** 5×7 glyphs for the wordmark; a `█` is a lit cell. */
