@@ -402,11 +402,11 @@ pub fn sections(markdown: &str) -> Vec<Section> {
             line.strip_prefix("## ")
         };
 
-        match heading {
+        match heading.map(heading_text) {
             Some(text) => found.push(Section {
                 heading: Heading {
-                    id: anchorizer.anchorize(text.trim()),
-                    text: text.trim().to_owned(),
+                    id: anchorizer.anchorize(&text),
+                    text,
                 },
                 body: String::new(),
             }),
@@ -424,6 +424,29 @@ pub fn sections(markdown: &str) -> Vec<Section> {
     }
 
     found
+}
+
+/// A heading's words as the page draws them: inline html dropped, emphasis and
+/// code kept as their text.
+///
+/// The same text comrak builds the heading's id from, so the id anchorized
+/// here is the id in the html. Taking the raw line instead put
+/// `<span class="…">` into the contents list and an id that scrolled nowhere.
+fn heading_text(source: &str) -> String {
+    let arena = Arena::new();
+    let root = parse_document(&arena, source, &options());
+    let mut text = String::new();
+
+    for node in root.descendants() {
+        match &node.data().value {
+            NodeValue::Text(literal) => text.push_str(literal),
+            NodeValue::Code(code) => text.push_str(&code.literal),
+            NodeValue::SoftBreak | NodeValue::LineBreak => text.push(' '),
+            _ => {}
+        }
+    }
+
+    text.trim().to_owned()
 }
 
 /// How long a peek runs, in characters, before it is cut.
@@ -734,6 +757,24 @@ mod tests {
         let html = render(markdown);
 
         for heading in headings(markdown) {
+            assert!(
+                html.contains(&format!("id=\"{}\"", heading.id)),
+                "no heading in the html has id {:?}\n{html}",
+                heading.id
+            );
+        }
+    }
+
+    #[test]
+    fn a_heading_with_inline_html_lists_its_words_not_its_tags() {
+        let markdown = "## <span class=\"text-black\">Mut</span><span class=\"text-gray-400\">ual</span> <span class=\"text-black\">Ex</span><span class=\"text-gray-400\">clusion</span>\n\ntext\n\n## The `sync` package\n\ntext\n";
+        let html = render(markdown);
+        let found = headings(markdown);
+
+        let texts: Vec<&str> = found.iter().map(|h| h.text.as_str()).collect();
+        assert_eq!(texts, ["Mutual Exclusion", "The sync package"]);
+
+        for heading in &found {
             assert!(
                 html.contains(&format!("id=\"{}\"", heading.id)),
                 "no heading in the html has id {:?}\n{html}",
