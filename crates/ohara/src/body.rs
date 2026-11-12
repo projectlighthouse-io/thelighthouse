@@ -338,6 +338,9 @@ fn options() -> Options<'static> {
     options.extension.tasklist = true;
     options.extension.autolink = true;
     options.extension.footnotes = true;
+    // `> [!NOTE]` and its siblings become a titled callout, so a page can set
+    // an aside apart from the prose without raw html (which stays off).
+    options.extension.alerts = true;
 
     options
 }
@@ -945,5 +948,12 @@ mod tests {
         assert_eq!(read_minutes("one two three"), 1);
         assert_eq!(read_minutes(&"word ".repeat(220)), 1);
         assert_eq!(read_minutes(&"word ".repeat(221)), 2);
+    }
+
+    #[test]
+    fn a_note_alert_renders_as_a_titled_callout() {
+        let html = render("> [!NOTE]\n> Docker Desktop runs Linux in a VM.\n");
+        assert!(html.contains(r#"class="markdown-alert markdown-alert-note""#), "{html}");
+        assert!(html.contains("markdown-alert-title"), "{html}");
     }
 }

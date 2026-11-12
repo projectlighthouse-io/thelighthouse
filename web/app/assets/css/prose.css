@@ -80,6 +80,27 @@
 
 .lesson-content blockquote > :last-child { margin-bottom: 0; }
 
+/* callouts — `> [!NOTE]` and friends. An aside set apart from the prose: the
+ * sunken ground of a quote, a rule of accent on the left, and a mono eyebrow
+ * for the title instead of a heading. */
+.lesson-content .markdown-alert {
+  margin: 0 0 var(--space-6);
+  padding: var(--space-5) var(--space-6);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.lesson-content .markdown-alert-title {
+  margin: 0 0 var(--space-2);
+  font: var(--text-label-mono);
+  color: var(--ink-muted);
+}
+
+.lesson-content .markdown-alert > :last-child { margin-bottom: 0; }
+
+.lesson-content :is(.markdown-alert-warning, .markdown-alert-caution) { border-left-color: var(--border-strong); }
+
 /* images, with the sizes markdown can ask for */
 .lesson-content img {
   max-width: 100%;

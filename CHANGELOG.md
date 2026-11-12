@@ -5,6 +5,13 @@ readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
 
 ## 2026-11-12
 
+### Reader
+
+- Lessons can set an aside apart with a GitHub-style alert (`> [!NOTE]`,
+  `> [!TIP]`, `> [!WARNING]` and the rest). It renders as a callout with a
+  mono title, on the quote's sunken ground with an accent rule. Raw html
+  stays off.
+
 ### luxctl
 
 - The project and task pages showed `luxctl projects start` and
