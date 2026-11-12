@@ -120,7 +120,7 @@ fn unauthenticated() -> Response {
         StatusCode::UNAUTHORIZED,
         serde_json::json!({
             "code": "unauthenticated",
-            "error": "Sign in with `lux login` and try again.",
+            "error": "Sign in with `luxctl auth --token <TOKEN>` and try again.",
         }),
         CachePolicy::NoStore,
     )
