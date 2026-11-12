@@ -117,8 +117,8 @@ const { getPro } = useGetPro()
 
     <div class="lh-figure run">
       <TerminalPanel tag="luxctl" note="run it on your own machine">
-        <pre class="commands"><span class="dim">$ </span>luxctl projects start {{ project.slug }}
-<span class="dim">$ </span>luxctl tasks submit</pre>
+        <pre class="commands"><span class="dim">$ </span>luxctl project start --id {{ project.slug }}
+<span class="dim">$ </span>luxctl validate</pre>
       </TerminalPanel>
     </div>
 

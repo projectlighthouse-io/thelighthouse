@@ -65,8 +65,8 @@ useSeo(() => ({
             blueprint, checks your work on your own machine, and reports the outcome back.
           </p>
           <TerminalPanel tag="luxctl" note="run it on your own machine">
-            <pre class="commands"><span class="dim">$ </span>luxctl projects start {{ task.project.slug }}
-<span class="dim">$ </span>luxctl tasks submit
+            <pre class="commands"><span class="dim">$ </span>luxctl project start --id {{ task.project.slug }}
+<span class="dim">$ </span>luxctl run --task {{ task.slug }}
   <span class="dim">→ running validator on your machine…</span>
   <span class="ok">✓ checks passed</span></pre>
           </TerminalPanel>
