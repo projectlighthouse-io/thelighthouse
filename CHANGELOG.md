@@ -3,6 +3,17 @@
 What changed, newest first. The site's own `/changelog` page is written for
 readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
 
+## 2026-11-12
+
+### luxctl
+
+- The project and task pages showed `luxctl projects start` and
+  `luxctl tasks submit`, neither of which exists. They now show
+  `luxctl project start --id`, then `luxctl validate` on a project and
+  `luxctl run --task` on a task.
+- The api's 401 told readers to run `lux login`, which is not a command. It
+  now names `luxctl auth --token <TOKEN>`.
+
 ## 2026-10-12
 
 ### Reader
