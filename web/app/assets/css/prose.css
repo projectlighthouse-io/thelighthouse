@@ -88,6 +88,9 @@
   border-radius: var(--radius-md);
 }
 
+/* a click opens it full screen, unless the author made it a link */
+.lesson-content :not(a) > img { cursor: zoom-in; }
+
 .lesson-content img.img-sm { width: 100%; max-width: 400px; }
 .lesson-content img.img-md { width: 100%; max-width: 600px; }
 .lesson-content img.img-lg,

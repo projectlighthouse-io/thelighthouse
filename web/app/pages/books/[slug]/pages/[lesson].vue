@@ -3,6 +3,7 @@ import type { Note } from '@/composables/UseNotes'
 import type { LessonComment } from '@/types/Comments'
 import type { Chapter, LessonResponse, LessonSummary } from '@/types/Content'
 import type { PaywallBook, PaywallSection } from '@/types/Paywall'
+import type { ZoomedImage } from '@/components/Reader/ImageLightbox.vue'
 // only this route needs the reader system
 import '@/assets/css/reader.css'
 
@@ -781,6 +782,21 @@ const closePopover = (): void => {
 onMounted(() => document.addEventListener('mousedown', closePopover))
 onBeforeUnmount(() => document.removeEventListener('mousedown', closePopover))
 
+/* ---------- images open full screen ---------- */
+
+const zoomedImage = ref<ZoomedImage | null>(null)
+
+// One listener on the body rather than one per image: the images arrive as
+// `v-html`, which vue replaces wholesale, so per-image listeners would be lost
+// on every lesson change. An image inside a link is the author's link.
+const zoomImage = (event: MouseEvent): void => {
+  const target = event.target
+  if (!(target instanceof HTMLImageElement) || target.closest('a')) return
+  zoomedImage.value = { src: target.currentSrc || target.src, alt: target.alt }
+}
+
+watch(lessonSlug, () => { zoomedImage.value = null })
+
 /**
  * Loads a lesson's annotations and draws them.
  *
@@ -941,7 +957,8 @@ useJsonLd('crumbs', () => ({
 
         <div class="reader-body">
           <!-- eslint-disable-next-line vue/no-v-html -- authored markdown, rendered server side -->
-          <div class="lesson-content" data-lesson-content v-html="readable" />
+          <div class="lesson-content" data-lesson-content @click="zoomImage" v-html="readable" />
+          <ReaderImageLightbox :image="zoomedImage" @close="zoomedImage = null" />
         </div>
 
         <!--
