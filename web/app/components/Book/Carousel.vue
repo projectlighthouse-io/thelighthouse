@@ -95,7 +95,7 @@ defineProps<{ books: Book[] }>()
 
 .bk-title {
     display: block;
-    font-family: 'Newsreader', Georgia, serif;
+    font-family: 'Literata', Georgia, serif;
     font-optical-sizing: auto;
     font-weight: 600;
     font-size: 24px;
@@ -115,7 +115,7 @@ defineProps<{ books: Book[] }>()
     line-clamp: 2;
     overflow: hidden;
     margin-top: 10px;
-    font-family: 'Newsreader', Georgia, serif;
+    font-family: 'Literata', Georgia, serif;
     font-optical-sizing: auto;
     font-size: 16px;
     line-height: 1.72;

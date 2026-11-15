@@ -16,7 +16,7 @@
 }
 
 .part-title {
-    font-family: 'Newsreader', Georgia, serif;
+    font-family: 'Literata', Georgia, serif;
     font-optical-sizing: auto;
     font-weight: 600;
     font-size: 19px;
@@ -55,7 +55,7 @@
     align-items: center;
     gap: 9px;
     flex-wrap: wrap;
-    font-family: 'Newsreader', Georgia, serif;
+    font-family: 'Literata', Georgia, serif;
     font-optical-sizing: auto;
     font-weight: 600;
     font-size: 15.5px;

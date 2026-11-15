@@ -7,10 +7,10 @@
   --font-mono: "Geist Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   --font-hero: "Fredericka the Great", var(--font-serif);
 
-  /* The lesson reader's type, from the old app: Newsreader for the prose and
+  /* The lesson reader's type: Literata for the prose and
      its h2/h3, Lora for the lesson title, dek and h4, JetBrains Mono for code.
      Used by reader.css on the lesson page only, not by the rest of the site. */
-  --font-reading: "Newsreader", Georgia, serif;
+  --font-reading: "Literata", Georgia, serif;
   --font-reading-title: "Lora", Georgia, serif;
   --font-reading-code: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
