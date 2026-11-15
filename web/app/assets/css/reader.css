@@ -69,20 +69,20 @@
   margin: 0;
   flex-basis: 100%;
   padding: var(--space-3) var(--space-4);
-  /* no brown in the palette; mixed with the page so it holds in both themes */
-  --langs-brown: #d9a05b;
-  border: 1px dashed var(--langs-brown);
+  /* Fixed yellow and black, not theme tokens: a sticker reads the same in
+     either theme, and black on yellow holds contrast in both. */
+  border: 1px dashed #e0c54a;
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--langs-brown) 22%, var(--surface-page));
+  background: #fef5c4;
   font: var(--text-body-sm);
-  color: var(--ink);
+  color: #111;
 }
 .reader-langs a {
-  color: var(--ink);
-  text-decoration: underline 2px var(--langs-brown);
+  color: #111;
+  text-decoration: underline 2px #111;
   text-underline-offset: 3px;
 }
-.reader-langs a:hover { text-decoration-color: var(--ink); }
+.reader-langs a:hover { text-decoration-thickness: 3px; }
 .reader-langs-flag {
   display: inline-block; /* the base reset makes img a block */
   height: 0.9em;
