@@ -179,6 +179,22 @@ a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink);
 
 .lesson-content[data-lesson-content] :is(strong, b) { font-weight: 600; }
 
+/* Flush edges for English. Hyphenation is what keeps justify from opening
+   rivers between words; browsers have no Bengali dictionary, so Bangla stays
+   ragged rather than gappy. */
+.lesson-content[data-lesson-content]:lang(en) :is(p, li),
+:lang(en) .lesson-content[data-lesson-content] :is(p, li) {
+  text-align: justify;
+  hyphens: auto;
+}
+
+/* A note's column is too narrow to justify without rivers, and a quote at
+   display size is a line to read whole, not one to hyphenate. */
+.lesson-content[data-lesson-content] :is(.markdown-alert, blockquote) :is(p, li) {
+  text-align: start;
+  hyphens: manual;
+}
+
 /* <term tip="…">: a wavy underline that opens a definition on hover or focus */
 .lesson-content[data-lesson-content] .term {
   text-decoration: underline wavy color-mix(in srgb, var(--accent) 60%, transparent);
@@ -219,6 +235,9 @@ a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink);
   border-radius: var(--radius-xs);
   background: var(--surface-sunken);
 }
+
+/* `ch-root` is not a command anyone can type */
+.lesson-content[data-lesson-content] :is(code, a) { hyphens: manual; }
 
 /* the old reader kept italic emphasis; prose.css flattens it */
 .lesson-content[data-lesson-content] :is(em, i) { font-style: italic; }
