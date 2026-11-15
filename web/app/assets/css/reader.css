@@ -179,6 +179,47 @@ a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink);
 
 .lesson-content[data-lesson-content] :is(strong, b) { font-weight: 600; }
 
+/* <term tip="…">: a wavy underline that opens a definition on hover or focus */
+.lesson-content[data-lesson-content] .term {
+  text-decoration: underline wavy color-mix(in srgb, var(--accent) 60%, transparent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
+  cursor: help;
+  border-radius: 2px;
+}
+
+.lesson-content[data-lesson-content] .term:hover,
+.lesson-content[data-lesson-content] .term:focus-visible {
+  text-decoration-color: var(--accent-strong);
+  outline: none;
+}
+
+/* Fixed to the viewport, so scrolling closes it rather than leaving it behind. */
+.term-tip {
+  position: fixed;
+  z-index: 50;
+  max-width: min(340px, calc(100vw - 16px));
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.12);
+  font: var(--text-body-sm);
+  color: var(--ink);
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+}
+
+.term-tip--below { transform: translate(-50%, 0); }
+
+.term-tip code {
+  font-family: var(--font-reading-code);
+  font-size: 0.88em;
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-xs);
+  background: var(--surface-sunken);
+}
+
 /* the old reader kept italic emphasis; prose.css flattens it */
 .lesson-content[data-lesson-content] :is(em, i) { font-style: italic; }
 

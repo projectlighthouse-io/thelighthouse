@@ -814,6 +814,42 @@ const zoomImage = (event: MouseEvent): void => {
 
 watch(lessonSlug, () => { zoomedImage.value = null })
 
+/* ---------- <term> definitions on hover ---------- */
+
+/** Where the popover sits: centred over the term, or under it near the top. */
+interface TermTip { html: string, x: number, y: number, below: boolean }
+
+const termTip = ref<TermTip | null>(null)
+
+// Delegated for the same reason as `zoomImage`. Hover and keyboard focus both
+// open it; a tap on a phone fires `mouseover` too, and a tap elsewhere closes.
+const showTerm = (event: Event): void => {
+  const term = event.target instanceof Element ? event.target.closest('.term') : null
+  if (!(term instanceof HTMLElement)) return
+
+  const rect = term.getBoundingClientRect()
+  // The popover is at most 340 wide; keep its centre far enough in that it
+  // never hangs off either edge.
+  const half = Math.min(170, window.innerWidth / 2 - 8)
+  const below = rect.top < 160
+  termTip.value = {
+    // the tip is our own rendered markdown, escaped into the attribute server side
+    html: term.dataset.tip ?? '',
+    x: Math.min(Math.max(rect.left + rect.width / 2, half + 8), window.innerWidth - half - 8),
+    y: below ? rect.bottom + 8 : rect.top - 8,
+    below,
+  }
+}
+
+const hideTerm = (event: Event): void => {
+  if (event.target instanceof Element && event.target.closest('.term')) termTip.value = null
+}
+
+const dropTerm = (): void => { termTip.value = null }
+onMounted(() => window.addEventListener('scroll', dropTerm, { passive: true }))
+onBeforeUnmount(() => window.removeEventListener('scroll', dropTerm))
+watch(lessonSlug, dropTerm)
+
 /**
  * Loads a lesson's annotations and draws them.
  *
@@ -977,9 +1013,27 @@ useJsonLd('crumbs', () => ({
         </header>
 
         <div class="reader-body">
-          <!-- eslint-disable-next-line vue/no-v-html -- authored markdown, rendered server side -->
-          <div class="lesson-content" data-lesson-content @click="zoomImage" v-html="readable" />
+          <!-- eslint-disable vue/no-v-html -- authored markdown and term tips, both rendered and escaped server side -->
+          <div
+            class="lesson-content"
+            data-lesson-content
+            @click="zoomImage"
+            @mouseover="showTerm"
+            @mouseout="hideTerm"
+            @focusin="showTerm"
+            @focusout="hideTerm"
+            v-html="readable"
+          />
           <ReaderImageLightbox :image="zoomedImage" @close="zoomedImage = null" />
+          <div
+            v-if="termTip"
+            class="term-tip"
+            :class="{ 'term-tip--below': termTip.below }"
+            role="tooltip"
+            :style="{ left: `${termTip.x}px`, top: `${termTip.y}px` }"
+            v-html="termTip.html"
+          />
+          <!-- eslint-enable vue/no-v-html -->
         </div>
 
         <!--

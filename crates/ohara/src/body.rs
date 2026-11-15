@@ -3,9 +3,9 @@
 use std::sync::OnceLock;
 
 use comrak::{
-    Anchorizer, Arena, Options, arena_tree::NodeEdge,
-    markdown_to_html_with_plugins, nodes::NodeValue, options::Plugins,
-    parse_document, plugins::syntect::SyntectAdapter,
+    Anchorizer, Arena, Options, arena_tree::NodeEdge, format_html_with_plugins,
+    markdown_to_html, nodes::NodeValue, options::Plugins, parse_document,
+    plugins::syntect::SyntectAdapter,
 };
 
 /// Where a paid region opens and closes.
@@ -323,7 +323,65 @@ pub fn render(markdown: &str) -> String {
     let mut plugins = Plugins::default();
     plugins.render.codefence_syntax_highlighter = Some(highlighter);
 
-    markdown_to_html_with_plugins(markdown, &options, &plugins)
+    let arena = Arena::new();
+    let root = parse_document(&arena, markdown, &options);
+
+    // `<term>` is the one piece of raw HTML the prose is allowed. Everything
+    // else stays omitted, so it is swapped for markup built here rather than
+    // let through by turning on unsafe rendering.
+    for node in root.descendants() {
+        let term = match &node.data().value {
+            NodeValue::HtmlInline(html) => term_tag(html),
+            _ => None,
+        };
+        if let Some(span) = term {
+            node.data_mut().value = NodeValue::Raw(span);
+        }
+    }
+
+    let mut html = String::new();
+    // Writing into a `String` cannot fail; an error here would be a comrak
+    // bug, and an empty lesson says so louder than half of one.
+    if format_html_with_plugins(root, &options, &mut html, &plugins).is_err() {
+        html.clear();
+    }
+
+    html
+}
+
+/// `<term tip="…">` and `</term>` as the span the reader hovers.
+///
+/// The tip is markdown, as it was in the laravel app — a few carry `code` or
+/// **bold** — rendered here and escaped into `data-tip` for the page to show.
+/// Anything else that merely starts with `<term` is not a term and stays
+/// omitted like any other raw HTML.
+fn term_tag(html: &str) -> Option<String> {
+    if html == "</term>" {
+        return Some("</span>".to_owned());
+    }
+
+    let tip = html
+        .strip_prefix("<term")?
+        .trim_start()
+        .strip_prefix("tip=\"")?
+        .strip_suffix("\">")?;
+
+    let rendered = markdown_to_html(tip.trim(), &options());
+    let rendered = rendered.trim();
+    // One paragraph is the common case; its `<p>` would make the popover a
+    // block with margins for a single line.
+    let rendered = rendered
+        .strip_prefix("<p>")
+        .and_then(|inner| inner.strip_suffix("</p>"))
+        .filter(|inner| !inner.contains("<p>"))
+        .unwrap_or(rendered);
+
+    let mut span =
+        String::from(r#"<span class="term" tabindex="0" data-tip=""#);
+    comrak::html::escape(&mut span, rendered).ok()?;
+    span.push_str(r#"">"#);
+
+    Some(span)
 }
 
 /// The markdown dialect: GitHub flavoured, as the laravel app parsed it.
@@ -559,6 +617,19 @@ mod tests {
 
     const MARKED: &str =
         "Free part.\n\n<paid>\nPaid part.\n</paid>\n\nFree again.";
+
+    #[test]
+    fn a_term_becomes_a_span_carrying_its_tip_and_other_html_stays_out() {
+        let html = render(
+            r#"two <term tip="maps `pid`s to tasks">PID namespaces</term> and <b>raw</b>"#,
+        );
+
+        assert!(
+            html.contains(r#"<span class="term" tabindex="0" data-tip="maps &lt;code&gt;pid&lt;/code&gt;s to tasks">PID namespaces</span>"#),
+            "{html}"
+        );
+        assert!(!html.contains("<b>"), "{html}");
+    }
 
     #[test]
     fn an_alert_is_a_callout_not_a_quote_with_its_marker_in_it() {
