@@ -41,11 +41,18 @@ const alsoIn = computed(() => ALSO_IN[data.value?.locale ?? 'en'] ?? ALSO_IN.en!
 
 // Every translation names the others, so search engines serve the right one.
 useHead({
-  link: () => (data.value?.locales ?? []).map(code => ({
-    rel: 'alternate',
-    hreflang: code,
-    href: `${SITE.url}${route.path}${code === 'en' ? '' : `?lang=${code}`}`,
-  })),
+  link: () => [
+    ...(data.value?.locales ?? []).map(code => ({
+      rel: 'alternate',
+      hreflang: code,
+      href: `${SITE.url}${route.path}${code === 'en' ? '' : `?lang=${code}`}`,
+    })),
+    // Literata has no Bengali. Only a Bangla page pays for the font; the
+    // stacks in reader.css put it after Literata, so Latin words keep theirs.
+    ...(data.value?.locale === 'bn'
+      ? [{ rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Noto+Serif+Bengali:wght@400;500;600&display=swap' }]
+      : []),
+  ],
 })
 
 /**

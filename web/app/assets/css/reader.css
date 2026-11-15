@@ -182,7 +182,14 @@ a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink);
 /* the old reader kept italic emphasis; prose.css flattens it */
 .lesson-content[data-lesson-content] :is(em, i) { font-style: italic; }
 
-/* Newsreader has no Bengali, so italic there is a faux slant on the fallback.
+/* Bengali letters fall through to Noto Serif Bengali, linked by the lesson page
+   only when it serves Bangla. Latin words in the same line stay Literata. */
+:root:lang(bn) {
+  --font-reading: "Literata", "Noto Serif Bengali", Georgia, serif;
+  --font-reading-title: "Lora", "Noto Serif Bengali", Georgia, serif;
+}
+
+/* Noto Serif Bengali has no italic, so italic there is a faux slant.
    Weight carries the emphasis instead, as it did in the old reader. */
 .lesson-content[data-lesson-content]:lang(bn) :is(em, i),
 :lang(bn) .lesson-content[data-lesson-content] :is(em, i) {
