@@ -172,6 +172,13 @@ a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink);
   font: italic 500 25px/1.4 var(--font-reading);
 }
 
+/* the same faux slant as `em` above; upright reads as the quote it is */
+.lesson-content[data-lesson-content]:lang(bn) blockquote,
+:lang(bn) .lesson-content[data-lesson-content] blockquote {
+  font-style: normal;
+  font-size: 22px;
+}
+
 .lesson-content[data-lesson-content] :not(pre) > code {
   font-family: var(--font-reading-code);
   font-size: 0.82em;

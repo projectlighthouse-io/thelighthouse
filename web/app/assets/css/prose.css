@@ -80,6 +80,25 @@
 
 .lesson-content blockquote > :last-child { margin-bottom: 0; }
 
+/* `> [!NOTE]` and the other github alerts. Body type, not the quote's: it is
+   an aside to read, not a line to stop on. */
+.lesson-content .markdown-alert {
+  margin: 0 0 var(--space-6);
+  padding: var(--space-4) var(--space-5);
+  border-left: 3px solid var(--accent-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+
+.lesson-content .markdown-alert > :last-child { margin-bottom: 0; }
+
+.lesson-content .markdown-alert-title {
+  margin-bottom: var(--space-2);
+  font: var(--text-label-mono);
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+
 /* images, with the sizes markdown can ask for */
 .lesson-content img {
   max-width: 100%;
