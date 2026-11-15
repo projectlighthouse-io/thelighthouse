@@ -84,19 +84,35 @@
    an aside to read, not a line to stop on. */
 .lesson-content .markdown-alert {
   margin: 0 0 var(--space-6);
-  padding: var(--space-4) var(--space-5);
-  border-left: 3px solid var(--accent-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface-sunken);
+  padding: var(--space-5) var(--space-6);
+  /* sky, from the accent, so it holds in both themes */
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--surface-page));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface-page));
+  font-size: 0.92em;
 }
 
 .lesson-content .markdown-alert > :last-child { margin-bottom: 0; }
 
 .lesson-content .markdown-alert-title {
-  margin-bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
   font: var(--text-label-mono);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent-strong);
+}
+
+/* an "i" in a ring, drawn in the title's own colour */
+.lesson-content .markdown-alert-title::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  flex: none;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM8.75 7v4.5h-1.5V7h1.5ZM8 4a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 /* images, with the sizes markdown can ask for */
