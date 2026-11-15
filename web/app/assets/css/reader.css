@@ -257,8 +257,9 @@ a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink);
   font-weight: 500;
 }
 
+/* 400, not 500: Literata's italic is already heavy at this size */
 .lesson-content[data-lesson-content] blockquote {
-  font: italic 500 25px/1.4 var(--font-reading);
+  font: italic 400 22px/1.5 var(--font-reading);
 }
 
 /* the same faux slant as `em` above; upright reads as the quote it is */
