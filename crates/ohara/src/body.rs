@@ -338,6 +338,9 @@ fn options() -> Options<'static> {
     options.extension.tasklist = true;
     options.extension.autolink = true;
     options.extension.footnotes = true;
+    // `> [!NOTE]` and friends. Without it the marker reaches the reader as
+    // literal text inside a plain blockquote.
+    options.extension.alerts = true;
 
     options
 }
@@ -556,6 +559,14 @@ mod tests {
 
     const MARKED: &str =
         "Free part.\n\n<paid>\nPaid part.\n</paid>\n\nFree again.";
+
+    #[test]
+    fn an_alert_is_a_callout_not_a_quote_with_its_marker_in_it() {
+        let html = render("> [!NOTE]\n> Mind the gap.");
+
+        assert!(html.contains("markdown-alert-note"), "{html}");
+        assert!(!html.contains("[!NOTE]"), "{html}");
+    }
 
     #[test]
     fn a_region_is_lifted_out_and_the_prose_resumes_after_it() {
