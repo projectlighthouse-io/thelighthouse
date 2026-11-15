@@ -3,6 +3,21 @@
 What changed, newest first. The site's own `/changelog` page is written for
 readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
 
+## 2026-11-15
+
+### Reader
+
+- `<term tip="…">` renders again: a wavy underline that shows its definition
+  on hover, focus or tap. The tip is markdown, rendered and escaped server
+  side; every other raw HTML in a lesson is still omitted.
+- `> [!NOTE]` and the other GitHub alerts render as callouts instead of a
+  quote with the marker printed in it.
+- Lesson prose is set in Literata. English paragraphs are justified and
+  hyphenated; inline code and links never are.
+- A translated lesson says so in a yellow notice at the top, linking the
+  other language with its flag. Bangla pages load Noto Serif Bengali, and
+  quotes and emphasis there stay upright rather than taking a faux slant.
+
 ## 2026-11-12
 
 ### luxctl
