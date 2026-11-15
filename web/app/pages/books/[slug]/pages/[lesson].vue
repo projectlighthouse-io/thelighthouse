@@ -34,7 +34,7 @@ const LANGUAGE_FLAGS: Record<string, string> = { en: '/flags/gb.svg', bn: '/flag
 /** "Also available in …", worded in the language being read, split around the link. */
 const ALSO_IN: Record<string, [string, string]> = {
   en: ['This article is also available in ', '.'],
-  bn: ['এই লেখাটি ', ' ভাষাতেও পড়া যাবে।'],
+  bn: ['এই লেখাটি ', ' এ ও পড়া যাবে।'],
 }
 const otherLocales = computed(() => (data.value?.locales ?? []).filter(code => code !== data.value?.locale))
 const alsoIn = computed(() => ALSO_IN[data.value?.locale ?? 'en'] ?? ALSO_IN.en!)
