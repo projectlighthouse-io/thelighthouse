@@ -65,10 +65,32 @@
 
 .reader-meta button:hover { color: var(--ink); }
 
-.reader-langs { display: flex; gap: var(--space-2); }
-.reader-langs a { color: var(--ink-secondary); text-decoration: none; }
-.reader-langs a:hover,
-.reader-langs a[aria-current] { color: var(--ink); }
+.reader-langs {
+  margin: 0;
+  flex-basis: 100%;
+  padding: var(--space-3) var(--space-4);
+  /* no brown in the palette; mixed with the page so it holds in both themes */
+  --langs-brown: #d9a05b;
+  border: 1px dashed var(--langs-brown);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--langs-brown) 22%, var(--surface-page));
+  font: var(--text-body-sm);
+  color: var(--ink);
+}
+.reader-langs a {
+  color: var(--ink);
+  text-decoration: underline 2px var(--langs-brown);
+  text-underline-offset: 3px;
+}
+.reader-langs a:hover { text-decoration-color: var(--ink); }
+.reader-langs-flag {
+  display: inline-block; /* the base reset makes img a block */
+  height: 0.9em;
+  width: auto;
+  margin-right: 0.35em;
+  vertical-align: -0.08em;
+  border-radius: 2px;
+}
 
 .reader-body { margin-top: var(--space-12); }
 

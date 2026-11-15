@@ -28,6 +28,16 @@ const { data, error } = await useAsyncData(
 
 /** Each language in its own script, so a reader finds theirs by sight. */
 const LANGUAGE_NAMES: Record<string, string> = { en: 'English', bn: 'বাংলা' }
+/** SVG, not emoji: Windows draws flag emoji as two letters. */
+const LANGUAGE_FLAGS: Record<string, string> = { en: '/flags/gb.svg', bn: '/flags/bd.svg' }
+
+/** "Also available in …", worded in the language being read, split around the link. */
+const ALSO_IN: Record<string, [string, string]> = {
+  en: ['This article is also available in ', '.'],
+  bn: ['এই লেখাটি ', ' ভাষাতেও পড়া যাবে।'],
+}
+const otherLocales = computed(() => (data.value?.locales ?? []).filter(code => code !== data.value?.locale))
+const alsoIn = computed(() => ALSO_IN[data.value?.locale ?? 'en'] ?? ALSO_IN.en!)
 
 // Every translation names the others, so search engines serve the right one.
 useHead({
@@ -937,15 +947,19 @@ useJsonLd('crumbs', () => ({
           <p v-if="lesson.description" class="lh-lede">{{ lesson.description }}</p>
 
           <div class="reader-meta">
-            <span v-if="data.locales.length > 1" class="reader-langs">
-              <NuxtLink
-                v-for="code in data.locales"
-                :key="code"
+            <p v-if="otherLocales.length" class="reader-langs">
+              {{ alsoIn[0] }}<template v-for="(code, i) in otherLocales" :key="code">{{ i ? ', ' : '' }}<NuxtLink
                 :to="{ query: code === 'en' ? {} : { lang: code } }"
                 :hreflang="code"
-                :aria-current="code === data.locale ? 'true' : undefined"
-              >{{ LANGUAGE_NAMES[code] ?? code }}</NuxtLink>
-            </span>
+                :lang="code"
+                aria-current="false"
+              ><img
+                v-if="LANGUAGE_FLAGS[code]"
+                :src="LANGUAGE_FLAGS[code]"
+                alt=""
+                class="reader-langs-flag"
+              >{{ LANGUAGE_NAMES[code] ?? code }}</NuxtLink></template>{{ alsoIn[1] }}
+            </p>
             <!-- Only once there is one. A control that is present and inert
                  most of the time reads as broken rather than as empty. -->
             <template v-if="currentBookmark">
