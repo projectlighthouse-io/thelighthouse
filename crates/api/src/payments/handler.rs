@@ -525,6 +525,7 @@ async fn apply(
             reference,
             plan,
             subscription,
+            paid,
         } => {
             let Some(user_id) = reader(&reference) else {
                 tracing::warn!(reference, "a checkout named no reader we know");
@@ -540,7 +541,14 @@ async fn apply(
                 return Ok(());
             }
 
-            // A purchase has no such follow-up. This delivery is the only
+            // A delayed method has not settled. The provider delivers this
+            // checkout again once it has, paid, and that is when to grant.
+            if !paid {
+                tracing::info!(reference, "a purchase has not settled yet");
+                return Ok(());
+            }
+
+            // A purchase has no other follow-up. A paid delivery is the only
             // notice that money moved, so the books are granted here or never.
             let Some(plan) = plan else {
                 tracing::error!(

@@ -37,6 +37,13 @@ pub enum Event {
         ///
         /// `None` for a one-time purchase, which is what tells the two apart.
         subscription: Option<String>,
+        /// Whether the money has arrived.
+        ///
+        /// Usually yes. A delayed method such as a bank debit finishes the
+        /// checkout first and settles days later, and the provider then sends a
+        /// second, paid delivery for the same checkout. Nothing should be
+        /// granted on an unpaid one.
+        paid: bool,
     },
     /// A charge failed. The provider is likely retrying on its own schedule.
     PaymentFailed {

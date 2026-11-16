@@ -167,9 +167,19 @@ fn read(body: &[u8]) -> Result<Event, Error> {
     };
 
     match delivery.kind.as_str() {
-        "checkout.session.completed" => {
+        // The second is the delayed method settling: the same session again,
+        // now paid. Its failure twin needs no arm, because an unpaid checkout
+        // granted nothing to take back.
+        "checkout.session.completed"
+        | "checkout.session.async_payment_succeeded" => {
             let session: wire::Session = serde_json::from_value(object)
                 .map_err(|source| malformed(source.to_string()))?;
+            // Anything but a named settled state is unpaid, including a
+            // missing one.
+            let paid = matches!(
+                session.payment_status.as_deref(),
+                Some("paid" | "no_payment_required")
+            );
 
             // Both are set by this driver at checkout. A session missing
             // either was created by something else, and there is no account to
@@ -184,6 +194,7 @@ fn read(body: &[u8]) -> Result<Event, Error> {
                             .get(wire::PLAN_KEY)
                             .map(|name| name.clone().into()),
                         subscription: session.subscription,
+                        paid,
                     })
                 }
                 _ => Ok(Event::Ignored),
@@ -336,6 +347,7 @@ mod tests {
                 "client_reference_id": "41",
                 "subscription": "sub_1",
                 "metadata": { "plan": "yearly" },
+                "payment_status": "paid",
                 "url": null
             }}
         }"#;
@@ -347,8 +359,40 @@ mod tests {
                 reference: "41".to_owned(),
                 plan: Some("yearly".into()),
                 subscription: Some("sub_1".to_owned()),
+                paid: true,
             }
         );
+    }
+
+    /// A bank debit finishes the checkout before the money arrives. Only the
+    /// later delivery, or a settled state, may count as paid.
+    #[test]
+    fn a_checkout_is_paid_only_once_the_money_has_settled() {
+        let delivery = |kind: &str, status: &str| {
+            let body = format!(
+                r#"{{"type":"{kind}","data":{{"object":{{
+                    "customer":"cus_1","client_reference_id":"41",
+                    "metadata":{{"plan":"all_lifetime"}}{status}
+                }}}}}}"#
+            );
+            match read(body.as_bytes()).unwrap() {
+                Event::CheckoutCompleted { paid, .. } => paid,
+                other => panic!("{kind} {status}: {other:?}"),
+            }
+        };
+
+        let completed = "checkout.session.completed";
+        assert!(!delivery(completed, r#","payment_status":"unpaid""#));
+        assert!(!delivery(completed, ""));
+        assert!(delivery(completed, r#","payment_status":"paid""#));
+        assert!(delivery(
+            completed,
+            r#","payment_status":"no_payment_required""#
+        ));
+        assert!(delivery(
+            "checkout.session.async_payment_succeeded",
+            r#","payment_status":"paid""#
+        ));
     }
 
     #[test]
