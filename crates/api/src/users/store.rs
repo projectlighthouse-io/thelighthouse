@@ -6,8 +6,8 @@
 //! purchases on each.
 //!
 //! Three branches, in order: a row already carrying this provider's id; a row
-//! carrying this email, which gets the provider id attached; otherwise a new
-//! row.
+//! carrying this email and no id from this provider yet, which gets the id
+//! attached; otherwise a new row.
 //!
 //! **`email` is the link key and the column is `NOT NULL`.** A provider that
 //! shares no address cannot complete sign-in — [`Error::NoEmail`] — because the
@@ -34,6 +34,10 @@ pub(crate) enum Error {
     /// declined. Not a failure to report as a bug — the reader has to be told
     /// what to do about it.
     NoEmail,
+    /// The address belongs to an account already linked to a *different* id
+    /// from this provider. Linking would hand that account to whoever holds
+    /// the new id, so it is refused instead.
+    AlreadyLinked,
     /// Every attempt at a new row lost the username race. Rare enough that
     /// seeing it means something is wrong with the search, not with the reader.
     UsernameRace,
@@ -88,6 +92,11 @@ pub(crate) async fn find_or_create(
     // 2. Known email, unknown provider — the cross-provider link. An UPDATE
     //    that matches nothing returns no row, which is exactly "no account with
     //    that address", so the read and the write are one round trip.
+    //
+    //    Only onto an empty column. A row already carrying a different id from
+    //    this provider is somebody's existing sign-in, and overwriting it would
+    //    let whoever presents the address take the account. That row is left
+    //    alone, and the insert below then refuses it as `AlreadyLinked`.
     let mut attach = format!(
         "UPDATE users SET {column} = $2, avatar_url = $3, updated_at = NOW()"
     );
@@ -96,7 +105,9 @@ pub(crate) async fn find_or_create(
         // equivalent of `login`, so there is nothing to write.
         attach.push_str(", github_username = $4");
     }
-    attach.push_str(" WHERE email = $1 RETURNING ");
+    attach.push_str(" WHERE email = $1 AND ");
+    attach.push_str(column);
+    attach.push_str(" IS NULL RETURNING ");
     attach.push_str(COLUMNS);
 
     let mut query = sqlx::query_as::<_, UserRow>(&attach)
@@ -189,6 +200,12 @@ async fn create(
             {
                 tracing::info!(%error, "lost a username race, retrying");
             }
+            // Step 2 found this address but would not link it.
+            Err(sqlx::Error::Database(error))
+                if error.constraint() == Some("users_email_unique") =>
+            {
+                return Err(Error::AlreadyLinked);
+            }
             Err(error) => return Err(error.into()),
         }
     }
@@ -221,6 +238,71 @@ mod tests {
     fn each_provider_has_its_own_column() {
         assert_eq!(provider_column(Provider::Github), "github_id");
         assert_eq!(provider_column(Provider::Google), "google_id");
+    }
+
+    /// The link key is an address, and an address is not proof of being the
+    /// person already signed in with it. A second id from the same provider
+    /// must not take the row over. Needs a migrated postgres:
+    ///
+    /// ```text
+    /// DATABASE_URL=postgres://… cargo test -p lighthouse-api -- --ignored relink
+    /// ```
+    #[tokio::test]
+    #[ignore = "needs DATABASE_URL pointing at a migrated postgres"]
+    async fn a_second_id_from_the_same_provider_is_not_relinked() {
+        let url = std::env::var("DATABASE_URL").unwrap();
+        let pool = PgPool::connect(&url).await.unwrap();
+        let run = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let email = format!("relink-{run}@example.test");
+        let social = |id: &str| SocialUser {
+            id: id.to_owned(),
+            nickname: Some(format!("relink{run}")),
+            name: None,
+            email: Some(email.clone()),
+            avatar: None,
+        };
+
+        let owner = find_or_create(
+            &pool,
+            Provider::Github,
+            &social(&format!("gh-{run}")),
+        )
+        .await
+        .unwrap();
+        let linked = find_or_create(
+            &pool,
+            Provider::Google,
+            &social(&format!("g1-{run}")),
+        )
+        .await
+        .unwrap();
+        let other = find_or_create(
+            &pool,
+            Provider::Google,
+            &social(&format!("g2-{run}")),
+        )
+        .await;
+
+        let (google_id,) = sqlx::query_as::<_, (Option<String>,)>(
+            "SELECT google_id FROM users WHERE id = $1",
+        )
+        .bind(owner.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(owner.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // The first Google id still links onto the empty column.
+        assert_eq!(linked.id, owner.id);
+        assert!(matches!(other, Err(Error::AlreadyLinked)), "{other:?}");
+        assert_eq!(google_id, Some(format!("g1-{run}")));
     }
 }
 

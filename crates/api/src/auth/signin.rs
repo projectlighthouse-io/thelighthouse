@@ -164,6 +164,10 @@ pub(crate) async fn callback(
             tracing::info!(%provider, "the provider shared no email address");
             return to_login(NO_EMAIL, &discard);
         }
+        Err(users::Error::AlreadyLinked) => {
+            tracing::warn!(%provider, "refused to relink an account to a new provider id");
+            return to_login(GENERIC_FAILURE, &discard);
+        }
         Err(users::Error::Database(error)) => {
             tracing::error!(%provider, %error, "failed to resolve the reader");
             return to_login(GENERIC_FAILURE, &discard);
