@@ -131,8 +131,70 @@ const ALLOWED: sanitizeHtml.IOptions = {
   disallowedTagsMode: 'discard',
 }
 
+/**
+ * How much emphasis matching a body may ask of marked before it is shown as
+ * plain text instead.
+ *
+ * marked's `*`, `_` and `~` matching is quadratic: every unmatched opener
+ * re-scans the rest of its paragraph. A 50,000-character body of `*a ` takes
+ * tens of seconds, synchronously, on the one Nitro process that renders every
+ * page for every visitor. `emphasisCost` bounds that work from above. That
+ * 50,000-character body scores about 830 million and took 27 seconds, so this
+ * line caps a render near 0.15s; forty 600-character paragraphs with a dozen
+ * markers each score about 300,000, well under it.
+ */
+const EMPHASIS_BUDGET = 5_000_000
+
+/**
+ * An upper bound on marked's emphasis work: markers times length, summed over
+ * each run of lines between blank lines.
+ *
+ * Fenced code is skipped, because marked never looks for emphasis inside it
+ * and code is where `*` is most common. Everything else is counted, inline code
+ * spans included, which can only over-estimate, and over-estimating costs a
+ * body its formatting, not its content.
+ */
+function emphasisCost(markdown: string): number {
+  let cost = 0
+  let markers = 0
+  let length = 0
+  let fenced = false
+
+  const close = () => {
+    cost += markers * length
+    markers = 0
+    length = 0
+  }
+
+  for (const line of markdown.split('\n')) {
+    if (/^ {0,3}(```|~~~)/.test(line)) {
+      fenced = !fenced
+      close()
+    } else if (fenced) {
+      continue
+    } else if (line.trim() === '') {
+      close()
+    } else {
+      length += line.length + 1
+      markers += line.match(/[*_~]/g)?.length ?? 0
+    }
+  }
+
+  close()
+  return cost
+}
+
 /** The author's markdown as html, with nothing in it that can run. */
 export function renderArticle(markdown: string): string {
+  // Over budget, the body is shown as the text it is. The inner pass escapes
+  // the author's markup rather than dropping it, and the outer one is the same
+  // boundary every other body goes through.
+  if (emphasisCost(markdown) > EMPHASIS_BUDGET) {
+    const text = sanitizeHtml(markdown, { allowedTags: [], allowedAttributes: {}, disallowedTagsMode: 'escape' })
+
+    return sanitizeHtml(`<pre>${text}</pre>`, ALLOWED)
+  }
+
   // marked is a formatter here, not a filter. Everything that makes the output
   // safe happens on the next line.
   const rendered = marked.parse(markdown, { async: false }) as string
