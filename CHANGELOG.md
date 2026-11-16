@@ -3,6 +3,14 @@
 What changed, newest first. The site's own `/changelog` page is written for
 readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
 
+## 2026-11-16
+
+### Reader
+
+- Bangla lessons set Bengali text in Hind Siliguri instead of Noto Serif
+  Bengali, self-hosted and scaled 112% to sit level with Literata. The font
+  only downloads on pages that contain Bengali.
+
 ## 2026-11-15
 
 ### Reader
