@@ -19,7 +19,12 @@ pub(crate) async fn user(
         id: profile.sub,
         nickname: profile.nickname,
         name: profile.name,
-        email: profile.email,
+        // An address Google has not verified is not proof of anything, and
+        // the caller links accounts by it. Dropping it here turns that into
+        // `NoEmail` rather than into somebody else's account.
+        email: profile
+            .email
+            .filter(|_| profile.email_verified == Some(true)),
         avatar: profile.picture,
     })
 }
@@ -28,8 +33,8 @@ pub(crate) async fn user(
 /// returns.
 ///
 /// `email_verified` is read from the response but not carried onto
-/// [`SocialUser`]: it is Google's own account, and Google does not hand out an
-/// unverified address on a `email` scope grant.
+/// [`SocialUser`]: it decides whether `email` is carried at all. Absent counts
+/// as unverified.
 #[derive(Deserialize)]
 struct Profile {
     /// The subject claim. Stable per Google account per client, and the only
@@ -38,6 +43,7 @@ struct Profile {
     nickname: Option<String>,
     name: Option<String>,
     email: Option<String>,
+    email_verified: Option<bool>,
     picture: Option<String>,
 }
 
@@ -77,6 +83,54 @@ mod tests {
         assert_eq!(profile.nickname, None);
         assert_eq!(profile.email, None);
         assert_eq!(profile.picture, None);
+    }
+
+    async fn social_user_from(body: serde_json::Value) -> SocialUser {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "access_token": TOKEN,
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(USERINFO))
+            .respond_with(ResponseTemplate::new(200).set_body_json(body))
+            .mount(&server)
+            .await;
+
+        client_for(Provider::Google, &server)
+            .user(Callback {
+                code: CODE,
+                state: STATE,
+                expected_state: STATE,
+            })
+            .await
+            .unwrap()
+    }
+
+    /// The address is what accounts are linked by, so one Google has not
+    /// verified must never reach the caller.
+    #[tokio::test]
+    async fn an_unverified_or_unstated_email_is_dropped() {
+        for verified in [json!(false), serde_json::Value::Null] {
+            let user = social_user_from(json!({
+                "sub": "1",
+                "email": "victim@example.test",
+                "email_verified": verified,
+            }))
+            .await;
+
+            assert_eq!(user.email, None, "email_verified = {verified}");
+        }
+
+        let user = social_user_from(
+            json!({"sub": "1", "email": "victim@example.test"}),
+        )
+        .await;
+        assert_eq!(user.email, None, "email_verified absent");
     }
 
     /// Socialite: `GoogleProviderTest::test_it_can_map_a_user_from_an_access_token`,
