@@ -242,14 +242,42 @@ a.reader-toc__item:hover { background: var(--surface-sunken); color: var(--ink);
 /* the old reader kept italic emphasis; prose.css flattens it */
 .lesson-content[data-lesson-content] :is(em, i) { font-style: italic; }
 
-/* Bengali letters fall through to Noto Serif Bengali, linked by the lesson page
-   only when it serves Bangla. Latin words in the same line stay Literata. */
-:root:lang(bn) {
-  --font-reading: "Literata", "Noto Serif Bengali", Georgia, serif;
-  --font-reading-title: "Lora", "Noto Serif Bengali", Georgia, serif;
+/* Bengali letters fall through to Hind Siliguri, the open release of the
+   foundry behind macOS's Kohinoor Bangla. Self-hosted for `size-adjust`: its
+   letters sit small beside Literata's at the same size. The unicode-range
+   means a page with no Bengali never downloads it. Latin words in the same
+   line stay Literata. OFL; the licence is beside the files. */
+@font-face {
+  font-family: "Hind Siliguri Reader";
+  src: url("/fonts/hind-siliguri-bengali-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+  size-adjust: 112%;
+  unicode-range: U+0951-0952, U+0964-0965, U+0980-09FE, U+200C-200D, U+25CC;
+}
+@font-face {
+  font-family: "Hind Siliguri Reader";
+  src: url("/fonts/hind-siliguri-bengali-500.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+  size-adjust: 112%;
+  unicode-range: U+0951-0952, U+0964-0965, U+0980-09FE, U+200C-200D, U+25CC;
+}
+@font-face {
+  font-family: "Hind Siliguri Reader";
+  src: url("/fonts/hind-siliguri-bengali-600.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+  size-adjust: 112%;
+  unicode-range: U+0951-0952, U+0964-0965, U+0980-09FE, U+200C-200D, U+25CC;
 }
 
-/* Noto Serif Bengali has no italic, so italic there is a faux slant.
+:root:lang(bn) {
+  --font-reading: "Literata", "Hind Siliguri Reader", Georgia, serif;
+  --font-reading-title: "Lora", "Hind Siliguri Reader", Georgia, serif;
+}
+
+/* Hind Siliguri has no italic, so italic there is a faux slant.
    Weight carries the emphasis instead, as it did in the old reader. */
 .lesson-content[data-lesson-content]:lang(bn) :is(em, i),
 :lang(bn) .lesson-content[data-lesson-content] :is(em, i) {
