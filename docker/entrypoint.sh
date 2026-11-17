@@ -11,6 +11,11 @@
 # ash does not have it.
 set -euo pipefail
 
+# Caddy refuses requests that do not carry it, which is what keeps the
+# *.ondigitalocean.app hostname from bypassing Cloudflare. Unset would boot an
+# open origin without saying so; `off` is how a local run says it on purpose.
+: "${ORIGIN_SECRET:?ORIGIN_SECRET must be set (the value Cloudflare sends as X-Origin-Secret, or off locally)}"
+
 API_PORT=${API_PORT:-9000}
 NUXT_PORT=${NUXT_PORT:-3000}
 export API_PORT NUXT_PORT

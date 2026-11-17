@@ -166,7 +166,7 @@ jobs:
       # This asserts the routing too: the frontend is public, the api is not.
       - name: Boot it and check the routing holds
         run: |
-          docker run -d --name ci -p 8080:8080 -e LUXCTL_SECRET=citest thelighthouse:ci
+          docker run -d --name ci -p 8080:8080 -e LUXCTL_SECRET=citest -e ORIGIN_SECRET=off thelighthouse:ci
           for i in $(seq 1 60); do
             curl -fsS -o /dev/null http://localhost:8080/ && break
             sleep 1

@@ -28,6 +28,16 @@
 	servers {
 		trusted_proxies static private_ranges
 	}
+
+	# Caddy's own logs — a failed proxy among them — carry the request's
+	# headers too, and the origin secret is one. The access log below has the
+	# same filter.
+	log default {
+		format filter {
+			wrap json
+			request>headers>X-Origin-Secret delete
+		}
+	}
 }
 
 :{$PORT:8080} {
@@ -68,7 +78,11 @@
 		output stdout
 		# JSON, not console: App Platform captures stdout, and structured fields
 		# stay queryable if they are ever shipped somewhere that indexes them.
-		format json
+		# The access log records request headers, and the origin secret is one.
+		format filter {
+			wrap json
+			request>headers>X-Origin-Secret delete
+		}
 		level {$CADDY_LOG_LEVEL:INFO}
 	}
 
@@ -81,6 +95,21 @@
 		header User-Agent Wget
 	}
 	log_skip @healthprobe
+
+	# Only Cloudflare may reach the origin. App Platform also serves this app on
+	# its own *.ondigitalocean.app hostname, and a request there skips every
+	# Cloudflare rule — rate limits included — and can set CF-Connecting-IP to
+	# anything. A Cloudflare transform rule adds X-Origin-Secret on the way in;
+	# anything arriving without it was not sent by Cloudflare.
+	#
+	# Loopback is exempt because only the container itself can be loopback: the
+	# docker healthcheck. An unset or `off` secret disables the lock, which is
+	# what development runs on — entrypoint.sh refuses to boot the production
+	# image with it unset, so `off` there is a decision, not an accident.
+	@not_from_cloudflare expression `{env.ORIGIN_SECRET} != "" && {env.ORIGIN_SECRET} != "off" && {http.request.header.X-Origin-Secret} != {env.ORIGIN_SECRET} && !remote_ip('127.0.0.1', '::1')`
+	handle @not_from_cloudflare {
+		respond 403
+	}
 
 	# .env, .git and friends. .well-known stays reachable for ACME and
 	# security.txt. This must be a `handle` placed first — as a bare `respond`
