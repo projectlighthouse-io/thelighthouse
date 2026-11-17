@@ -3,6 +3,23 @@
 What changed, newest first. The site's own `/changelog` page is written for
 readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
 
+## 2026-11-17
+
+### Security
+
+- An article whose markdown asks for runaway emphasis matching (thousands of
+  unmatched `*`, `_` or `~`) is shown as plain text instead of rendered. One
+  such article could hold the Nuxt process for tens of seconds per view.
+- Google sign-in uses the email address only when Google says it is verified.
+- Signing in never moves an account onto a new GitHub or Google id: an email
+  that already belongs to an account linked to a different id is refused.
+
+### Billing
+
+- A one-time purchase grants its books only once the payment has settled. A
+  delayed method such as a bank debit grants on
+  `checkout.session.async_payment_succeeded`, not when checkout finishes.
+
 ## 2026-11-16
 
 ### Reader
