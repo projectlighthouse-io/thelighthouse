@@ -13,6 +13,13 @@ readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
 - Google sign-in uses the email address only when Google says it is verified.
 - Signing in never moves an account onto a new GitHub or Google id: an email
   that already belongs to an account linked to a different id is refused.
+- The origin answers only requests that came through Cloudflare. Caddy
+  refuses anything without the `X-Origin-Secret` header a Cloudflare
+  transform rule adds, so the App Platform hostname no longer skips the
+  edge. The image will not boot without `ORIGIN_SECRET`.
+- Rate limiting moves to Cloudflare. The api's own limit is now a backstop
+  that counts a reader or a Cloudflare address only; nitro's server-side
+  renders no longer share one budget any visitor could spend.
 
 ### Billing
 
