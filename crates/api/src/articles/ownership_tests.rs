@@ -193,3 +193,34 @@ async fn ownership_an_archived_article_is_hidden_from_everyone_but_its_author()
     assert!(restored.is_some_and(|it| it.archived_at.is_none()));
     assert!(public_again.is_some(), "unarchiving did not restore it");
 }
+
+#[tokio::test]
+#[ignore = "needs a migrated postgres in DATABASE_URL"]
+async fn cooldown_a_second_article_waits_ten_minutes() {
+    let db = db().await;
+    let (a, b) = authors(&db).await;
+    store::insert(&db, a, &slug(a), &article()).await.unwrap();
+
+    let again =
+        store::insert(&db, a, &format!("{}-2", slug(a)), &article()).await;
+    // Another author is not held up by A's cooldown.
+    let other = store::insert(&db, b, &slug(b), &article()).await;
+
+    // Eleven minutes on, A may publish again.
+    sqlx::query("UPDATE articles SET created_at = created_at - INTERVAL '11 minutes' WHERE user_id = $1")
+        .bind(a)
+        .execute(&db)
+        .await
+        .unwrap();
+    let later =
+        store::insert(&db, a, &format!("{}-3", slug(a)), &article()).await;
+
+    forget(&db, &[a, b]).await;
+
+    assert!(
+        matches!(again, Err(store::StoreError::TooSoon(wait)) if wait > 0 && wait <= 600),
+        "{again:?}"
+    );
+    assert!(other.is_ok(), "{other:?}");
+    assert!(later.is_ok(), "{later:?}");
+}

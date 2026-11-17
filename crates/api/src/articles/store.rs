@@ -26,6 +26,9 @@ pub(crate) enum StoreError {
     /// characters make this vanishingly rare, and the index is what makes it
     /// impossible rather than merely unlikely.
     SlugTaken,
+    /// The author published less than [`PUBLISH_COOLDOWN_SECS`] ago. Carries
+    /// the seconds left, for `Retry-After`.
+    TooSoon(i64),
     /// Everything else, and nobody outside can act on it.
     Database(sqlx::Error),
 }
@@ -42,6 +45,10 @@ impl From<sqlx::Error> for StoreError {
         }
     }
 }
+
+/// How long an author waits between two new articles. Edits are not counted:
+/// fixing a typo is not publishing.
+pub(crate) const PUBLISH_COOLDOWN_SECS: i64 = 10 * 60;
 
 /// Aliased to [`Article`]'s field names, which `FromRow` maps by.
 const COLUMNS: &str = "
@@ -286,6 +293,34 @@ pub(crate) async fn insert(
     article: &ValidArticle<'_>,
 ) -> Result<OwnArticle, StoreError> {
     let mut tx = db.begin().await?;
+
+    // One article per author per cooldown. The author's row is locked for the
+    // rest of the transaction, so two publishes at once cannot both find no
+    // recent article. `created_at` has no zone and is written by `now()`, so
+    // it is compared with `LOCALTIMESTAMP`, the same clock. It is also rounded
+    // to the second, which can put it just ahead of now — hence the `min`.
+    sqlx::query("SELECT 1 FROM users WHERE id = $1 FOR UPDATE")
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+
+    let (wait,) = sqlx::query_as::<_, (Option<i64>,)>(
+        "
+        SELECT CEIL(EXTRACT(EPOCH FROM
+            MAX(created_at) + make_interval(secs => $2::float8) - LOCALTIMESTAMP
+        ))::bigint
+        FROM articles
+        WHERE user_id = $1
+        ",
+    )
+    .bind(user_id)
+    .bind(PUBLISH_COOLDOWN_SECS)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if let Some(wait) = wait.filter(|&wait| wait > 0) {
+        return Err(StoreError::TooSoon(wait.min(PUBLISH_COOLDOWN_SECS)));
+    }
 
     let (id,) = sqlx::query_as::<_, (i64,)>(
         "

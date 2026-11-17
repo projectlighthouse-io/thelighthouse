@@ -2,7 +2,7 @@
 
 use axum::response::Response;
 
-use crate::response::{bad_request, invalid};
+use crate::response::{bad_request, invalid, too_many};
 
 /// Why a write was refused. An enum for the reason `notes::refusal::Refusal`
 /// is one: a `Result<_, &str>` makes every string literal a valid error.
@@ -23,6 +23,9 @@ pub(crate) enum Refusal {
     /// Two articles minted the same slug. Vanishingly rare and worth saying
     /// out loud rather than logging as a 500 — see `store::insert`.
     SlugTaken,
+    /// A new article within the publishing cooldown. See
+    /// `store::PUBLISH_COOLDOWN_SECS`.
+    TooSoon,
 }
 
 impl Refusal {
@@ -40,6 +43,7 @@ impl Refusal {
             Self::NoTopics => "article_topics_empty",
             Self::TooManyTopics => "article_topics_too_many",
             Self::SlugTaken => "article_slug_taken",
+            Self::TooSoon => "article_too_soon",
         }
     }
 
@@ -71,6 +75,10 @@ impl Refusal {
             Self::NoTopics => "Please pick at least one topic.",
             Self::TooManyTopics => "An article can carry at most three topics.",
             Self::SlugTaken => "That address was just taken. Please try again.",
+            Self::TooSoon => {
+                "You can publish one article every ten minutes. Please try \
+                 again in a little while."
+            }
         }
     }
 }
@@ -86,7 +94,7 @@ impl Refusal {
             Self::UnknownCategory | Self::NoTopics | Self::TooManyTopics => {
                 Some("topics")
             }
-            Self::SlugTaken => None,
+            Self::SlugTaken | Self::TooSoon => None,
         }
     }
 }
@@ -109,13 +117,22 @@ pub(crate) fn refuse(cause_of: Refusal) -> Response {
     bad_request(cause_of.code(), cause_of.message())
 }
 
+/// The 429 for publishing inside the cooldown, with the seconds left.
+pub(crate) fn too_soon(retry_after: i64) -> Response {
+    too_many(
+        Refusal::TooSoon.code(),
+        Refusal::TooSoon.message(),
+        retry_after,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// Every variant, so adding one fails here first — the prompt to give the
     /// frontend an entry for its code.
-    const REFUSALS: [Refusal; 10] = [
+    const REFUSALS: [Refusal; 11] = [
         Refusal::EmptyTitle,
         Refusal::TitleTooLong,
         Refusal::EmptySubtitle,
@@ -126,6 +143,7 @@ mod tests {
         Refusal::NoTopics,
         Refusal::TooManyTopics,
         Refusal::SlugTaken,
+        Refusal::TooSoon,
     ];
 
     #[test]

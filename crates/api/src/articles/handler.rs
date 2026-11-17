@@ -17,7 +17,7 @@ use super::{
         AuthorFilter, EditArticleRequest, NewArticleRequest, TopicFilter,
         slugify, validate_article,
     },
-    refusal::{Refusal, refuse, refuse_all},
+    refusal::{Refusal, refuse, refuse_all, too_soon},
     store::{self, Filters, StoreError},
 };
 use crate::{
@@ -287,6 +287,7 @@ pub(crate) async fn create(
             tracing::error!(slug, "an article slug collided");
             refuse(Refusal::SlugTaken)
         }
+        Err(StoreError::TooSoon(wait)) => too_soon(wait),
         Err(StoreError::Database(error)) => {
             tracing::error!(
                 %error,

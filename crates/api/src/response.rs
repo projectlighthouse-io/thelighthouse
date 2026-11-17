@@ -11,7 +11,7 @@
 
 use axum::{
     Json,
-    http::StatusCode,
+    http::{HeaderValue, StatusCode, header::RETRY_AFTER},
     response::{IntoResponse, Response},
 };
 use std::collections::BTreeMap;
@@ -168,6 +168,28 @@ pub(crate) fn bad_request(code: &str, message: &str) -> Response {
         },
         CachePolicy::NoStore,
     )
+}
+
+/// 429, saying when to come back. `Retry-After` is in seconds.
+pub(crate) fn too_many(
+    code: &str,
+    message: &str,
+    retry_after: i64,
+) -> Response {
+    let mut response = json(
+        StatusCode::TOO_MANY_REQUESTS,
+        ErrorResponse {
+            code,
+            error: message,
+        },
+        CachePolicy::NoStore,
+    );
+
+    if let Ok(value) = HeaderValue::from_str(&retry_after.to_string()) {
+        response.headers_mut().insert(RETRY_AFTER, value);
+    }
+
+    response
 }
 
 /// One field's refusal: the input it belongs to, as the form names it, and
