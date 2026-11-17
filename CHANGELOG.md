@@ -21,6 +21,17 @@ readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
   that counts a reader or a Cloudflare address only; nitro's server-side
   renders no longer share one budget any visitor could spend.
 
+### Blog
+
+- An author can publish one new article every ten minutes. Inside that
+  window the api answers 429 with `Retry-After`; edits are not limited.
+
+### Operations
+
+- The signed `POST /reload` endpoint and `make content-reload` are gone.
+  Content reaches production with each image; a running container still
+  rereads it on SIGHUP (`make content-sync`).
+
 ### Billing
 
 - A one-time purchase grants its books only once the payment has settled. A
