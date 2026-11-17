@@ -62,26 +62,6 @@ impl RateLimit {
         Self::new(per_minute, Duration::from_secs(60))
     }
 
-    /// Three a minute, and the whole process shares them.
-    ///
-    /// A reload rereads every file in the content repo and reparses it, so it
-    /// is the most expensive thing an authenticated caller can ask for — and
-    /// unlike a read, asking twice in a row is never useful. A deploy triggers
-    /// one. Three leaves room to retry a failure twice and no room to loop.
-    ///
-    /// **Not keyed by caller, deliberately.** There is one catalogue, so the
-    /// budget is the catalogue's rather than each caller's: if the signing
-    /// secret ever leaks, per-caller buckets would let whoever holds it spend
-    /// a fresh sixty a minute per forged address. One bucket caps the work
-    /// this process will do regardless of who is asking or how many of them
-    /// there are.
-    /// The default. `CONTENT_RELOAD_LIMIT` overrides it.
-    pub(crate) const CONTENT_RELOADS: u32 = 3;
-
-    pub(crate) fn content_reloads(per_minute: u32) -> Self {
-        Self::new(per_minute, Duration::from_secs(60))
-    }
-
     /// Sixty a minute, which is `RateLimiter::for('api')` in the laravel app —
     /// the limit every route there inherits unless it names a stricter one.
     ///

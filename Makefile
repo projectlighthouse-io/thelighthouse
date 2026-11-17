@@ -28,7 +28,7 @@ API_PORT ?= 9000
 .DEFAULT_GOAL := help
 .PHONY: help up dev api down db db-down db-reset psql migrate migrate-status fmt fmt-check \
         lint test test-db build check audit image run run-built login push clean \
-        content content-check content-sync content-db-sync content-reload \
+        content content-check content-sync content-db-sync \
         prices prices-apply catalogue
 
 help: ## show this
@@ -270,20 +270,3 @@ prices-apply: ## make stripe match pricing.yaml, then regenerate both outputs
 catalogue: ## write the frontend's build-time catalogue from pricing.yaml + ohara
 	CONTENT_PATH="$(CONTENT_PATH)" cargo run -q -p lighthouse-prices -- catalogue
 
-# Rereads ohara and swaps the catalogue over in the *running* process. No
-# restart, no dropped request — the alternative is `docker kill -s HUP`, which
-# does the same thing without telling you whether it worked.
-#
-# Signed, because the endpoint is: the api verifies the HMAC itself and answers
-# 404 without it. The payload is "{unix seconds}.{METHOD}.{path}" — luxctl's
-# scheme, which this endpoint inherits by sharing the middleware. The timestamp
-# goes in a header of its own and is checked against a five-minute window, so a
-# signature copied out of a shell history stops working.
-content-reload: ## make the running api reread ohara
-	@test -n "$$LUXCTL_SECRET" || { . ./.env 2>/dev/null; }; \
-		ts=$$(date +%s); \
-		sig=$$(printf '%s.POST./reload' "$$ts" \
-			| openssl dgst -sha256 -hmac "$${LUXCTL_SECRET}" -hex | sed 's/.*= *//'); \
-		curl -fsS -X POST -H "X-Luxctl-Signature: $$sig" \
-			-H "X-Luxctl-Timestamp: $$ts" \
-			http://127.0.0.1:$(API_PORT)/reload && echo

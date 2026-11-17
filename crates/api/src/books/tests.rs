@@ -33,19 +33,6 @@ fn router() -> axum::Router {
     crate::api::app(config, socials, db, catalog, crate::api::Billing::sample())
 }
 
-async fn post(uri: &str) -> Response {
-    router()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(uri)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap()
-}
-
 async fn get(uri: &str) -> Response {
     router()
         .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
@@ -326,75 +313,6 @@ async fn seo_falls_back_to_what_a_reader_sees() {
         at(&lesson, "/seo/meta_description"),
         "no paywall marker, so it is wholly free"
     );
-}
-
-/// A signed POST to `/reload`, built fresh each time so one router can serve
-/// several — the budget lives in the state, not the request.
-fn signed_reload() -> Request<Body> {
-    crate::testing::signed("POST", "/reload")
-}
-
-async fn post_signed(uri: &str) -> Response {
-    router()
-        .oneshot(crate::testing::signed("POST", uri))
-        .await
-        .unwrap()
-}
-
-#[tokio::test]
-async fn reloading_needs_a_signature_and_says_nothing_without_one() {
-    // 404, not 401: a 401 confirms the endpoint is there, which is free
-    // reconnaissance. Caddy never routes this path either — the signature is
-    // the boundary, the missing route is depth.
-    assert_eq!(post("/reload").await.status(), StatusCode::NOT_FOUND);
-}
-
-#[tokio::test]
-async fn reloading_swaps_the_catalogue_without_restarting() {
-    let response = post_signed("/reload").await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    // Nothing may hold this: it is a write, and its body is a count that is
-    // only true at the instant it was produced.
-    assert!(
-        cache_control(&response).contains("no-store"),
-        "{response:?}"
-    );
-
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let counted: Value = serde_json::from_slice(&body).unwrap();
-
-    // The fixture, reread from disk rather than remembered.
-    assert_eq!(at(&counted, "/books"), 1);
-    assert_eq!(at(&counted, "/lessons"), 2);
-}
-
-#[tokio::test]
-async fn reloading_runs_out_of_budget_before_it_runs_out_of_cpu() {
-    // Three a minute for the whole process. The signature is the gate; this is
-    // what holds if the gate ever fails, so it must not be per caller — the
-    // fourth call is refused however it arrived.
-    let app = router();
-
-    for attempt in 1..=3 {
-        let response = app.clone().oneshot(signed_reload()).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK, "reload {attempt}");
-    }
-
-    let refused = app.oneshot(signed_reload()).await.unwrap();
-
-    assert_eq!(refused.status(), StatusCode::TOO_MANY_REQUESTS);
-    assert!(refused.headers().contains_key("retry-after"));
-}
-
-#[tokio::test]
-async fn reloading_is_a_post_because_it_changes_the_process() {
-    // A GET would be fetched by anything that crawls, prefetches or
-    // revalidates, and this one does work. 404 rather than 405: the signature
-    // layer answers before the method does, and says as little as possible.
-    assert_eq!(get("/reload").await.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

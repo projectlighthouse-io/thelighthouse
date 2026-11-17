@@ -58,8 +58,6 @@ pub(crate) struct Config {
     pub(crate) request_limit: u32,
     /// Note and bookmark writes a minute, per reader.
     pub(crate) note_write_limit: u32,
-    /// Content reloads a minute, for the whole process.
-    pub(crate) content_reload_limit: u32,
     /// Kit's api key, for the newsletter list. Required for the same reason
     /// the stripe key is: a deployment that came up with the subscribe toggle
     /// on the page but no key behind it would only find out from a reader who
@@ -156,10 +154,6 @@ impl Config {
                 get("NOTE_WRITE_LIMIT").as_deref(),
                 RateLimit::NOTE_WRITES,
             )?,
-            content_reload_limit: count(
-                get("CONTENT_RELOAD_LIMIT").as_deref(),
-                RateLimit::CONTENT_RELOADS,
-            )?,
             stripe_secret_key: required("STRIPE_SECRET_KEY")?.into(),
             stripe_webhook_secret: required("STRIPE_WEBHOOK_SECRET")?.into(),
             billing_plans: required("BILLING_PLANS")?,
@@ -203,7 +197,6 @@ impl Config {
             drafts: ohara::Drafts::Hidden,
             request_limit: RateLimit::REQUESTS,
             note_write_limit: RateLimit::NOTE_WRITES,
-            content_reload_limit: RateLimit::CONTENT_RELOADS,
             stripe_secret_key: "sk_test".into(),
             stripe_webhook_secret: "whsec_test".into(),
             billing_plans: "billing.sample.yaml".to_owned(),
@@ -315,7 +308,6 @@ mod tests {
 
         assert_eq!(config.request_limit, RateLimit::REQUESTS);
         assert_eq!(config.note_write_limit, RateLimit::NOTE_WRITES);
-        assert_eq!(config.content_reload_limit, RateLimit::CONTENT_RELOADS);
     }
 
     #[test]

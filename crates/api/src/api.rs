@@ -13,10 +13,10 @@ use std::sync::Arc;
 use axum::{
     Router,
     extract::State,
-    http::{HeaderValue, StatusCode, header::RETRY_AFTER},
+    http::StatusCode,
     middleware::from_fn_with_state,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::get,
 };
 use loginwith::Providers;
 use ohara::catalog::Catalog;
@@ -24,13 +24,11 @@ use sqlx::postgres::PgPool;
 
 use crate::{
     articles, auth, bookmarks, books,
-    cache::CachePolicy,
     config::Config,
     db,
     limit::RateLimit,
     middleware::{rate::limit_requests, signature::require_signature},
-    newsletter, notes, payments, profiles, projects, response, settings,
-    telemetry,
+    newsletter, notes, payments, profiles, projects, settings, telemetry,
 };
 
 /// Everything needed to take money: the drivers registered at boot, and the
@@ -93,12 +91,9 @@ pub(crate) struct AppState {
     /// The limit every route inherits, keyed by reader or address. Shared for
     /// the same reason `limits` is: a per-clone counter is a per-request one.
     pub(crate) requests: Arc<RateLimit>,
-    /// What a reload costs, capped for the process rather than per caller.
-    /// The signature is the gate; this is what holds if the gate ever fails.
-    pub(crate) reloads: Arc<RateLimit>,
-    /// Shared for the same reason, and more so: reloading swaps the snapshot
-    /// inside this one, and a per-clone catalogue would leave most requests
-    /// reading a copy nothing ever reloads.
+    /// Shared for the same reason, and more so: a SIGHUP reload swaps the
+    /// snapshot inside this one, and a per-clone catalogue would leave most
+    /// requests reading a copy nothing ever reloads.
     pub(crate) catalog: Arc<Catalog>,
     /// How money is taken, and what is on sale.
     pub(crate) billing: Billing,
@@ -112,11 +107,8 @@ pub(crate) fn app(
     billing: Billing,
 ) -> Router {
     // Read before `config` moves into the state.
-    let (requests, note_writes, reloads) = (
-        config.request_limit,
-        config.note_write_limit,
-        config.content_reload_limit,
-    );
+    let (requests, note_writes) =
+        (config.request_limit, config.note_write_limit);
 
     let state = AppState {
         config,
@@ -124,7 +116,6 @@ pub(crate) fn app(
         db,
         limits: Arc::new(RateLimit::note_writes(note_writes)),
         requests: Arc::new(RateLimit::requests(requests)),
-        reloads: Arc::new(RateLimit::content_reloads(reloads)),
         catalog,
         billing,
     };
@@ -136,13 +127,6 @@ pub(crate) fn app(
         state.config.clone(),
         require_signature,
     ));
-
-    // Signed like luxctl's surface, and unrouted like `/health`. Two
-    // independent gates, because either alone is thin: caddy not naming a path
-    // is configuration, and configuration is one edit from being wrong.
-    let internal = Router::new().route("/reload", post(reload)).route_layer(
-        from_fn_with_state(state.config.clone(), require_signature),
-    );
 
     // Everything a caller off the internet can reach, under one limit.
     //
@@ -182,12 +166,10 @@ pub(crate) fn app(
         .layer(from_fn_with_state(state.clone(), limit_requests));
 
     Router::new()
-        // Outside the limit, both of them. `/health` is polled on a timer by
-        // whatever is watching the container, and a probe that starts failing
-        // because it probed too often is worse than no probe; `/reload` is
-        // signed, unrouted, and called by a deploy rather than by traffic.
+        // Outside the limit. `/health` is polled on a timer by whatever is
+        // watching the container, and a probe that starts failing because it
+        // probed too often is worse than no probe.
         .route("/health", get(health))
-        .merge(internal)
         .merge(public)
         .layer(axum::middleware::from_fn(telemetry::trace_request))
         // Outermost, and in this order: axum applies layers bottom-up, so the
@@ -216,87 +198,5 @@ async fn health(State(state): State<AppState>) -> Response {
     } else {
         (StatusCode::SERVICE_UNAVAILABLE, "database unreachable")
             .into_response()
-    }
-}
-
-/// The one bucket every reload counts against, whoever asked for it.
-const RELOAD_BUDGET: &str = "content-reload";
-
-/// Rereads the content repo and swaps the catalogue over, in place.
-///
-/// The whole point is that nothing restarts. [`Catalog::reload`] builds a new
-/// snapshot and swaps one `Arc` pointer, so requests already running finish
-/// against the snapshot they are holding and the next one picks up the new
-/// catalogue. There is no window where the site has no content.
-///
-/// **A failed reload changes nothing.** The rebuild happens first and the swap
-/// only follows if it parsed, so a typo in one lesson leaves the previous
-/// catalogue serving and reports what was wrong. That is why this can be safe
-/// to call from a deploy script: the bad case is "still serving the old
-/// content", not "serving none".
-///
-/// # Who may call it
-///
-/// Two gates, and neither is trusted on its own.
-///
-/// It carries the same HMAC signature luxctl uses, verified here in constant
-/// time — so reaching the socket is not enough, and anything else sharing the
-/// container's loopback still cannot trigger it. And it is not mounted under
-/// `/api/*`, so the Caddyfile never routes it and nothing outside reaches it
-/// at all.
-///
-/// The signature is the boundary; the caddy rule is depth. Relying on caddy
-/// alone would make an unauthenticated way to run work on demand out of one
-/// mistaken proxy rule, and this repo's own rule is that caddy is not a
-/// security boundary — it cannot verify an HMAC, so it must never be the only
-/// thing standing in front of something that does work.
-async fn reload(State(state): State<AppState>) -> Response {
-    // Before the work, not after: the point is to not do it. One bucket for
-    // the whole process — see `RateLimit::content_reloads` for why this is not
-    // per caller.
-    if let Some(retry_after) = state.reloads.check(RELOAD_BUDGET) {
-        tracing::warn!(retry_after, "content reload refused: too many");
-
-        let mut response = StatusCode::TOO_MANY_REQUESTS.into_response();
-        if let Ok(value) = HeaderValue::from_str(&retry_after.to_string()) {
-            response.headers_mut().insert(RETRY_AFTER, value);
-        }
-
-        return response;
-    }
-
-    match state.catalog.reload() {
-        Ok(()) => {
-            let snapshot = state.catalog.current();
-            let books = snapshot.books().count();
-            let lessons: usize =
-                snapshot.books().map(|book| book.lessons().count()).sum();
-
-            tracing::info!(books, lessons, "content reloaded");
-
-            response::json(
-                StatusCode::OK,
-                serde_json::json!({ "books": books, "lessons": lessons }),
-                CachePolicy::NoStore,
-            )
-        }
-        Err(cause) => {
-            // Named, unlike a 500 from a reader-facing route: the only caller
-            // is a deploy script inside the container, and "which file" is the
-            // entire value of the response.
-            tracing::error!(
-                %cause,
-                "failed to reload content; keeping the previous catalogue"
-            );
-
-            response::json(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                serde_json::json!({
-                    "error": cause.to_string(),
-                    "serving": "the previous catalogue, unchanged",
-                }),
-                CachePolicy::NoStore,
-            )
-        }
     }
 }
