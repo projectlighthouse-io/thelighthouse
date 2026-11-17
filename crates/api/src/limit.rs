@@ -91,10 +91,8 @@ impl RateLimit {
     ///
     /// **Sixty is a browser's budget, and nitro is not a browser.** Server-side
     /// rendering calls this api over loopback, carrying no `CF-Connecting-IP`,
-    /// so every such request shares the one unattributed bucket — one page
-    /// render can be several calls, and a prerender is hundreds. That is why
-    /// this is configurable rather than a constant: the number that is right
-    /// for a reader is wrong for the process rendering for them.
+    /// and so is not counted against this at all — see `limit_requests`.
+    /// Cloudflare is the limit at the edge; this is the backstop behind it.
     ///
     /// The default. `REQUEST_LIMIT` overrides it.
     pub(crate) const REQUESTS: u32 = 60;

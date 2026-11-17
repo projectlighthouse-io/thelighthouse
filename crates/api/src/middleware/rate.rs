@@ -7,6 +7,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
+use std::net::IpAddr;
+
 use crate::{api::AppState, session::Session};
 
 /// Cloudflare's own header, and the only address here worth trusting.
@@ -31,12 +33,21 @@ const UNATTRIBUTED: &str = "ip:unknown";
 ///
 /// `RateLimiter::for('api')` from the laravel app: sixty a minute, keyed by
 /// the reader when there is one and by address otherwise.
+///
+/// **A backstop now, not the limit.** Cloudflare rate-limits at the edge,
+/// where the real address is known. This counts only what it can attribute —
+/// a reader or a Cloudflare address — and lets the rest through: in production
+/// that rest is nitro rendering over loopback for every visitor at once, and
+/// counting it as one caller is what made one visitor able to spend everyone's
+/// pages.
 pub(crate) async fn limit_requests(
     State(state): State<AppState>,
     request: Request,
     next: Next,
 ) -> Response {
-    let key = caller(&request);
+    let Some(key) = attributed(&request) else {
+        return next.run(request).await;
+    };
 
     let Some(retry_after) = state.requests.check(&key) else {
         return next.run(request).await;
@@ -76,6 +87,15 @@ pub(crate) fn caller(request: &Request) -> String {
     address(request.headers()).unwrap_or_else(|| peer(request))
 }
 
+/// [`caller`] without the peer fallback: who this is, when that is known.
+fn attributed(request: &Request) -> Option<String> {
+    request
+        .extensions()
+        .get::<Session>()
+        .map(|session| format!("user:{}", session.user_id))
+        .or_else(|| address(request.headers()))
+}
+
 /// The address the connection actually came from.
 ///
 /// The fallback when Cloudflare's header is absent, which is every request
@@ -109,13 +129,26 @@ fn peer(request: &Request) -> String {
 /// the client sent, so its first entry is the client's own claim and its last
 /// is Cloudflare's address rather than the reader's — one is forgeable and the
 /// other is useless as a key.
+///
+/// Only a value that parses as an address is one. IPv6 is keyed by its /64,
+/// which is what one subscriber is usually handed: keyed whole, one caller has
+/// billions of buckets to rotate through.
 fn address(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get(CF_CONNECTING_IP)
-        .and_then(|value| value.to_str().ok())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|ip| format!("ip:{ip}"))
+    let ip = headers
+        .get(CF_CONNECTING_IP)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse::<IpAddr>()
+        .ok()?;
+
+    Some(match ip {
+        IpAddr::V4(ip) => format!("ip:{ip}"),
+        IpAddr::V6(ip) => {
+            let [a, b, c, d, ..] = ip.segments();
+            format!("ip:{a:x}:{b:x}:{c:x}:{d:x}::/64")
+        }
+    })
 }
 
 #[cfg(test)]
@@ -155,6 +188,46 @@ mod tests {
     fn an_empty_or_absent_header_is_not_an_address() {
         assert_eq!(address(&HeaderMap::new()), None);
         assert_eq!(address(&headers(&[("cf-connecting-ip", "  ")])), None);
+    }
+
+    #[test]
+    fn a_header_that_is_not_an_address_is_not_one() {
+        // Each distinct string used to be its own bucket.
+        for junk in ["anything", "203.0.113.7, 198.51.100.1", "1.2.3.4.5"] {
+            assert_eq!(
+                address(&headers(&[("cf-connecting-ip", junk)])),
+                None,
+                "{junk}"
+            );
+        }
+    }
+
+    #[test]
+    fn one_ipv6_subscriber_is_one_bucket() {
+        let key = |ip| address(&headers(&[("cf-connecting-ip", ip)]));
+
+        assert_eq!(key("2001:db8:1:2::1"), key("2001:db8:1:2:ffff::9"));
+        assert_eq!(
+            key("2001:db8:1:2::1"),
+            Some("ip:2001:db8:1:2::/64".to_owned())
+        );
+        assert_ne!(key("2001:db8:1:2::1"), key("2001:db8:1:3::1"));
+    }
+
+    #[test]
+    fn nitro_over_loopback_is_not_counted_by_the_backstop() {
+        // Every visitor's server-side render arrives like this. Counted as one
+        // caller, one visitor could spend all of their budgets.
+        let mut request = Request::new(axum::body::Body::empty());
+        request.extensions_mut().insert(axum::extract::ConnectInfo(
+            std::net::SocketAddr::from(([127, 0, 0, 1], 54321)),
+        ));
+        assert_eq!(attributed(&request), None);
+
+        request
+            .headers_mut()
+            .insert(CF_CONNECTING_IP, HeaderValue::from_static("203.0.113.7"));
+        assert_eq!(attributed(&request), Some("ip:203.0.113.7".to_owned()));
     }
 
     #[test]
