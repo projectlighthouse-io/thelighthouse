@@ -30,15 +30,33 @@ pub(crate) const VOYAGE: &str = "voyage";
 /// `_monthly`, `_yearly` and `_lifetime`.
 const VOYAGE_PRICES: &str = "lighthouse_voyage_";
 
+/// The prefix of the voyage plans this application sold — `voyage_monthly`
+/// and the like — before they were taken out of `pricing.yaml`.
+///
+/// Readers still renewing them hold the Foundations books. Not [`VOYAGE`]:
+/// that one is laravel's, and it opens everything.
+const RETIRED_VOYAGE: &str = "voyage_";
+
+/// The plan a retired voyage plan reads its books from.
+const FOUNDATION: &str = "foundation_yearly";
+
 /// Whether a plan unlocks this book.
 ///
 /// `everything` is the one thing a list cannot say, because the point of it is
 /// the books that do not exist yet. Anything else is membership of the list.
 ///
 /// [`VOYAGE`] unlocks everything without being declared, because it never is.
+/// A retired `voyage_*` plan covers what [`FOUNDATION`] covers.
 pub(crate) fn covers(plans: &Plans, plan: &PlanId, slug: &str) -> bool {
     if plan.as_str() == VOYAGE {
         return true;
+    }
+
+    // ponytail: borrows Foundations' list by name. Retire foundation_yearly
+    // and these readers cover nothing again; a `retired:` flag in
+    // pricing.yaml is the general fix.
+    if plan.as_str().starts_with(RETIRED_VOYAGE) {
+        return covers(plans, &FOUNDATION.into(), slug);
     }
 
     plans.get(plan).is_some_and(|held| {
@@ -200,6 +218,27 @@ mod tests {
         );
 
         assert!(covers(&plans, &VOYAGE.into(), "written-next-year"));
+    }
+
+    #[test]
+    fn a_retired_voyage_plan_covers_the_foundation_books_and_no_others() {
+        // `voyage_monthly` is no longer declared, and its readers are still
+        // paying. They hold what Foundations holds — not everything.
+        let plans = plans_from(
+            "plans:\n  - id: foundation_yearly\n    price: price_x\n    \
+             interval: year\n    books: [networking-fundamentals]\n",
+        );
+
+        assert!(covers(
+            &plans,
+            &"voyage_monthly".into(),
+            "networking-fundamentals"
+        ));
+        assert!(!covers(
+            &plans,
+            &"voyage_monthly".into(),
+            "written-next-year"
+        ));
     }
 
     fn subscription(
