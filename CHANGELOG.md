@@ -3,6 +3,15 @@
 What changed, newest first. The site's own `/changelog` page is written for
 readers and lives in `web/app/data/Changelog.ts`; this file is for the repo.
 
+## 2026-11-19
+
+### Billing
+
+- A reader still renewing a `voyage_*` plan reads the Foundations books
+  again. Those plans were taken out of `pricing.yaml`, and a plan the api
+  could not find covered nothing, so they saw the paywall. Laravel's plain
+  `voyage` plan still opens everything.
+
 ## 2026-11-17
 
 ### Security
