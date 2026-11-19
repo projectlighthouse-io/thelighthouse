@@ -5,6 +5,60 @@ import type { ChangelogEntry } from '@/types/Content'
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: 'Nov 17, 2026',
+    title: 'Safer sign-in',
+    description: 'Google sign-in only trusts an email address Google has verified, and signing in can no longer attach your account to a different GitHub or Google login.',
+    tag: 'platform',
+  },
+  {
+    date: 'Nov 17, 2026',
+    title: 'Bank payments unlock on settlement',
+    description: 'Books bought with a delayed payment method such as a bank debit unlock once the payment settles, not when checkout finishes.',
+    tag: 'platform',
+  },
+  {
+    date: 'Nov 17, 2026',
+    title: 'Blog: one new article every ten minutes',
+    description: 'Authors can publish one new article every ten minutes. Editing an existing article is not limited.',
+    tag: 'platform',
+  },
+  {
+    date: 'Nov 16, 2026',
+    title: 'Bangla lessons in Hind Siliguri',
+    description: 'Bengali text is now set in Hind Siliguri, sized to sit level with the English body. The font only downloads on pages that contain Bengali.',
+    tag: 'books',
+  },
+  {
+    date: 'Nov 15, 2026',
+    title: 'Lesson typography and callouts',
+    description: 'Lesson prose is set in Literata, justified and hyphenated in English. Term tooltips are back, note and warning callouts render properly, and translated lessons show a notice linking the other language.',
+    tag: 'books',
+  },
+  {
+    date: 'Nov 12, 2026',
+    title: 'Correct luxctl commands on project pages',
+    description: 'Project and task pages now show the real commands: luxctl project start --id, then luxctl validate or luxctl run --task. The sign-in hint names luxctl auth --token.',
+    tag: 'labs',
+  },
+  {
+    date: 'Oct 12, 2026',
+    title: 'Contents list fix',
+    description: 'Headings with inline formatting show their words in the contents list and scroll to the right place.',
+    tag: 'books',
+  },
+  {
+    date: 'Oct 7, 2026',
+    title: 'New mobile layout',
+    description: 'A floating tab bar for books, projects, pricing, blog and your account replaces the header links on phones, with a compact header and footer to match.',
+    tag: 'platform',
+  },
+  {
+    date: 'Oct 7, 2026',
+    title: 'Paid lessons stay unlocked',
+    description: 'Readers who paid no longer see the paywall on a lesson their browser cached from a signed-out visit.',
+    tag: 'books',
+  },
+  {
     date: 'Jun 7, 2026',
     title: 'Lab page redesign — problem brief layout',
     description: 'Every terminal/lab page (sandbox, DSA, systems, troubleshooting) now uses a tabbed brief layout on the left with a clean Newsreader serif body, mono eyebrow, optional difficulty pill, and per-language accent. Right pane slides in via translate-x.',
